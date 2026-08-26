@@ -6,6 +6,10 @@
 # The packager reads .pkgmeta at the repository root, and takes the project
 # identifiers from Cleansive/Cleansive.toc (X-Curse-Project-ID, X-Wago-ID).
 # It also rewrites ## Version to match the tag, so keep the two in step.
+#
+# Run it by hand from the Actions tab to check the whole pipeline without
+# publishing: leave "upload" unticked and the packager builds the zip and
+# stops there.
 
 name: Release
 
@@ -13,6 +17,12 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      upload:
+        description: "Actually upload to CurseForge and Wago"
+        type: boolean
+        default: false
 
 permissions:
   contents: write        # needed to attach the zip to a GitHub release
@@ -30,6 +40,10 @@ jobs:
 
       - name: Package and upload
         uses: BigWigsMods/packager@v2
+        # -d tells the packager to build but skip every upload. A tag push
+        # always uploads; a manual run only does when the box was ticked.
+        with:
+          args: ${{ (github.event_name == 'workflow_dispatch' && inputs.upload != true) && '-d' || '' }}
         env:
           CF_API_KEY: ${{ secrets.CF_API_KEY }}
           WAGO_API_TOKEN: ${{ secrets.WAGO_API_TOKEN }}
