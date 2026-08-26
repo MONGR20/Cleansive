@@ -40,9 +40,12 @@ local function getPotentialAuraTypes()
     end
     local result = {}
     for _, auraType in ipairs(AURA_DISPEL_TYPES) do
-        -- A grouped type is shown once, next to the grid, instead of on every
-        -- cell. Giving it no engine slot is what removes the wall of cells.
-        if supported[auraType] and not NS:IsTypeGrouped(auraType) then
+        -- Grouped types keep their engine slot. It is the only thing that can
+        -- signal an aura Lua may not read, and 1.5.4 removed it: an unreadable
+        -- affliction whose spell was outside the seasonal sound list produced
+        -- no cell, no indicator and no sound at all. The wall of cells is
+        -- toned down in StyleAuraVisual instead of being deleted.
+        if supported[auraType] then
             result[#result + 1] = auraType
         end
     end
@@ -185,6 +188,12 @@ function NS:CreateGrid()
     manualIndicator:EnableMouse(true)
     manualIndicator.background = manualIndicator:CreateTexture(nil, "BACKGROUND")
     manualIndicator.background:SetAllPoints()
+    -- Same reasoning as the L/R/C click letters: colour alone is not a
+    -- readable signal. "!" says "you press this yourself" without hue.
+    manualIndicator.mark = manualIndicator:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    manualIndicator.mark:SetPoint("TOPLEFT", 2, -1)
+    manualIndicator.mark:SetText("!")
+    manualIndicator.mark:SetTextColor(1, 1, 1, 1)
     manualIndicator.count = manualIndicator:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
     manualIndicator.count:SetPoint("CENTER")
     manualIndicator:SetScript("OnEnter", function(frame) self:ShowManualIndicatorTooltip(frame) end)
@@ -435,13 +444,17 @@ function NS:StyleAuraVisual(button, auraType, visual)
     local slot = self.typeToSlot and self.typeToSlot[auraType]
     local manual = not slot and self.manualTypeSpell and self.manualTypeSpell[auraType]
     local enabled = (slot or manual) and self.db.enabledTypes[auraType] ~= false
+    local grouped = self:IsTypeGrouped(auraType)
     local clickColor = slot and CLICK_COLORS[slot] or DETECT_COLOR
     local typeColor = self.TYPE_COLORS[auraType] or { 1, 1, 1 }
     local priority = self:GetTypePriority(auraType)
     -- AuraSlot owns mouse motion and its protected tooltip. It sits above the
     -- secure click layer while explicitly passing click buttons through to it.
     local level = button:GetFrameLevel() + 110 + (math.max(0, 10 - priority) * 4)
-    local alpha = enabled and 0.92 or 0
+    -- A grouped cell keeps its type stripe but loses the filled background:
+    -- the count next to the grid carries the message, the cell only proves
+    -- the engine still sees something here.
+    local alpha = enabled and (grouped and 0 or 0.92) or 0
 
     local ok = pcall(function()
         visual.auraButton:SetFrameLevel(level)
@@ -510,7 +523,7 @@ function NS:UpdateReadableAfflictionAlert(button, unit, silent)
         button.alertAuraKey = nil
         return
     end
-    local ok, aura, auraType, slot, _, charmed = pcall(self.GetCurableAura, self, unit)
+    local ok, aura, auraType, slot, _, charmed = pcall(self.GetCurableAura, self, unit, true)
     if not ok then
         button.alertAuraKey = nil
         return
@@ -864,6 +877,7 @@ function NS:LayoutButtons()
         button.cooldown:SetPoint(point, self.cooldownBody, relative, x, y)
     end
     self.gridAnchor:SetSize(size, math.max(12, math.floor(size * 0.55)))
+    self:LayoutManualIndicator()
     self.cooldownBody:SetSize(size, math.max(12, math.floor(size * 0.55)))
     self.pendingLayout = false
     self:UpdateAuraContainerConfiguration(true)
@@ -937,7 +951,7 @@ function NS:GetAuraByIndex(unit, index)
     return nil
 end
 
-function NS:GetCurableAura(unit)
+function NS:GetCurableAura(unit, includeGrouped)
     if self.testMode then
         local slot = ((self.unitToButton[unit] and self.unitToButton[unit].index or 1) - 1) % math.max(1, #self.clickSpells) + 1
         local def = self.clickSpells[slot] or self.clickSpells[1]
@@ -966,7 +980,12 @@ function NS:GetCurableAura(unit)
             local accessible = self:CanAccess(dispelName)
             if accessible and dispelName and self.db.enabledTypes[dispelName] ~= false then
                 local slot = self.typeToSlot[dispelName]
-                local manual = not slot and not self:IsTypeGrouped(dispelName)
+                -- Grouped types are deliberately invisible to the per-unit
+                -- cell, but the readable sound fallback must still find them:
+                -- without this a grouped affliction was silent whenever the
+                -- native registration did not cover its spell.
+                local manual = not slot
+                    and (includeGrouped or not self:IsTypeGrouped(dispelName))
                     and self.manualTypeSpell and self.manualTypeSpell[dispelName]
                 local priority = self:GetTypePriority(dispelName)
                 if (slot or manual) and priority < bestPriority then
@@ -1338,6 +1357,7 @@ function NS:RefreshUnit(unit)
             end
         end
     end
+    self:RequestManualIndicatorUpdate()
 end
 
 function NS:RefreshAll(force)
@@ -1483,6 +1503,18 @@ function NS:ScanGroupedType(unit)
     return nil
 end
 
+-- UNIT_AURA fires constantly. Recomputing the indicator on each one would
+-- rescan the whole roster, so coalesce them into a single pass.
+function NS:RequestManualIndicatorUpdate()
+    if not self.manualIndicator or self.manualIndicatorScheduled then return end
+    if not (C_Timer and C_Timer.After) then return self:UpdateManualIndicator() end
+    self.manualIndicatorScheduled = true
+    C_Timer.After(0.1, function()
+        self.manualIndicatorScheduled = false
+        self:UpdateManualIndicator()
+    end)
+end
+
 function NS:UpdateManualIndicator()
     local frame = self.manualIndicator
     if not frame then return end
@@ -1498,8 +1530,30 @@ function NS:UpdateManualIndicator()
         return
     end
 
+    -- Test mode exists so the player can place and size everything without an
+    -- affliction. The indicator was the one piece it never showed.
+    if self.testMode then
+        frame.activeCount, frame.activeType = 2, grouped[1]
+        self:LayoutManualIndicator()
+        local color = self.TYPE_COLORS[grouped[1]] or { 1, 1, 1 }
+        frame.background:SetColorTexture(color[1], color[2], color[3], 0.92)
+        frame.count:SetText(2)
+        frame:Show()
+        return
+    end
+
+    -- A self-only ability cannot help anyone else, so counting the raid would
+    -- promise something the player cannot deliver. Mirrors the scoping the
+    -- sound plan already applies.
+    local selfOnly = true
+    for _, auraType in ipairs(grouped) do
+        local spell = self.manualTypeSpell and self.manualTypeSpell[auraType]
+        if not (spell and spell.selfOnly) then selfOnly = false end
+    end
+
     local count, firstType = 0, nil
-    for _, descriptor in ipairs(self.roster or {}) do
+    local scanned = selfOnly and { { unit = "player" } } or (self.roster or {})
+    for _, descriptor in ipairs(scanned) do
         local found = self:ScanGroupedType(self:GetDisplayUnit(descriptor.unit))
         if found then
             count = count + 1
@@ -1508,11 +1562,11 @@ function NS:UpdateManualIndicator()
     end
 
     frame.activeCount, frame.activeType = count, firstType
-    frame:SetSize(self.db.frameSize, self.db.frameSize)
+    self:LayoutManualIndicator()
     if count > 0 then
         local color = self.TYPE_COLORS[firstType] or { 1, 1, 1 }
         frame.background:SetColorTexture(color[1], color[2], color[3], 0.92)
-        frame.count:SetText(count > 1 and count or "")
+        frame.count:SetText(count)
         frame:Show()
     elseif self.db.afflictedOnly then
         frame:Hide()
@@ -1541,4 +1595,61 @@ function NS:ShowManualIndicatorTooltip(frame)
     end
     GameTooltip:AddLine(self.L.MANUAL_READABLE_ONLY, 0.65, 0.65, 0.65)
     GameTooltip:Show()
+end
+
+-- Anchored opposite the growth direction: sitting above the grid would put it
+-- straight on top of the first cell in the RIGHT_UP and LEFT_UP layouts.
+function NS:LayoutManualIndicator()
+    local frame = self.manualIndicator
+    if not frame or not self.cooldownBody then return end
+    local size = self.db.frameSize
+    frame:SetSize(size, size)
+    frame:ClearAllPoints()
+    local grow = self.db.grow or "RIGHT_DOWN"
+    local up = grow == "RIGHT_UP" or grow == "LEFT_UP"
+    local left = grow == "RIGHT_DOWN" or grow == "RIGHT_UP"
+    local corner = (up and "TOP" or "BOTTOM") .. (left and "LEFT" or "RIGHT")
+    local anchor = (up and "BOTTOM" or "TOP") .. (left and "LEFT" or "RIGHT")
+    frame:SetPoint(corner, self.cooldownBody, anchor, 0, up and -4 or 4)
+end
+
+-- engineAuraTypes is decided once, when the grid is built. A specialization
+-- or talent change can alter it, and reconfiguring existing slots cannot add
+-- a type that was never created. Rebuild rather than leave a stale set.
+function NS:RefreshAuraEngineTypes()
+    if not self.buttons or not self.gridBody then return end
+    local wanted = getPotentialAuraTypes()
+    local current = self.engineAuraTypes or {}
+    local same = #wanted == #current
+    if same then
+        for index = 1, #wanted do
+            if wanted[index] ~= current[index] then same = false break end
+        end
+    end
+    if same then return false end
+
+    if InCombatLockdown and InCombatLockdown() then
+        self.pendingAuraEngineRebuild = true
+        return false
+    end
+    self.pendingAuraEngineRebuild = false
+
+    self.engineAuraTypes = wanted
+    self.auraContainerDiagnostics = {
+        expected = MAX_BUTTONS * #wanted, added = 0, readyButtons = 0, firstError = nil,
+    }
+    for _, button in ipairs(self.buttons) do
+        if button.auraContainer then
+            pcall(button.auraContainer.Hide, button.auraContainer)
+            button.auraContainer = nil
+        end
+        button.auraSlotKeys, button.auraSlotVisuals = nil, nil
+        button.engineAuraReady = false
+        self:CreateAuraContainer(button)
+        if button.engineAuraReady then
+            self.auraContainerDiagnostics.readyButtons = self.auraContainerDiagnostics.readyButtons + 1
+        end
+    end
+    self.engineAuraMode = #wanted > 0 and self.auraContainerDiagnostics.readyButtons > 0
+    return true
 end

@@ -1,4 +1,4 @@
-# Cleansive 1.5.5
+# Cleansive 1.5.6
 
 Cleansive is a standalone one-click cleansing addon for **World of Warcraft Retail 12.1** (`120100`). It provides a compact Decursive-style workflow with a dark, class-colored interface inspired by the clarity of Ellesmere UI. English is the default language; French is available from the General page.
 
@@ -37,6 +37,11 @@ Red, blue, and orange identify the click to use. The optional L/R/C corner lette
 - English and French localization.
 - A guided first-time setup, with English kept as the default language.
 - Separate settings profiles for every character and specialization.
+- Optional grouping for dispel types you can only clear with an area or
+  self-only ability: one indicator with a count instead of one cell per
+  member. Off by default; the per-unit protected indicator stays in place
+  either way, because it is the only signal for an aura the addon may not
+  read.
 - Secure combat-only auto visibility and an afflicted-only visual mode.
 - A persistent, clickable history of readable afflictions.
 - A secure priority-cleanse key for the first configured cleansing spell.
@@ -88,6 +93,16 @@ remain active so a protected AuraSlot can pass cleansing clicks through during
 combat. Avoid clicking empty grid positions while this mode is enabled.
 
 The hover-cleanse key also respects these restrictions: it casts through a secure action button on your mouseover, target, or player. It never asks Lua to select an afflicted unit during combat, because the secure engine evaluates targeting conditions only and cannot read auras.
+
+## 1.5.6 changes
+
+- Grouped dispel types keep their protected engine cell. 1.5.4 removed it, which is what made grouping unsafe: an aura the addon may not read had no cell, no indicator and no sound. The cell is now drawn as a thin type stripe instead of a filled block, so the wall of cells is gone without the signal going with it.
+- The grouped indicator follows `UNIT_AURA` instead of waiting for a full refresh, coalescing bursts into one pass.
+- The readable sound fallback finds grouped afflictions again. Selecting a cell's clickable spell still ignores them; the two searches are now separate.
+- The engine's aura-type set is rebuilt when it changes, so a specialization or talent change no longer leaves a stale configuration. A change made during combat is applied once combat ends.
+- The indicator is anchored opposite the growth direction, so it no longer sits on top of the first cell in the upward layouts, and it resizes with the cell-size slider.
+- The indicator shows its count from 1, carries a colour-independent `!`, appears in test mode, counts only the player for a self-only ability, and follows the configured type order.
+- Shortened the option label so it fits its control.
 
 ## 1.5.5 changes
 

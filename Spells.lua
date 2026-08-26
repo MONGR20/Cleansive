@@ -10,7 +10,8 @@ NS.DISPEL_TYPES = { "Magic", "Curse", "Poison", "Disease", "Bleed", "Charm" }
 -- player cannot act on a single ally, so a per-unit cell has nothing to say.
 function NS:GetManualOnlyTypes()
     local result = {}
-    for _, auraType in ipairs(self.DISPEL_TYPES or {}) do
+    -- Follow the player's configured order, not the fixed declaration order.
+    for _, auraType in ipairs((self.db and self.db.typeOrder) or self.DISPEL_TYPES or {}) do
         if not (self.typeToSlot and self.typeToSlot[auraType])
             and self.manualTypeSpell and self.manualTypeSpell[auraType]
             and self.db and self.db.enabledTypes[auraType] ~= false then
@@ -214,6 +215,7 @@ function NS:UpdateSpells()
 
     self.pendingSpells = false
     if self.deferRefreshes then return end
+    if self.RefreshAuraEngineTypes then self:RefreshAuraEngineTypes() end
     if self.ApplySecureBindings then
         self:ApplySecureBindings()
     end

@@ -5,6 +5,16 @@ Depuis la 1.4.5, les principales branches logiques corrigées sont couvertes
 par des tests de non-régression dans `j/tests` (`npm test`). Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.5.6
+
+- Grouped dispel types keep their protected engine cell. 1.5.4 removed it, which is what made grouping unsafe: an aura the addon may not read had no cell, no indicator and no sound. The cell is now drawn as a thin type stripe instead of a filled block, so the wall of cells is gone without the signal going with it.
+- The grouped indicator follows `UNIT_AURA` instead of waiting for a full refresh, coalescing bursts into one pass.
+- The readable sound fallback finds grouped afflictions again. Selecting a cell's clickable spell still ignores them; the two searches are now separate.
+- The engine's aura-type set is rebuilt when it changes, so a specialization or talent change no longer leaves a stale configuration. A change made during combat is applied once combat ends.
+- The indicator is anchored opposite the growth direction, so it no longer sits on top of the first cell in the upward layouts, and it resizes with the cell-size slider.
+- The indicator shows its count from 1, carries a colour-independent `!`, appears in test mode, counts only the player for a self-only ability, and follows the configured type order.
+- Shortened the option label so it fits its control.
+
 ## 1.5.5
 
 - "Group untargetable cleanses" is now opt-in. Enabled by default in 1.5.4, it removed the protected engine cell for the grouped types without providing an equally reliable replacement: when an aura is unreadable in restricted combat and the native sound does not cover the spell, nothing was shown at all. Profiles written by 1.5.4 are reset to opt-in once, so the fix reaches players who already ran it. A deliberate choice made afterwards is left alone.

@@ -1,7 +1,7 @@
 local addonName, NS = ...
 
 NS.addonName = addonName
-NS.version = "1.5.5"
+NS.version = "1.5.6"
 NS.playerClass = select(2, UnitClass("player"))
 NS.blacklist = {}
 NS.testMode = false
@@ -505,6 +505,11 @@ function NS:FlushCombatUpdates()
     self.deferRefreshes = false
 
     if needsSpells or needsRoster then self:ApplySecureBindings() end
+    -- A specialization change during combat cannot rebuild the engine
+    -- slots; replay it now so the type set is not left stale.
+    if self.pendingAuraEngineRebuild and self.RefreshAuraEngineTypes then
+        self:RefreshAuraEngineTypes()
+    end
     self.pendingAuraFilters = false
     self.pendingAuraStyle = false
     local configured = false
