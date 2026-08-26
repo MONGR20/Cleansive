@@ -5,6 +5,11 @@ Depuis la 1.4.5, les principales branches logiques corrigées sont couvertes
 par des tests de non-régression dans `j/tests` (`npm test`). Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.5.5
+
+- "Group untargetable cleanses" is now opt-in. Enabled by default in 1.5.4, it removed the protected engine cell for the grouped types without providing an equally reliable replacement: when an aura is unreadable in restricted combat and the native sound does not cover the spell, nothing was shown at all. Profiles written by 1.5.4 are reset to opt-in once, so the fix reaches players who already ran it. A deliberate choice made afterwards is left alone.
+- The option still does what it was asked to do. Turn it on and a Demon Hunter or a Shaman gets a single indicator instead of one cell per member; the remaining gaps on the protected path are being addressed for 1.5.6.
+
 ## 1.5.4
 
 - Added "Group untargetable cleanses" (on by default). When the only way to clear a dispel type is an area or self-only ability, it is shown once next to the grid with a count of affected allies instead of on every unit cell. Reported by a Demon Hunter: Reverse Magic cannot be aimed at an ally, so forty cells all said the same thing. A Shaman gains the same for Poison Cleansing Totem; a class that can click every type sees no change.

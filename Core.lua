@@ -1,7 +1,7 @@
 local addonName, NS = ...
 
 NS.addonName = addonName
-NS.version = "1.5.4"
+NS.version = "1.5.5"
 NS.playerClass = select(2, UnitClass("player"))
 NS.blacklist = {}
 NS.testMode = false
@@ -36,7 +36,7 @@ local defaults = {
     showClickHints = true,
     autoHide = false,
     afflictedOnly = false,
-    groupManualTypes = true,
+    groupManualTypes = false,
     priorityKey = "",
     frameSize = 22,
     spacing = 2,

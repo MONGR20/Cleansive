@@ -128,6 +128,18 @@ function NS:InitializeProfiles()
     raw.profiles[characterKey] = type(raw.profiles[characterKey]) == "table" and raw.profiles[characterKey] or {}
     self.dbRoot = raw
 
+    -- 1.5.4 shipped "group untargetable cleanses" enabled, and applyDefaults
+    -- wrote that into every profile. On the protected path the grouped types
+    -- lost their engine cell without gaining a reliable replacement, so the
+    -- option goes back to opt-in -- including for profiles that already
+    -- recorded it. Runs once; a later deliberate choice is left alone.
+    if not raw.global.groupManualOptOut then
+        raw.global.groupManualOptOut = true
+        for _, stored in pairs(raw.profiles[characterKey]) do
+            if type(stored) == "table" then stored.groupManualTypes = false end
+        end
+    end
+
     for _, stored in pairs(raw.profiles[characterKey]) do
         prune(stored)
         absorbHistory(raw.global, stored)
