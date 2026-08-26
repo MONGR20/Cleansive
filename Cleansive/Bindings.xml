@@ -1,0 +1,6 @@
+<Bindings>
+    <Binding name="CLEANSIVE_OPTIONS" header="CLEANSIVE" category="ADDONS">Cleansive_ToggleOptions()</Binding>
+    <Binding name="CLEANSIVE_TOGGLE" category="ADDONS">Cleansive_Toggle()</Binding>
+    <Binding name="CLEANSIVE_PRIORITY" category="ADDONS">Cleansive_ShowPriority()</Binding>
+    <Binding name="CLEANSIVE_SKIP" category="ADDONS">Cleansive_ShowSkip()</Binding>
+</Bindings>

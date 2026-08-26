@@ -1,0 +1,405 @@
+local _, NS = ...
+
+-- Retail 12.1 forbids addon scripts from observing managed AuraButton
+-- visibility. Public spell IDs are therefore registered with Blizzard's
+-- native aura-sound service. Frames.lua supplies a separate UNIT_AURA
+-- fallback only when an aura remains readable and has no native registration.
+-- The list below covers one dungeon pool. When Blizzard rotates the season
+-- it silently stops matching, and the only visible symptom is that sounds
+-- stop firing. Bump this whenever the IDs are refreshed: /cleansive
+-- soundstatus prints it so the staleness is at least legible.
+NS.KNOWN_DISPELLABLE_AURAS_SEASON = "2"
+
+NS.KNOWN_DISPELLABLE_AURAS = {
+    Magic = {
+        1294569, 1217633, 1228198, 1201554, 1235549, 1239860, 1259365,
+        1238084, 1249238, 276031, 1294815, 270920, 270499, 372682,
+        373589, 1305234, 381515, 392641, 392924, 1296052,
+    },
+    Curse = {
+        1309980, 1310017, 1238255, 1217973, 1238801, 1252095, 269972,
+        270492,
+    },
+    Poison = {
+        1294845, 1305368, 1307571, 474515, 1216590, 1234846, 1250937,
+        1226031, 1289258, 1263971, 267273, 271564, 1298104, 1306763,
+        270865, 270507, 1308100, 1308148, 267027, 1303486, 1308546,
+    },
+    Disease = {
+        1296069, 1302867, 1245456, 267763,
+    },
+    Bleed = {
+        474740, 1216300, 1295035, 1295427, 1311136, 1238439, 1235865,
+        1238076, 1241058, 1247746, 1242135, 1237267, 1267894, 1299133,
+        1311778, 266191, 266231, 1297781, 1297918, 1301851, 1302945,
+        1303490, 372796, 1291399,
+    },
+}
+
+local function accessible(value)
+    return not canaccessvalue or canaccessvalue(value)
+end
+
+local function registrationKey(unit, spellID)
+    return tostring(unit) .. ":" .. tostring(spellID)
+end
+
+local SOUND_WARNING_THRESHOLD = 4500
+
+local function nowMilliseconds()
+    if debugprofilestop then return debugprofilestop() end
+    if GetTime then return GetTime() * 1000 end
+    return 0
+end
+
+local function tableCount(values)
+    local count = 0
+    for _ in pairs(values or {}) do count = count + 1 end
+    return count
+end
+
+local function getInstanceContext()
+    if not GetInstanceInfo then return "World", "none", 0 end
+    local name, instanceType, _, _, _, _, _, instanceID = GetInstanceInfo()
+    return name or "World", instanceType or "none", tonumber(instanceID) or 0
+end
+
+function NS:IsNativeAuraSoundAvailable()
+    return C_UnitAuras
+        and type(C_UnitAuras.AddAuraSound) == "function"
+        and type(C_UnitAuras.RemoveAuraSound) == "function"
+end
+
+function NS:GetAuraSoundUnitTokens()
+    local units, seen = {}, {}
+    local function add(unit)
+        if type(unit) ~= "string" or seen[unit] then return end
+        if unit == "player" or not UnitExists or UnitExists(unit) then
+            seen[unit] = true
+            units[#units + 1] = unit
+        end
+    end
+
+    -- Keep the player token available for self-only abilities. For every
+    -- other roster entry, register only the token currently displayed by the
+    -- secure cell. This includes an active vehicle without treating ordinary
+    -- pets as passengers when "Scan pets" is disabled.
+    add("player")
+    for _, descriptor in ipairs(self.roster or {}) do
+        local unit = self.GetDisplayUnit and self:GetDisplayUnit(descriptor.unit) or descriptor.unit
+        add(unit)
+    end
+    return units
+end
+
+function NS:BuildAuraSoundPlan()
+    local allUnitSpellIDs, playerOnlySpellIDs = {}, {}
+    local allUnitSeen, playerOnlySeen = {}, {}
+    local inCombat = InCombatLockdown and InCombatLockdown()
+    local function isIgnored(spellID)
+        local always = self.db.ignoredAlways or {}
+        local combat = self.db.ignoredCombat or {}
+        return always[spellID] or always[tostring(spellID)]
+            or (inCombat and (combat[spellID] or combat[tostring(spellID)]))
+    end
+    for auraType, ids in pairs(self.KNOWN_DISPELLABLE_AURAS or {}) do
+        local clickable = self.typeToSlot and self.typeToSlot[auraType]
+        local manual = not clickable and self.manualTypeSpell and self.manualTypeSpell[auraType]
+        local scope = clickable and "all" or (manual and manual.selfOnly and "player" or (manual and "all" or nil))
+        if self.db.enabledTypes[auraType] ~= false and scope then
+            local target = scope == "player" and playerOnlySpellIDs or allUnitSpellIDs
+            local seen = scope == "player" and playerOnlySeen or allUnitSeen
+            for index = 1, #ids do
+                local spellID = ids[index]
+                if type(spellID) == "number" and spellID > 0 and not seen[spellID] and not isIgnored(spellID) then
+                    seen[spellID] = true
+                    target[#target + 1] = spellID
+                end
+            end
+        end
+    end
+    for index = #playerOnlySpellIDs, 1, -1 do
+        if allUnitSeen[playerOnlySpellIDs[index]] then table.remove(playerOnlySpellIDs, index) end
+    end
+    table.sort(allUnitSpellIDs)
+    table.sort(playerOnlySpellIDs)
+    local candidateUnits = self:GetAuraSoundUnitTokens()
+
+    -- Spend the budget a complete unit at a time and preserve roster order.
+    -- This prevents a normal pet from displacing a priority player and avoids
+    -- leaving a retained unit with only a random subset of its dispels.
+    local registrations, units, spellIDs = {}, {}, {}
+    local includedSpellIDs, seenRegistration = {}, {}
+    local skippedUnits = 0
+    local budget = tonumber(self.db and self.db.soundMaxRegistrations) or 0
+    for _, unit in ipairs(candidateUnits) do
+        local entries = {}
+        for _, spellID in ipairs(allUnitSpellIDs) do
+            local key = registrationKey(unit, spellID)
+            if not seenRegistration[key] then entries[#entries + 1] = { key = key, unit = unit, spellID = spellID } end
+        end
+        if unit == "player" then
+            for _, spellID in ipairs(playerOnlySpellIDs) do
+                local key = registrationKey(unit, spellID)
+                if not seenRegistration[key] then entries[#entries + 1] = { key = key, unit = unit, spellID = spellID } end
+            end
+        end
+        if #entries > 0 then
+            if budget > 0 and #registrations + #entries > budget then
+                skippedUnits = skippedUnits + 1
+            else
+                units[#units + 1] = unit
+                for _, entry in ipairs(entries) do
+                    seenRegistration[entry.key] = true
+                    registrations[#registrations + 1] = entry
+                    includedSpellIDs[entry.spellID] = true
+                end
+            end
+        end
+    end
+    self.auraSoundSkippedUnits = skippedUnits
+
+    for spellID in pairs(includedSpellIDs) do spellIDs[#spellIDs + 1] = spellID end
+    table.sort(spellIDs)
+
+    local spellParts, unitParts, registrationParts = {}, {}, {}
+    for index = 1, #spellIDs do spellParts[index] = tostring(spellIDs[index]) end
+    for index = 1, #units do unitParts[index] = tostring(units[index]) end
+    for index = 1, #registrations do registrationParts[index] = registrations[index].key end
+    local fingerprint = table.concat({
+        self.db.sound and "1" or "0",
+        self.enabled and "1" or "0",
+        self.db.soundChannel or "Master",
+        table.concat(spellParts, ","),
+        table.concat(unitParts, ","),
+        table.concat(registrationParts, ","),
+    }, "|")
+    return spellIDs, units, fingerprint, registrations
+end
+
+function NS:RequestAuraSoundRefresh(reason)
+    self.pendingSoundRefreshReason = reason or self.pendingSoundRefreshReason or "requested"
+    if self.auraSoundRefreshScheduled then return end
+    if C_Timer and C_Timer.After then
+        self.auraSoundRefreshScheduled = true
+        C_Timer.After(0.10, function()
+            self.auraSoundRefreshScheduled = false
+            local refreshReason = self.pendingSoundRefreshReason
+            self.pendingSoundRefreshReason = nil
+            self:RefreshAuraSoundRegistrations(refreshReason)
+        end)
+    else
+        local refreshReason = self.pendingSoundRefreshReason
+        self.pendingSoundRefreshReason = nil
+        self:RefreshAuraSoundRegistrations(refreshReason)
+    end
+end
+
+function NS:IsAuraSoundRegistered(unit, spellID)
+    return self.auraSoundRegistered
+        and self.auraSoundRegistered[registrationKey(unit, spellID)] == true
+end
+
+function NS:GetKnownDispelType(spellID)
+    if type(spellID) ~= "number" or spellID <= 0 then return nil end
+    if not self.knownDispelTypeBySpellID then
+        self.knownDispelTypeBySpellID = {}
+        for auraType, ids in pairs(self.KNOWN_DISPELLABLE_AURAS or {}) do
+            for index = 1, #ids do
+                self.knownDispelTypeBySpellID[ids[index]] = auraType
+            end
+        end
+    end
+    return self.knownDispelTypeBySpellID[spellID]
+end
+
+function NS:RefreshAuraSoundRegistrations(reason)
+    self.pendingSoundRefresh = false
+
+    local startedAt = nowMilliseconds()
+    local spellIDs, units, fingerprint, registrations = self:BuildAuraSoundPlan()
+    local previous = self.auraSoundDiagnostics
+    if fingerprint == self.auraSoundFingerprint and previous
+        and previous.registered == previous.attempted then
+        local handleCount = tableCount(self.auraSoundHandles)
+        if handleCount == previous.registered then
+            local instanceName, instanceType, instanceID = getInstanceContext()
+            previous.reason = reason or previous.reason
+            previous.instanceName = instanceName
+            previous.instanceType = instanceType
+            previous.instanceID = instanceID
+            previous.elapsedMs = 0
+            previous.activeHandles = handleCount
+            previous.cached = true
+            return previous.registered
+        end
+    end
+    local instanceName, instanceType, instanceID = getInstanceContext()
+    local diagnostics = {
+        reason = reason or "unknown",
+        attempted = #registrations,
+        registered = 0,
+        units = #units,
+        spells = #spellIDs,
+        skippedUnits = self.auraSoundSkippedUnits or 0,
+        instanceName = instanceName,
+        instanceType = instanceType,
+        instanceID = instanceID,
+        added = 0,
+        removed = 0,
+        reused = 0,
+        batches = 0,
+        elapsedMs = 0,
+        cached = false,
+        error = nil,
+    }
+    self.auraSoundDiagnostics = diagnostics
+    self.auraSoundGeneration = (self.auraSoundGeneration or 0) + 1
+    local generation = self.auraSoundGeneration
+
+    if not self:IsNativeAuraSoundAvailable() then
+        diagnostics.error = "native API unavailable"
+        diagnostics.elapsedMs = nowMilliseconds() - startedAt
+        diagnostics.activeHandles = tableCount(self.auraSoundHandles)
+        self.auraSoundFingerprint = nil
+        return 0
+    end
+
+    local desired = {}
+    if self.db and self.db.sound and self.enabled then
+        for _, entry in ipairs(registrations) do
+            desired[entry.key] = entry
+        end
+    else
+        diagnostics.attempted = 0
+    end
+
+    local handles = self.auraSoundHandles or {}
+    local registered = self.auraSoundRegistered or {}
+    local staleHandles = 0
+    local invalidHandles = {}
+    local currentChannel = self.db.soundChannel or "Master"
+    local rebuildAll = self.auraSoundChannel and self.auraSoundChannel ~= currentChannel
+
+    -- Keep registrations that are still valid. Group/focus changes normally
+    -- touch only one or two unit tokens instead of rebuilding unit x spell.
+    for key, handle in pairs(handles) do
+        if rebuildAll or not desired[key] then
+            local ok, result = pcall(C_UnitAuras.RemoveAuraSound, handle)
+            if ok and result ~= false then
+                handles[key] = nil
+                registered[key] = nil
+                diagnostics.removed = diagnostics.removed + 1
+            else
+                staleHandles = staleHandles + 1
+                invalidHandles[key] = true
+                diagnostics.error = ok and "sound registration removal failed" or tostring(result)
+            end
+        end
+    end
+
+    local pendingAdds = {}
+    for _, planned in ipairs(registrations) do
+        local key, entry = planned.key, desired[planned.key]
+        if entry and handles[key] and not invalidHandles[key] then
+            registered[key] = true
+            diagnostics.registered = diagnostics.registered + 1
+            diagnostics.reused = diagnostics.reused + 1
+        elseif entry and not invalidHandles[key] then
+            pendingAdds[#pendingAdds + 1] = { key = key, unit = entry.unit, spellID = entry.spellID }
+        end
+    end
+
+    self.auraSoundHandles = handles
+    self.auraSoundRegistered = registered
+
+    local trigger = Enum and Enum.UnitAuraSoundTrigger and Enum.UnitAuraSoundTrigger.Added or 0
+    local nextAdd = 1
+    diagnostics.pending = #pendingAdds > 0
+
+    local function finalize()
+        if self.auraSoundGeneration ~= generation then return end
+        diagnostics.pending = false
+        diagnostics.elapsedMs = math.max(0, nowMilliseconds() - startedAt)
+        diagnostics.activeHandles = tableCount(handles)
+        if diagnostics.registered == diagnostics.attempted and staleHandles == 0 then
+            self.auraSoundFingerprint = fingerprint
+            self.auraSoundChannel = currentChannel
+        else
+            self.auraSoundFingerprint = nil
+            if InCombatLockdown and InCombatLockdown() then self.pendingSoundRefresh = true end
+        end
+        if diagnostics.attempted >= SOUND_WARNING_THRESHOLD and not self.soundLoadWarningShown then
+            self.soundLoadWarningShown = true
+            self:Print(self.L.SOUND_STATUS_HIGH, diagnostics.attempted, diagnostics.units, diagnostics.spells)
+        end
+    end
+
+    local function registerBatch()
+        if self.auraSoundGeneration ~= generation then return end
+        local batchSize = C_Timer and C_Timer.After and 180 or #pendingAdds
+        local lastAdd = math.min(#pendingAdds, nextAdd + batchSize - 1)
+        if lastAdd >= nextAdd then diagnostics.batches = diagnostics.batches + 1 end
+        for index = nextAdd, lastAdd do
+            local entry = pendingAdds[index]
+            local info = {
+                unitToken = entry.unit,
+                spellID = entry.spellID,
+                soundFileName = self.afflictionSoundFile,
+                outputChannel = self.db.soundChannel or "Master",
+            }
+            local ok, handle = pcall(C_UnitAuras.AddAuraSound, trigger, info)
+            if ok and type(handle) == "number" and accessible(handle) then
+                handles[entry.key] = handle
+                registered[entry.key] = true
+                diagnostics.registered = diagnostics.registered + 1
+                diagnostics.added = diagnostics.added + 1
+            elseif not ok then
+                diagnostics.error = tostring(handle)
+            else
+                diagnostics.error = "registration returned no sound ID"
+            end
+        end
+        nextAdd = lastAdd + 1
+        if nextAdd <= #pendingAdds and C_Timer and C_Timer.After then
+            C_Timer.After(0, registerBatch)
+        else
+            finalize()
+        end
+    end
+
+    registerBatch()
+    return diagnostics.registered
+end
+
+function NS:PrintAuraSoundStatus()
+    local diagnostics = self.auraSoundDiagnostics or {}
+    local activeHandles = tableCount(self.auraSoundHandles)
+    self:Print(self.L.SOUND_STATUS,
+        tonumber(diagnostics.registered) or 0,
+        tonumber(diagnostics.attempted) or 0,
+        tonumber(diagnostics.spells) or 0,
+        tonumber(diagnostics.units) or 0)
+    self:Print(self.L.SOUND_STATUS_DELTA,
+        tonumber(diagnostics.added) or 0,
+        tonumber(diagnostics.removed) or 0,
+        tonumber(diagnostics.reused) or 0)
+    self:Print(self.L.SOUND_STATUS_PERFORMANCE,
+        activeHandles,
+        tonumber(diagnostics.batches) or 0,
+        tonumber(diagnostics.elapsedMs) or 0)
+    self:Print(self.L.SOUND_STATUS_INSTANCE,
+        tostring(diagnostics.instanceName or "World"),
+        tostring(diagnostics.instanceType or "none"),
+        tostring(diagnostics.instanceID or 0))
+    if (tonumber(diagnostics.skippedUnits) or 0) > 0 then
+        self:Print(self.L.SOUND_STATUS_CAPPED, diagnostics.skippedUnits,
+            tonumber(self.db.soundMaxRegistrations) or 0)
+    end
+    local total = 0
+    for _, ids in pairs(self.KNOWN_DISPELLABLE_AURAS or {}) do total = total + #ids end
+    self:Print(self.L.SOUND_STATUS_SEASON,
+        tostring(self.KNOWN_DISPELLABLE_AURAS_SEASON or "?"), total)
+    if diagnostics.pending then self:Print(self.L.SOUND_STATUS_PENDING) end
+    if diagnostics.error then self:Print(self.L.SOUND_STATUS_ERROR, diagnostics.error) end
+end

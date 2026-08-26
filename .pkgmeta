@@ -1,0 +1,29 @@
+# Read by the BigWigs packager, which Wago and CurseForge run from a GitHub
+# action. It does nothing when you zip by hand.
+#
+# This file belongs at the repository root, next to the Cleansive/ folder --
+# not inside it.
+
+package-as: Cleansive
+
+# Cleansive embeds no libraries, so a "nolib" variant would be byte-identical
+# to the normal one. Building it would only confuse the download page.
+enable-nolib-creation: no
+
+# Use the changelog the addon ships instead of letting the packager paste a
+# commit log into the release notes.
+manual-changelog:
+  filename: CHANGELOG.md
+  markup-type: markdown
+
+# Everything not listed here is packaged. The addon folder holds no build
+# artifacts -- the test harness lives outside it -- so this stays short.
+ignore:
+  - .pkgmeta
+  - .github
+  - tests
+  - "*.bak"
+  - .DS_Store
+
+# The addon already ships its own LICENSE.txt, so the packager does not need
+# to generate one.

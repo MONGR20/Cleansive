@@ -1,0 +1,31 @@
+## Interface: 120100
+## Title: Cleansive
+## Notes: Afflictions display and one-click cleansing for solo, groups and raids.
+## Notes-frFR: Affichage des afflictions et dissipation en un clic en solo, groupe et raid.
+## Author: Ro
+## Version: 1.5.4
+## X-Website: https://addons.wago.io/addons/cleansive
+## X-Wago-ID: v6330o6b
+## X-Curse-Project-ID: 1666419
+## X-License: MIT
+## SavedVariables: CleansiveDB
+## OptionalDeps: Blizzard_AuraContainer, EllesmereUI
+## IconTexture: Interface\Icons\Spell_Holy_DispelMagic
+## Category: Combat
+## Category-enUS: Combat
+## Category-frFR: Combat
+## X-Category: Combat
+## AddonCompartmentFunc: Cleansive_AddonCompartmentClick
+## AddonCompartmentFuncOnEnter: Cleansive_AddonCompartmentOnEnter
+## AddonCompartmentFuncOnLeave: Cleansive_AddonCompartmentOnLeave
+
+Core.lua
+Profiles.lua
+Locale.lua
+Spells.lua
+DispelSounds.lua
+Roster.lua
+Frames.lua
+Lists.lua
+EllesmereUX.lua
+SetupWizard.lua
