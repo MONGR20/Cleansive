@@ -5,6 +5,12 @@ Depuis la 1.4.5, les principales branches logiques corrigées sont couvertes
 par des tests de non-régression dans `j/tests` (`npm test`). Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.5.16
+
+- Cell labels scale with the cell instead of carrying a size tuned for the default 22 px. At 12 px the click-hint plate alone covered most of the cell -- it was a fixed 11x11 texture -- and the labels overlapped; at 40 px the same labels floated in empty space. Every size is now derived from the cell and clamped at both ends, calibrated so a 22 px cell is unchanged to the pixel. The unit name is hidden below 16 px rather than drawn as two illegible letters, and the grouped badge follows the same rule since it already resized with the cell.
+- The cell is stripped to what it needs: type colour, the affliction's clock sweep, and the numeric dispel cooldown. The affliction stack count keeps its option but is off by default, and one sweep turns it off in existing profiles -- flipping the default alone would have left every current player looking at the number it is meant to remove. A deliberate choice made afterwards is left alone. The unit name is unchanged: it was already off by default.
+- Tests: 229 to 248. The harness records fonts, sizes and anchors now, which is what makes a computed layout checkable without a renderer. One test passed for the wrong reason and was repaired: the harness neutralises `GetUXFont`, so the code under test returned early and asserted nothing.
+
 ## 1.5.15
 
 - The horizontal and vertical layouts stay on screen. Horizontal forced 82 columns and vertical a single one, so a full raid with pets laid a strict run of about 2 100 pixels -- past the edge of a 1920x1080 screen in both directions. `SetClampedToScreen` only holds the small anchor in place; the cells themselves walked straight off. A run now wraps at what the screen can actually show, without changing the shape that was asked for: horizontal still fills a row before starting another, vertical still fills a column. The grid layout follows a narrow screen the same way.

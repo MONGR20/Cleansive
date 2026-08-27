@@ -193,6 +193,22 @@ function NS:InitializeProfiles()
         end
     end
 
+    -- 1.5.16 strips the cell down to colour, sweep and dispel cooldown. The
+    -- affliction stack count goes with it: the option stays for anyone who
+    -- wants it back, but flipping the default alone would leave every existing
+    -- profile showing the number it is meant to remove. Runs once; a later
+    -- deliberate choice is left alone.
+    if not raw.global.stacksOffByDefault1516 then
+        raw.global.stacksOffByDefault1516 = true
+        for _, character in pairs(raw.profiles) do
+            if type(character) == "table" then
+                for _, stored in pairs(character) do
+                    if type(stored) == "table" then stored.showStacks = false end
+                end
+            end
+        end
+    end
+
     for _, stored in pairs(raw.profiles[characterKey]) do
         prune(stored)
         absorbHistory(raw.global, stored)

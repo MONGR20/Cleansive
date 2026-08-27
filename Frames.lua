@@ -57,6 +57,66 @@ local function tryCall(method, owner, ...)
     return pcall(method, owner, ...)
 end
 
+-- Every label carried a fixed size tuned for the default 22 px cell. At 12 px
+-- the click plate covered most of the cell and the labels overlapped; at 40 px
+-- the same labels floated in empty space. Sizes scale from the cell now,
+-- calibrated so 22 px is byte-for-byte unchanged, and clamped at both ends.
+local FONT_RULES = {
+    name      = { base = 10, min = 7, max = 14 },
+    stack     = { base = 10, min = 8, max = 14 },
+    hint      = { base =  9, min = 7, max = 12 },
+    countdown = { base = 12, min = 9, max = 16 },
+    plate     = { base = 11, min = 8, max = 15 },
+}
+
+-- A name in a 12 px cell shows a letter or two. Below this, hide it rather
+-- than draw mush over the rest of the cell.
+local NAME_MIN_CELL = 16
+
+function NS:CellFontSize(role, size)
+    local rule = FONT_RULES[role]
+    if not rule then return nil end
+    local cell = tonumber(size) or tonumber(self.db and self.db.frameSize) or 22
+    local scaled = math.floor(rule.base * cell / 22 + 0.5)
+    return math.max(rule.min, math.min(rule.max, scaled))
+end
+
+function NS:CellShowsNames()
+    if not self.db or not self.db.showNames then return false end
+    return (tonumber(self.db.frameSize) or 22) >= NAME_MIN_CELL
+end
+
+function NS:ApplyCellFonts(button)
+    if not button then return end
+    local font = self.GetUXFont and self:GetUXFont()
+    if not font then return end
+    local size = self.db and self.db.frameSize
+    local plate = self:CellFontSize("plate", size)
+    local function setFont(region, role, flags)
+        if region and region.SetFont then region:SetFont(font, self:CellFontSize(role, size), flags or "") end
+    end
+    local function setPlate(region)
+        if region and region.SetSize then region:SetSize(plate, plate) end
+    end
+    setFont(button.nameText, "name")
+    setFont(button.center, "stack")
+    setFont(button.clickHint, "hint", "OUTLINE")
+    setPlate(button.clickHintPlate)
+    local cooldown = button.cooldown
+    if cooldown and cooldown.GetCountdownFontString then
+        setFont(cooldown:GetCountdownFontString(), "countdown", "OUTLINE")
+    end
+    -- The protected engine draws its own copy of every label.
+    for _, visuals in pairs(button.auraSlotVisuals or {}) do
+        for _, visual in ipairs(visuals) do
+            setFont(visual.unitName, "name")
+            setFont(visual.stack, "stack")
+            setFont(visual.clickHint, "hint", "OUTLINE")
+            setPlate(visual.clickHintPlate)
+        end
+    end
+end
+
 local function createBorder(frame)
     frame.border = {}
     for index = 1, 4 do
@@ -125,7 +185,7 @@ function NS:CreateGrid()
     mark:SetPoint("CENTER")
     mark:SetText("C")
     mark:SetTextColor(ar, ag, ab, 1)
-    if self.GetUXFont then mark:SetFont(self:GetUXFont(), 10, "") end
+    if self.GetUXFont then mark:SetFont(self:GetUXFont(), self:CellFontSize("stack"), "") end
     anchor.handle, anchor.mark, anchor.accentLine = handle, mark, accentLine
 
     anchor:SetScript("OnDragStart", function(f)
@@ -339,7 +399,7 @@ function NS:CreateUnitButton(index)
     local center = labelLayer:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
     center:SetPoint("TOPRIGHT", labelLayer, "TOPRIGHT", -1, -1)
     center:SetText("")
-    if self.GetUXFont then center:SetFont(self:GetUXFont(), 10, "") end
+    if self.GetUXFont then center:SetFont(self:GetUXFont(), self:CellFontSize("stack"), "") end
     button.center = center
 
     local name = labelLayer:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -348,13 +408,13 @@ function NS:CreateUnitButton(index)
     name:SetJustifyH("CENTER")
     if name.SetWordWrap then name:SetWordWrap(false) end
     if name.SetMaxLines then name:SetMaxLines(1) end
-    if self.GetUXFont then name:SetFont(self:GetUXFont(), 10, "") end
+    if self.GetUXFont then name:SetFont(self:GetUXFont(), self:CellFontSize("name"), "") end
     name:Hide()
     button.nameText = name
 
     local hintPlate = labelLayer:CreateTexture(nil, "ARTWORK")
     hintPlate:SetPoint("TOPLEFT", 1, -1)
-    hintPlate:SetSize(11, 11)
+    hintPlate:SetSize(self:CellFontSize("plate"), self:CellFontSize("plate"))
     hintPlate:SetColorTexture(0.015, 0.025, 0.030, 0.78)
     hintPlate:Hide()
     local hint = labelLayer:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -362,7 +422,7 @@ function NS:CreateUnitButton(index)
     hint:SetTextColor(1, 1, 1, 1)
     hint:SetShadowColor(0, 0, 0, 1)
     hint:SetShadowOffset(1, -1)
-    if self.GetUXFont then hint:SetFont(self:GetUXFont(), 9, "OUTLINE") end
+    if self.GetUXFont then hint:SetFont(self:GetUXFont(), self:CellFontSize("hint"), "OUTLINE") end
     hint:Hide()
     button.clickHint = hint
     button.clickHintPlate = hintPlate
@@ -399,7 +459,7 @@ function NS:CreateUnitButton(index)
     if countdown then
         countdown:SetAlpha(1)
         countdown:SetTextColor(1, 1, 1, 1)
-        if self.GetUXFont then countdown:SetFont(self:GetUXFont(), 12, "OUTLINE") end
+        if self.GetUXFont then countdown:SetFont(self:GetUXFont(), self:CellFontSize("countdown"), "OUTLINE") end
     end
     button.cooldown = cooldown
 
@@ -484,11 +544,11 @@ function NS:StyleAuraVisual(button, auraType, visual)
         else
             visual.stack:SetPoint("TOPRIGHT", button, "TOPRIGHT", -1, -1)
         end
-        visual.stack:SetShown(enabled and self.db.showStacks and not self.db.showNames)
+        visual.stack:SetShown(enabled and self.db.showStacks and not self:CellShowsNames())
         if visual.unitName then
             visual.unitName:SetWidth(math.max(8, self.db.frameSize - 4))
             visual.unitName:SetText(button.descriptor and button.descriptor.displayName or button.unit or "")
-            visual.unitName:SetShown(enabled and self.db.showNames)
+            visual.unitName:SetShown(enabled and self:CellShowsNames())
         end
         if visual.clickHint then
             visual.clickHint:ClearAllPoints()
@@ -677,7 +737,7 @@ function NS:CreateAuraContainer(button)
                 hint:SetTextColor(1, 1, 1, 1)
                 hint:SetShadowColor(0, 0, 0, 1)
                 hint:SetShadowOffset(1, -1)
-                if self.GetUXFont then hint:SetFont(self:GetUXFont(), 9, "OUTLINE") end
+                if self.GetUXFont then hint:SetFont(self:GetUXFont(), self:CellFontSize("hint"), "OUTLINE") end
 
                 local unitName = labelLayer:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
                 unitName:SetPoint("BOTTOM", button, "BOTTOM", 0, 3)
@@ -685,7 +745,7 @@ function NS:CreateAuraContainer(button)
                 unitName:SetJustifyH("CENTER")
                 if unitName.SetWordWrap then unitName:SetWordWrap(false) end
                 if unitName.SetMaxLines then unitName:SetMaxLines(1) end
-                if self.GetUXFont then unitName:SetFont(self:GetUXFont(), 10, "") end
+                if self.GetUXFont then unitName:SetFont(self:GetUXFont(), self:CellFontSize("name"), "") end
 
                 local visual = {
                     auraButton = auraButton,
@@ -912,6 +972,7 @@ function NS:LayoutButtons()
         button:SetSize(size, size)
         button.cooldown:SetSize(size, size)
         button.nameText:SetWidth(math.max(8, size - 4))
+        self:ApplyCellFonts(button)
         button:ClearAllPoints()
         button.cooldown:ClearAllPoints()
         local col, row
@@ -1389,7 +1450,7 @@ function NS:SetButtonState(button, aura, auraType, slot, secret, charmed)
 
     -- A readable manual-only affliction has an aura but no secure click slot.
     -- It is still a visible afflicted cell and must keep its unit name.
-    local showNames = self.db.showNames and (not self.db.afflictedOnly or aura ~= nil) and true or false
+    local showNames = self:CellShowsNames() and (not self.db.afflictedOnly or aura ~= nil) and true or false
     if button.lastShowNames ~= showNames then
         button.lastShowNames = showNames
         if showNames then
@@ -1802,6 +1863,13 @@ function NS:LayoutManualIndicator()
     if not frame or not self.cooldownBody then return end
     local size = self.db.frameSize
     frame:SetSize(size, size)
+    -- The badge follows the cell size, so its labels follow it too.
+    local font = self.GetUXFont and self:GetUXFont()
+    if font then
+        local labelSize = self:CellFontSize("stack", size)
+        if frame.mark then frame.mark:SetFont(font, labelSize, "") end
+        if frame.count then frame.count:SetFont(font, labelSize, "") end
+    end
     frame:ClearAllPoints()
     local grow = self.db.grow or "RIGHT_DOWN"
     local up = grow == "RIGHT_UP" or grow == "LEFT_UP"

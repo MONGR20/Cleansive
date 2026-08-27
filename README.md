@@ -1,4 +1,4 @@
-# Cleansive 1.5.15
+# Cleansive 1.5.16
 
 Cleansive is a standalone one-click cleansing addon for **World of Warcraft Retail 12.1** (`120100`). It provides a compact Decursive-style workflow with a dark, class-colored interface inspired by the clarity of Ellesmere UI. The interface follows the language of your WoW client, English or French; either can be picked from the General page at any time.
 
@@ -93,6 +93,12 @@ remain active so a protected AuraSlot can pass cleansing clicks through during
 combat. Avoid clicking empty grid positions while this mode is enabled.
 
 The hover-cleanse key also respects these restrictions: it casts through a secure action button on your mouseover, target, or player. It never asks Lua to select an afflicted unit during combat, because the secure engine evaluates targeting conditions only and cannot read auras.
+
+## 1.5.16 changes
+
+- Cell labels scale with the cell instead of carrying a size tuned for the default 22 px. At 12 px the click-hint plate alone covered most of the cell -- it was a fixed 11x11 texture -- and the labels overlapped; at 40 px the same labels floated in empty space. Every size is now derived from the cell and clamped at both ends, calibrated so a 22 px cell is unchanged to the pixel. The unit name is hidden below 16 px rather than drawn as two illegible letters, and the grouped badge follows the same rule since it already resized with the cell.
+- The cell is stripped to what it needs: type colour, the affliction's clock sweep, and the numeric dispel cooldown. The affliction stack count keeps its option but is off by default, and one sweep turns it off in existing profiles -- flipping the default alone would have left every current player looking at the number it is meant to remove. A deliberate choice made afterwards is left alone. The unit name is unchanged: it was already off by default.
+- Tests: 229 to 248. The harness records fonts, sizes and anchors now, which is what makes a computed layout checkable without a renderer. One test passed for the wrong reason and was repaired: the harness neutralises `GetUXFont`, so the code under test returned early and asserted nothing.
 
 ## 1.5.15 changes
 
