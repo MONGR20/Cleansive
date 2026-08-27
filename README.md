@@ -1,4 +1,4 @@
-# Cleansive 1.5.18
+# Cleansive 1.5.19
 
 Cleansive is a standalone one-click cleansing addon for **World of Warcraft Retail 12.1** (`120100`). It provides a compact Decursive-style workflow with a dark, class-colored interface inspired by the clarity of Ellesmere UI. The interface follows the language of your WoW client, English or French; either can be picked from the General page at any time.
 
@@ -93,6 +93,11 @@ remain active so a protected AuraSlot can pass cleansing clicks through during
 combat. Avoid clicking empty grid positions while this mode is enabled.
 
 The hover-cleanse key also respects these restrictions: it casts through a secure action button on your mouseover, target, or player. It never asks Lua to select an afflicted unit during combat, because the secure engine evaluates targeting conditions only and cannot read auras.
+
+## 1.5.19 changes
+
+- Protected aura slots follow the spells the character actually knows. The filter accepted every definition belonging to the class without ever checking the spellbook, so a class whose definitions span five dispel types reserved a slot for all five on all 82 buttons -- 410 protected frames for an evoker who knows one cleanse, where 82 are needed. Learning a spell widens the set on the next spell update, and the class-wide set stays as a boot fallback in case the spellbook is not ready: an empty set would strip the cells of the protected engine, and 1.5.4 already showed what removing a signal costs.
+- Tests: 418 to 422.
 
 ## 1.5.18 changes
 

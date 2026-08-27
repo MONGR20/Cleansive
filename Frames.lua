@@ -32,7 +32,16 @@ local function getPotentialAuraTypes()
     for _, def in ipairs(NS.SPELL_DEFINITIONS or {}) do
         -- Include area/self-only abilities: their types must still be drawn
         -- so the player sees the affliction and casts the ability manually.
-        if def.class == NS.playerClass or (not def.class and NS:IsSpellKnown(def)) then
+        -- Every def of the class used to count, known or not, so a class whose
+        -- definitions span five types reserved an AuraSlot for all five on all
+        -- 82 buttons -- 410 protected frames for a character who may know one
+        -- cleanse. Only spells actually in the spellbook count now.
+        -- UpdateSpells runs before CreateFrames, so knownSpells is populated by
+        -- then; the class-wide set stays as a boot fallback in case it is not,
+        -- and RefreshAuraEngineTypes narrows it on the next spell update.
+        local resolved = NS.knownSpells ~= nil
+        if (resolved and NS:IsSpellKnown(def)) or (not resolved and def.class == NS.playerClass)
+            or (not def.class and NS:IsSpellKnown(def)) then
             for _, list in ipairs({ def.types, def.enhancedTypes }) do
                 for _, auraType in ipairs(list or {}) do supported[auraType] = true end
             end

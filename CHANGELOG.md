@@ -5,6 +5,11 @@ Depuis la 1.4.5, les principales branches logiques corrigées sont couvertes
 par des tests de non-régression dans `j/tests` (`npm test`). Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.5.19
+
+- Protected aura slots follow the spells the character actually knows. The filter accepted every definition belonging to the class without ever checking the spellbook, so a class whose definitions span five dispel types reserved a slot for all five on all 82 buttons -- 410 protected frames for an evoker who knows one cleanse, where 82 are needed. Learning a spell widens the set on the next spell update, and the class-wide set stays as a boot fallback in case the spellbook is not ready: an empty set would strip the cells of the protected engine, and 1.5.4 already showed what removing a signal costs.
+- Tests: 418 to 422.
+
 ## 1.5.18
 
 - The grid is laid out again whenever the anchor moves. Since 1.5.17 the cell count depends on where the anchor sits, but dragging it, resetting it or switching profile never recounted, so a run computed at the centre kept its centre-sized wrap once dragged towards an edge -- a cell ended up 2738 px across on a 1920 px screen. Two orderings were inverted as well: `LayoutButtons` read the anchor's edges before the new profile's position had been restored, and the anchor was resized after its edges had been measured.
