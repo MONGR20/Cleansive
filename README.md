@@ -1,4 +1,4 @@
-# Cleansive 1.5.12
+# Cleansive 1.5.13
 
 Cleansive is a standalone one-click cleansing addon for **World of Warcraft Retail 12.1** (`120100`). It provides a compact Decursive-style workflow with a dark, class-colored interface inspired by the clarity of Ellesmere UI. The interface follows the language of your WoW client, English or French; either can be picked from the General page at any time.
 
@@ -93,6 +93,11 @@ remain active so a protected AuraSlot can pass cleansing clicks through during
 combat. Avoid clicking empty grid positions while this mode is enabled.
 
 The hover-cleanse key also respects these restrictions: it casts through a secure action button on your mouseover, target, or player. It never asks Lua to select an afflicted unit during combat, because the secure engine evaluates targeting conditions only and cannot read auras.
+
+## 1.5.13 changes
+
+- Removed Will of the Forsaken (7744) from the spell table. It could never light anything, and that is provable without a game test. Cleansive's "Charm" is not a dispel type -- Blizzard's own `AuraUtil.DispellableDebuffTypes` stops at Magic, Curse, Disease, Poison and Bleed -- it is the state "this ally is mind-controlled", detected because you can suddenly attack them, and answered by a crowd-control spell cast on them. A self-only racial fits none of that: it gets no click slot, so the detection is never reached, and `UnitCanAttack` is false on yourself, so your own case never fires either. Listing it only promised an undead player of a class with no crowd-control spell a type that stays dark forever. Nothing changes for anyone who has a real one.
+- Tests: the mixed-scope cases now inject the self-only side. No real character carries an area-only and a self-only cleanse at once any more, and pretending otherwise would have quietly turned those assertions into decoration.
 
 ## 1.5.12 changes
 

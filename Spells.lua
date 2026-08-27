@@ -87,7 +87,15 @@ NS.SPELL_DEFINITIONS = {
     { id = 278326, class = "DEMONHUNTER", types = { "Charm" }, hostile = true,         quality = 1 },
     { id = 217832, class = "DEMONHUNTER", types = { "Charm" }, hostile = true,         quality = 4 },
 
-    { id = 7744,   types = { "Charm" }, selfOnly = true, quality = 1 },
+    -- Will of the Forsaken (7744) was listed here until 1.5.13 and could never
+    -- light anything. Cleansive's "Charm" is not a dispel type -- Blizzard's
+    -- AuraUtil.DispellableDebuffTypes stops at Magic, Curse, Disease, Poison
+    -- and Bleed -- it is the state "this ally is mind-controlled", detected
+    -- because you can suddenly attack them, and answered by a crowd-control
+    -- spell cast on them. A self-only racial fits none of that: it gets no
+    -- click slot, so the detection never runs, and UnitCanAttack is false on
+    -- yourself, so your own case never fires either. Listing it only promised
+    -- an undead player something the addon cannot deliver.
 }
 
 local function getSpellName(spellID)

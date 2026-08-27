@@ -5,6 +5,11 @@ Depuis la 1.4.5, les principales branches logiques corrigées sont couvertes
 par des tests de non-régression dans `j/tests` (`npm test`). Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.5.13
+
+- Removed Will of the Forsaken (7744) from the spell table. It could never light anything, and that is provable without a game test. Cleansive's "Charm" is not a dispel type -- Blizzard's own `AuraUtil.DispellableDebuffTypes` stops at Magic, Curse, Disease, Poison and Bleed -- it is the state "this ally is mind-controlled", detected because you can suddenly attack them, and answered by a crowd-control spell cast on them. A self-only racial fits none of that: it gets no click slot, so the detection is never reached, and `UnitCanAttack` is false on yourself, so your own case never fires either. Listing it only promised an undead player of a class with no crowd-control spell a type that stays dark forever. Nothing changes for anyone who has a real one.
+- Tests: the mixed-scope cases now inject the self-only side. No real character carries an area-only and a self-only cleanse at once any more, and pretending otherwise would have quietly turned those assertions into decoration.
+
 ## 1.5.12
 
 - 1.5.11 shipped the defect it meant to fix. `C_Spell.GetSpellCharges` is documented to return nil for a spell that is not charge-based, and the fix tested for exactly that. The live client returns a table for those spells too, with `maxCharges = 1`, so every spell was treated as charge-based and the numeric cleanse cooldown stayed missing. The test passed because the mock had been written from the documentation rather than from the client. It now returns what the game returns, and the case turns red without the fix.
