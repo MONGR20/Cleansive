@@ -866,6 +866,25 @@ function NS:AssignRosterToButtons()
     end
 end
 
+-- SetClampedToScreen only holds the little anchor in place, so a strict run of
+-- 82 cells walks off the screen on its own. Cap a run at what actually fits;
+-- nil means the screen size is unknown and nothing is capped.
+function NS:MaxCellsPerRun(size, spacing, extent)
+    if type(extent) ~= "number" or extent <= 0 then return nil end
+    local step = (tonumber(size) or 0) + (tonumber(spacing) or 0)
+    if step <= 0 then return nil end
+    return math.max(1, math.min(MAX_BUTTONS, math.floor(extent / step)))
+end
+
+local function screenExtent(dimension)
+    if not UIParent then return nil end
+    local getter = dimension == "height" and UIParent.GetHeight or UIParent.GetWidth
+    if not getter then return nil end
+    local ok, value = pcall(getter, UIParent)
+    if not ok or type(value) ~= "number" then return nil end
+    return value
+end
+
 function NS:LayoutButtons()
     if not self.buttons then return end
     if InCombatLockdown and InCombatLockdown() then
@@ -874,10 +893,18 @@ function NS:LayoutButtons()
     end
     local size, spacing, columns = self.db.frameSize, self.db.spacing, self.db.columns
     local layoutMode = self.db.layoutMode or "GRID"
+    -- A run that leaves the screen shows nothing, so it wraps instead. The
+    -- shape the player asked for is kept: horizontal still fills a row before
+    -- starting another, vertical still fills a column.
+    local rows
     if layoutMode == "HORIZONTAL" then
-        columns = MAX_BUTTONS
+        columns = self:MaxCellsPerRun(size, spacing, screenExtent("width")) or MAX_BUTTONS
     elseif layoutMode == "VERTICAL" then
+        rows = self:MaxCellsPerRun(size, spacing, screenExtent("height")) or MAX_BUTTONS
         columns = 1
+    else
+        local widest = self:MaxCellsPerRun(size, spacing, screenExtent("width"))
+        if widest then columns = math.min(columns, widest) end
     end
     local growRight = self.db.grow == "RIGHT_DOWN" or self.db.grow == "RIGHT_UP"
     local growDown = self.db.grow == "RIGHT_DOWN" or self.db.grow == "LEFT_DOWN"
@@ -887,8 +914,15 @@ function NS:LayoutButtons()
         button.nameText:SetWidth(math.max(8, size - 4))
         button:ClearAllPoints()
         button.cooldown:ClearAllPoints()
-        local col = (index - 1) % columns
-        local row = math.floor((index - 1) / columns)
+        local col, row
+        if rows then
+            -- Vertical fills a column before moving to the next one.
+            row = (index - 1) % rows
+            col = math.floor((index - 1) / rows)
+        else
+            col = (index - 1) % columns
+            row = math.floor((index - 1) / columns)
+        end
         local x = (growRight and 1 or -1) * col * (size + spacing)
         local y = (growDown and -1 or 1) * (row * (size + spacing) + 3)
         local point = growRight and (growDown and "TOPLEFT" or "BOTTOMLEFT") or (growDown and "TOPRIGHT" or "BOTTOMRIGHT")

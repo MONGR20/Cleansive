@@ -18,6 +18,41 @@ local function deepCopy(source)
     return result
 end
 
+-- applyDefaults only fills what is missing, so a value that is present but
+-- wrong survived it and reached CreateFrame: a string where a number belongs,
+-- an opacity outside its slider, a layout mode that no longer exists. Bounds
+-- are the ones the option sliders enforce, so a repaired profile always lands
+-- somewhere the interface can actually represent.
+local NUMERIC_BOUNDS = {
+    frameSize = { 12, 40 },
+    spacing = { 0, 12 },
+    columns = { 1, 20 },
+    inactiveAlpha = { 0.05, 0.80 },
+    blacklistTime = { 0, 15 },
+    soundMaxRegistrations = { 500, 8000 },
+}
+
+local ALLOWED_VALUES = {
+    grow = { RIGHT_DOWN = true, RIGHT_UP = true, LEFT_DOWN = true, LEFT_UP = true },
+    layoutMode = { GRID = true, HORIZONTAL = true, VERTICAL = true },
+    soundChannel = { Master = true, SFX = true, Dialog = true },
+}
+
+local function normalizeProfile(profile, fallback)
+    if type(profile) ~= "table" or type(fallback) ~= "table" then return end
+    for key, bounds in pairs(NUMERIC_BOUNDS) do
+        local value = tonumber(profile[key])
+        if not value then
+            profile[key] = fallback[key]
+        else
+            profile[key] = math.max(bounds[1], math.min(bounds[2], value))
+        end
+    end
+    for key, allowed in pairs(ALLOWED_VALUES) do
+        if not allowed[profile[key]] then profile[key] = fallback[key] end
+    end
+end
+
 local function applyDefaults(source, destination)
     for key, value in pairs(source or {}) do
         if type(value) == "table" then
@@ -174,6 +209,7 @@ function NS:InitializeProfiles()
         self.bootstrapProfile = true
     end
     applyDefaults(self.profileDefaults, profile)
+    normalizeProfile(profile, self.profileDefaults)
     prune(profile)
     absorbHistory(raw.global, profile)
     profile.language = raw.global.language
@@ -198,6 +234,7 @@ function NS:NewProfileTable(characterKey)
     end
     local profile = deepCopy(seed or self.profileDefaults)
     applyDefaults(self.profileDefaults, profile)
+    normalizeProfile(profile, self.profileDefaults)
     prune(profile)
     return profile
 end
@@ -233,6 +270,7 @@ function NS:LoadCurrentProfile(cloneCurrent)
         profiles[characterKey][specKey] = profile
     end
     applyDefaults(self.profileDefaults, profile)
+    normalizeProfile(profile, self.profileDefaults)
     prune(profile)
     absorbHistory(self.dbRoot.global, profile)
     profile.language = self.dbRoot.global.language

@@ -5,6 +5,12 @@ Depuis la 1.4.5, les principales branches logiques corrigées sont couvertes
 par des tests de non-régression dans `j/tests` (`npm test`). Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.5.15
+
+- The horizontal and vertical layouts stay on screen. Horizontal forced 82 columns and vertical a single one, so a full raid with pets laid a strict run of about 2 100 pixels -- past the edge of a 1920x1080 screen in both directions. `SetClampedToScreen` only holds the small anchor in place; the cells themselves walked straight off. A run now wraps at what the screen can actually show, without changing the shape that was asked for: horizontal still fills a row before starting another, vertical still fills a column. The grid layout follows a narrow screen the same way.
+- Saved settings are validated on load, not merely completed. `applyDefaults` fills what is missing, so a value that was present but wrong -- a string where a number belongs, an opacity outside its slider, a layout mode that no longer exists -- survived it and reached `CreateFrame`. Numbers are now clamped to the bounds the option sliders enforce and unknown enumerations fall back to their default, so a repaired profile always lands somewhere the interface can represent.
+- Tests: 217 to 229. Both fixes were verified by removing them and watching the suite turn red. One case the audit raised, a truncated saved position, turned out to be covered already: `applyDefaults` recurses into sub-tables. The test stays as a guard.
+
 ## 1.5.14
 
 - `UnitGUID` and `UnitIsUnit` are guarded everywhere. Both are documented secret-capable -- `SecretWhenUnitIdentityRestricted` and `SecretWhenUnitComparisonRestricted` -- and their results were used raw in twelve places: in an `or`, in a comparison, as a table key, and once under a direct `not`. The grouped-indicator cache did all three at once, on the `UNIT_AURA` path, in combat, which is where an error becomes an error flood. Everything now goes through `NS:SafeUnitGUID` and `NS:IsPlayerUnit`; unreadable means unknown and falls back to the unit token. Without a readable GUID a recycled token cannot be told apart, so those units are rescanned every pass rather than trusted.

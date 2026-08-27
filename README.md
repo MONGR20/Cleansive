@@ -1,4 +1,4 @@
-# Cleansive 1.5.14
+# Cleansive 1.5.15
 
 Cleansive is a standalone one-click cleansing addon for **World of Warcraft Retail 12.1** (`120100`). It provides a compact Decursive-style workflow with a dark, class-colored interface inspired by the clarity of Ellesmere UI. The interface follows the language of your WoW client, English or French; either can be picked from the General page at any time.
 
@@ -93,6 +93,12 @@ remain active so a protected AuraSlot can pass cleansing clicks through during
 combat. Avoid clicking empty grid positions while this mode is enabled.
 
 The hover-cleanse key also respects these restrictions: it casts through a secure action button on your mouseover, target, or player. It never asks Lua to select an afflicted unit during combat, because the secure engine evaluates targeting conditions only and cannot read auras.
+
+## 1.5.15 changes
+
+- The horizontal and vertical layouts stay on screen. Horizontal forced 82 columns and vertical a single one, so a full raid with pets laid a strict run of about 2 100 pixels -- past the edge of a 1920x1080 screen in both directions. `SetClampedToScreen` only holds the small anchor in place; the cells themselves walked straight off. A run now wraps at what the screen can actually show, without changing the shape that was asked for: horizontal still fills a row before starting another, vertical still fills a column. The grid layout follows a narrow screen the same way.
+- Saved settings are validated on load, not merely completed. `applyDefaults` fills what is missing, so a value that was present but wrong -- a string where a number belongs, an opacity outside its slider, a layout mode that no longer exists -- survived it and reached `CreateFrame`. Numbers are now clamped to the bounds the option sliders enforce and unknown enumerations fall back to their default, so a repaired profile always lands somewhere the interface can represent.
+- Tests: 217 to 229. Both fixes were verified by removing them and watching the suite turn red. One case the audit raised, a truncated saved position, turned out to be covered already: `applyDefaults` recurses into sub-tables. The test stays as a guard.
 
 ## 1.5.14 changes
 
