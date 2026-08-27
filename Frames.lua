@@ -1074,6 +1074,19 @@ function NS:ApplySpellCooldown(cooldown, def, durationCache)
         return nil
     end
 
+    -- SpellChargeInfo.isActive and SpellCooldownInfo.isActive are documented
+    -- NeverSecret: they stay readable exactly where IsZero does not. Asking
+    -- them first replaces the guessing that cost 1.5.11 and 1.5.12, where an
+    -- unreadable IsZero had to be interpreted as "maybe running".
+    local function readActivity(getter, spellID)
+        if not getter then return nil end
+        local ok, info = pcall(getter, spellID)
+        if not ok or info == nil then return nil end
+        local readable, active = pcall(function() return info.isActive end)
+        if not readable or type(active) ~= "boolean" then return nil end
+        return active
+    end
+
     local function readDurationEntry()
         local cooldownOK, cooldownDuration = pcall(C_Spell.GetSpellCooldownDuration, def.id, true)
         if not cooldownOK then cooldownDuration = nil end
@@ -1096,6 +1109,32 @@ function NS:ApplySpellCooldown(cooldown, def, durationCache)
         -- zero" used to promote it over the real cooldown. clearIfZero then
         -- wiped the frame: the number disappeared while the affliction sweep,
         -- drawn elsewhere, stayed. Known-chargeless spells never qualify.
+        -- The readable flags decide first, and they settle the case the older
+        -- logic could not: a spell whose charges are all banked while a school
+        -- lockout runs its normal cooldown. The empty charge object used to win
+        -- there and clearIfZero wiped the number off an unavailable spell.
+        local chargeRunning = readActivity(C_Spell.GetSpellCharges, def.id)
+        local cooldownRunning = readActivity(C_Spell.GetSpellCooldown, def.id)
+        if chargeDuration and def.hasCharges ~= false and chargeRunning == true then
+            return { duration = chargeDuration, active = true, source = "charge" }
+        end
+        if cooldownDuration and cooldownRunning == true then
+            return { duration = cooldownDuration, active = true, source = "cooldown" }
+        end
+        if chargeRunning == false and cooldownRunning == false then
+            -- Both readably idle: the spell is available. Report that rather
+            -- than "no entry", because the stale-slot cleanup in
+            -- RefreshDispelCooldowns keys on a readable `active == false` --
+            -- returning nothing here would strand a click slot on the cell
+            -- until combat ended. The duration object is still handed over so
+            -- clearIfZero empties the frame.
+            if cooldownDuration then
+                return { duration = cooldownDuration, active = false, source = "cooldown" }
+            end
+            return false
+        end
+
+        -- No readable flag on this client: fall back to the IsZero reading.
         if chargeDuration and def.hasCharges ~= false and chargeActive ~= false then
             return { duration = chargeDuration, active = chargeActive, source = "charge" }
         elseif cooldownDuration then
@@ -1542,7 +1581,7 @@ function NS:ResolveGroupedType(unit, grouped)
     local present = self.groupedPresent or {}
     self.groupedPresent = present
     self:ScanGroupedTypes(unit, present)
-    local isPlayer = UnitIsUnit(unit, "player") and true or false
+    local isPlayer = self:IsPlayerUnit(unit)
     for _, auraType in ipairs(grouped) do
         local spell = self.manualTypeSpell and self.manualTypeSpell[auraType]
         if present[auraType] and (isPlayer or not (spell and spell.selfOnly)) then
@@ -1651,11 +1690,17 @@ function NS:UpdateManualIndicator()
         local token = descriptor.unit
         local unit = self:GetDisplayUnit(token)
         if unit then
-            local guid = UnitGUID(unit) or unit
+            -- Never `or` a raw UnitGUID and never use it as a table key: it
+            -- is unreadable under identity restrictions, and this runs on the
+            -- UNIT_AURA path, in combat, once per roster unit.
+            local guid = self:SafeUnitGUID(unit)
+            local identity = guid or token
             local entry = cache[token]
             -- A token gets recycled onto somebody else the moment the group
-            -- changes, so an entry is only trusted while its GUID holds.
-            if not entry or entry.guid ~= guid or dirty[token] then
+            -- changes, so an entry is only trusted while its GUID holds. With
+            -- no readable GUID there is nothing to hold, so nothing is trusted
+            -- and the unit is rescanned every pass.
+            if not guid or not entry or entry.guid ~= guid or dirty[token] then
                 entry = entry or {}
                 entry.guid = guid
                 entry.type = self:ResolveGroupedType(unit, grouped)
@@ -1663,8 +1708,8 @@ function NS:UpdateManualIndicator()
             end
             if entry.type then
                 -- One unit hit by two grouped types is still one unit.
-                if not counted[guid] then
-                    counted[guid] = true
+                if not counted[identity] then
+                    counted[identity] = true
                     count = count + 1
                 end
                 -- Priority is global: the colour is the most urgent type in

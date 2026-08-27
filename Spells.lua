@@ -260,7 +260,7 @@ function NS:IsSpellInRange(def, unit)
     if not def or def.untargeted then
         return true
     end
-    if def.selfOnly and not UnitIsUnit(unit, "player") then
+    if def.selfOnly and not self:IsPlayerUnit(unit) then
         return false
     end
     if C_Spell and C_Spell.IsSpellInRange then

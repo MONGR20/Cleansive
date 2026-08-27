@@ -1,4 +1,4 @@
-# Cleansive 1.5.13
+# Cleansive 1.5.14
 
 Cleansive is a standalone one-click cleansing addon for **World of Warcraft Retail 12.1** (`120100`). It provides a compact Decursive-style workflow with a dark, class-colored interface inspired by the clarity of Ellesmere UI. The interface follows the language of your WoW client, English or French; either can be picked from the General page at any time.
 
@@ -93,6 +93,13 @@ remain active so a protected AuraSlot can pass cleansing clicks through during
 combat. Avoid clicking empty grid positions while this mode is enabled.
 
 The hover-cleanse key also respects these restrictions: it casts through a secure action button on your mouseover, target, or player. It never asks Lua to select an afflicted unit during combat, because the secure engine evaluates targeting conditions only and cannot read auras.
+
+## 1.5.14 changes
+
+- `UnitGUID` and `UnitIsUnit` are guarded everywhere. Both are documented secret-capable -- `SecretWhenUnitIdentityRestricted` and `SecretWhenUnitComparisonRestricted` -- and their results were used raw in twelve places: in an `or`, in a comparison, as a table key, and once under a direct `not`. The grouped-indicator cache did all three at once, on the `UNIT_AURA` path, in combat, which is where an error becomes an error flood. Everything now goes through `NS:SafeUnitGUID` and `NS:IsPlayerUnit`; unreadable means unknown and falls back to the unit token. Without a readable GUID a recycled token cannot be told apart, so those units are rescanned every pass rather than trusted.
+- The charge-versus-cooldown choice now asks `SpellChargeInfo.isActive` and `SpellCooldownInfo.isActive`, both documented `NeverSecret`, before falling back to reading `IsZero`. This settles the case 1.5.12 could not: a spell whose charges are all banked while a school lockout runs its normal cooldown. The empty charge object used to win there and `clearIfZero` wiped the number off a spell that was genuinely unavailable. Nothing is inferred from an unreadable value any more.
+- A cell releases its remembered click slot as soon as the spell reads as ready again. The release keys on a readable `active == false`, which only became available with the flags above; until now a slot could stay attached to a cell until combat ended.
+- Tests: 200 to 217, and a fourth static check. The mock can now simulate restricted identity and comparison independently of secret auras, and the spell-activity flags. One case cannot be covered by behaviour at all -- a Lua table is a valid table key, so the mock cannot reproduce what the client raises -- so a static rule forbids calling `UnitGUID` or `UnitIsUnit` outside their two guards.
 
 ## 1.5.13 changes
 

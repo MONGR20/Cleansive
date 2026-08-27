@@ -48,12 +48,12 @@ function NS:GetUnitDescriptor(unit)
     end
     return {
         unit = unit,
-        guid = UnitGUID(unit),
+        guid = self:SafeUnitGUID(unit),
         name = name,
         displayName = displayUnitName(unit),
         class = class,
         group = group,
-        isPlayer = UnitIsUnit(unit, "player") and true or false,
+        isPlayer = self:IsPlayerUnit(unit),
         isPet = string.find(unit, "pet", 1, true) ~= nil,
     }
 end
@@ -101,7 +101,7 @@ local function addDescriptor(list, seen, unit)
     -- in a vehicle. Deduplicate on that resolved token so showPets cannot add
     -- the very same vehicle a second time after its owner.
     local displayUnit = NS:GetDisplayUnit(unit) or unit
-    local guid = UnitGUID(displayUnit) or UnitGUID(unit)
+    local guid = NS:SafeUnitGUID(displayUnit) or NS:SafeUnitGUID(unit)
     if guid and seen[guid] then return end
     local descriptor = NS:GetUnitDescriptor(unit)
     if NS:IsSkipped(descriptor) then return end

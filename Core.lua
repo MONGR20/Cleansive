@@ -94,6 +94,27 @@ function NS:Print(message, ...)
     DEFAULT_CHAT_FRAME:AddMessage("|c" .. colorCode .. "Cleansive:|r " .. tostring(message))
 end
 
+-- UnitGUID is SecretWhenUnitIdentityRestricted and UnitIsUnit is
+-- SecretWhenUnitComparisonRestricted: both come back unreadable in PvP and in
+-- other restricted contexts. An unreadable value cannot be used in `or`, in a
+-- comparison, or as a table key -- and every caller here did at least one of
+-- those. Unreadable means unknown, as everywhere else in the addon.
+function NS:SafeUnitGUID(unit)
+    if not unit or not UnitGUID then return nil end
+    local ok, guid = pcall(UnitGUID, unit)
+    if not ok or not self:CanAccess(guid) then return nil end
+    return guid
+end
+
+function NS:IsPlayerUnit(unit)
+    -- Two literal tokens compare without ever asking the client.
+    if unit == "player" then return true end
+    if not unit or not UnitIsUnit then return false end
+    local ok, same = pcall(UnitIsUnit, unit, "player")
+    if not ok or not self:CanAccess(same) then return false end
+    return same == true
+end
+
 function NS:CanAccess(value)
     if canaccessvalue then
         return canaccessvalue(value)
@@ -350,14 +371,14 @@ function NS:RecordSecureClick(button, mouseButton)
     button.cooldownClickTime = GetTime()
     self.lastClick = {
         unit = button.unit,
-        guid = UnitGUID(button.unit),
+        guid = self:SafeUnitGUID(button.unit),
         time = GetTime(),
         slot = slot,
     }
 
-    local unit, guid = button.unit, UnitGUID(button.unit)
+    local unit, guid = button.unit, self:SafeUnitGUID(button.unit)
     local function refreshClickedCooldown()
-        if button.unit ~= unit or (guid and UnitGUID(unit) ~= guid) then return end
+        if button.unit ~= unit or (guid and self:SafeUnitGUID(unit) ~= guid) then return end
         local def = slot and self.clickSpells and self.clickSpells[slot]
         if self.SetCooldown then self:SetCooldown(button, def) end
     end
@@ -400,7 +421,7 @@ function NS:OnUIError(errorType, message)
             local expires = self.blacklist[key]
             if not expires or expires > GetTime() then return end
             self.blacklist[key] = nil
-            if unit and UnitExists(unit) and (not guid or UnitGUID(unit) == guid) then
+            if unit and UnitExists(unit) and (not guid or self:SafeUnitGUID(unit) == guid) then
                 self:RefreshUnit(unit)
             end
         end)
@@ -448,7 +469,7 @@ function NS:RegisterBlizzardSettings()
 end
 
 function NS:IsBlacklisted(unit)
-    local key = UnitGUID(unit) or unit
+    local key = self:SafeUnitGUID(unit) or unit
     local expires = self.blacklist[key]
     if not expires then return false end
     if expires <= GetTime() then
@@ -673,7 +694,7 @@ local function isDecursiveEnabled()
     if C_AddOns and C_AddOns.GetAddOnEnableState then
         -- Retail 12.1 expects (addonName, characterGUID), matching
         -- AddOnUtil.IsAddOnEnabledForCurrentCharacter in Blizzard's UI.
-        local characterGUID = UnitGUID and UnitGUID("player") or nil
+        local characterGUID = NS:SafeUnitGUID("player")
         local ok, state
         if characterGUID then
             ok, state = pcall(C_AddOns.GetAddOnEnableState, "Decursive", characterGUID)
