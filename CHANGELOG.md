@@ -5,11 +5,18 @@ Depuis la 1.4.5, les principales branches logiques corrigées sont couvertes
 par des tests de non-régression dans `j/tests` (`npm test`). Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.5.24
+
+- A retired dispel type actually stays inert. 1.5.23 replaced its filters with an empty table, and `ConfigureButtonAuraContainer` handed the real ones straight back -- it walks every accumulated slot key and runs on every layout, roster assignment and filter edit, so the claim in the 1.5.23 notes did not hold in the final state. The active set is remembered now and consulted wherever slot filters are applied.
+- A failed slot reconfiguration is diagnosed and retried instead of being permanent. The wanted set was stored before the cells were reconciled, so a cell that failed was left on the Lua fallback and the next call returned early without retrying it -- until a reload. Failures are recorded, reported once, and retried up to three times; the retry is owed when containers exist but are not all covered, because a filter that fails for one slot fails it on all 82.
+- Tests: 452 to 465. The mock recorded nothing for `SetAuraSlotCandidateFilters` and could not fail it, which is the root of both defects above: the generic stub answered success and the suite could not see either one. It now stores the filters and can be made to fail.
+- README: the layout modes no longer promise a single row or column, and the hover-cleanse key is described as what it is -- it casts the first configured spell on mouseover, target, then player. It never picks an afflicted unit.
+
 ## 1.5.23
 
 - Aura containers are reused instead of replaced. Hiding a container does not destroy it -- WoW keeps every frame for the session -- so each real change of the dispel-type set left a generation of 82 abandoned containers behind, and the cost grew with every talent or specialization change. A change now reconciles what is already there: a new type gains a slot, a type that is no longer needed has its filters replaced by an empty `includeDispelTypes` table, and a type that comes back gets its real filters again. The total is bounded to 82 containers and at worst 410 slots for the whole session. Ten class alternations now allocate nothing at all, which is the measurement three audits had asked for.
 - The visual side needed nothing: `StyleAuraVisual` reads `typeToSlot` and `manualTypeSpell`, so a type the character can no longer clear was already styled invisible.
-- The README no longer duplicates the whole changelog. It carries the current release and points at `CHANGELOG.md`, which takes the package from 48 KB to under 8 KB of readme.
+- The README no longer duplicates the whole changelog. It carries the current release and points at `CHANGELOG.md`, which takes the readme from about 48 KB to about 8.5 KB.
 - A fifth static check refuses the tooltip sentences that were corrected in 1.5.22. A behavioural test guards what the code does; only a text rule stops a wrong sentence from coming back.
 - Tests: 451 to 452.
 

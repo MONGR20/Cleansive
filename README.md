@@ -1,4 +1,4 @@
-# Cleansive 1.5.23
+# Cleansive 1.5.24
 
 Cleansive is a standalone one-click cleansing addon for **World of Warcraft Retail 12.1** (`120100`). It provides a compact Decursive-style workflow with a dark, class-colored interface inspired by the clarity of Ellesmere UI. The interface follows the language of your WoW client, English or French; either can be picked from the General page at any time.
 
@@ -33,7 +33,7 @@ Red, blue, and orange identify the click to use. The optional L/R/C corner lette
 - Player, class, and raid-group priorities and exclusions.
 - Permanent and combat-only aura filters.
 - Class-colored interface, test mode, dual timers (numeric cleanse cooldown plus a clockwise affliction-duration fade), stacks, tooltips, color-independent click hints, sound-channel selection, and sound diagnostics.
-- Grid, single-row horizontal, and single-column vertical cell arrangements with independent growth direction.
+- Wrapping grid, horizontal-fill and vertical-fill cell arrangements with independent growth direction.
 - English and French localization.
 - A guided first-time setup, preselecting the language of your WoW client.
 - Separate settings profiles for every character and specialization.
@@ -44,7 +44,7 @@ Red, blue, and orange identify the click to use. The optional L/R/C corner lette
   read.
 - Secure combat-only auto visibility and an afflicted-only visual mode.
 - A persistent, clickable history of readable afflictions.
-- A secure priority-cleanse key for the first configured cleansing spell.
+- A secure hover-cleanse key for the first configured cleansing spell.
 
 ## Commands
 
@@ -94,13 +94,12 @@ combat. Avoid clicking empty grid positions while this mode is enabled.
 
 The hover-cleanse key also respects these restrictions: it casts through a secure action button on your mouseover, target, or player. It never asks Lua to select an afflicted unit during combat, because the secure engine evaluates targeting conditions only and cannot read auras.
 
-## 1.5.23 changes
+## 1.5.24 changes
 
-- Aura containers are reused instead of replaced. Hiding a container does not destroy it -- WoW keeps every frame for the session -- so each real change of the dispel-type set left a generation of 82 abandoned containers behind, and the cost grew with every talent or specialization change. A change now reconciles what is already there: a new type gains a slot, a type that is no longer needed has its filters replaced by an empty `includeDispelTypes` table, and a type that comes back gets its real filters again. The total is bounded to 82 containers and at worst 410 slots for the whole session. Ten class alternations now allocate nothing at all, which is the measurement three audits had asked for.
-- The visual side needed nothing: `StyleAuraVisual` reads `typeToSlot` and `manualTypeSpell`, so a type the character can no longer clear was already styled invisible.
-- The README no longer duplicates the whole changelog. It carries the current release and points at `CHANGELOG.md`, which takes the package from 48 KB to under 8 KB of readme.
-- A fifth static check refuses the tooltip sentences that were corrected in 1.5.22. A behavioural test guards what the code does; only a text rule stops a wrong sentence from coming back.
-- Tests: 451 to 452.
+- A retired dispel type actually stays inert. 1.5.23 replaced its filters with an empty table, and `ConfigureButtonAuraContainer` handed the real ones straight back -- it walks every accumulated slot key and runs on every layout, roster assignment and filter edit, so the claim in the 1.5.23 notes did not hold in the final state. The active set is remembered now and consulted wherever slot filters are applied.
+- A failed slot reconfiguration is diagnosed and retried instead of being permanent. The wanted set was stored before the cells were reconciled, so a cell that failed was left on the Lua fallback and the next call returned early without retrying it -- until a reload. Failures are recorded, reported once, and retried up to three times; the retry is owed when containers exist but are not all covered, because a filter that fails for one slot fails it on all 82.
+- Tests: 452 to 465. The mock recorded nothing for `SetAuraSlotCandidateFilters` and could not fail it, which is the root of both defects above: the generic stub answered success and the suite could not see either one. It now stores the filters and can be made to fail.
+- README: the layout modes no longer promise a single row or column, and the hover-cleanse key is described as what it is -- it casts the first configured spell on mouseover, target, then player. It never picks an afflicted unit.
 ## Français
 
 Cleansive est un addon autonome de dissipation en un clic pour WoW Retail 12.1. Lors d’une nouvelle installation, l’interface suit automatiquement la langue du client WoW : français ou anglais. Vous pouvez en changer depuis la page **Général** de `/cleansive`, puis taper `/reload` pour actualiser les libellés déjà créés.

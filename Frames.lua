@@ -859,8 +859,16 @@ function NS:ConfigureButtonAuraContainer(button, restyle)
     end
 
     if container.SetAuraSlotCandidateFilters then
+        -- Slots accumulate over a session, so this list also holds types the
+        -- character can no longer clear. Handing them real filters here undid
+        -- the neutralisation ReconcileAuraSlots had just applied, and this runs
+        -- on every layout, roster assignment and filter edit.
+        local active = self.engineAuraTypeSet
         for auraType, slotKey in pairs(button.auraSlotKeys or {}) do
-            local ok = pcall(container.SetAuraSlotCandidateFilters, container, slotKey, self:BuildAuraCandidateFilters(auraType))
+            local filters = (not active or active[auraType])
+                and self:BuildAuraCandidateFilters(auraType)
+                or { includeDispelTypes = {} }
+            local ok = pcall(container.SetAuraSlotCandidateFilters, container, slotKey, filters)
             if not ok then self.pendingAuraFilters = true end
         end
     end
@@ -2093,10 +2101,17 @@ function NS:ReconcileAuraSlots(button, wanted, wantedSet)
     button.auraSlotKeys = button.auraSlotKeys or {}
     button.auraSlotVisuals = button.auraSlotVisuals or {}
 
+    local diagnostics = self.auraContainerDiagnostics
+    local function recordFailure(reason)
+        if diagnostics and not diagnostics.firstError then diagnostics.firstError = tostring(reason) end
+    end
+
     for auraType, slotKey in pairs(button.auraSlotKeys) do
         if not wantedSet[auraType] then
-            tryCall(container.SetAuraSlotCandidateFilters, container, slotKey,
-                { includeDispelTypes = {} })
+            if not tryCall(container.SetAuraSlotCandidateFilters, container, slotKey,
+                { includeDispelTypes = {} }) then
+                recordFailure("SetAuraSlotCandidateFilters failed for " .. tostring(auraType))
+            end
         end
     end
 
@@ -2109,6 +2124,8 @@ function NS:ReconcileAuraSlots(button, wanted, wantedSet)
             if tryCall(container.SetAuraSlotCandidateFilters, container, slotKey,
                 self:BuildAuraCandidateFilters(auraType)) then
                 live = live + 1
+            else
+                recordFailure("SetAuraSlotCandidateFilters failed for " .. tostring(auraType))
             end
         elseif self:AddAuraSlotForType(button, auraType) then
             live = live + 1
@@ -2116,7 +2133,6 @@ function NS:ReconcileAuraSlots(button, wanted, wantedSet)
     end
 
     button.engineAuraReady = live == #wanted
-    local diagnostics = self.auraContainerDiagnostics
     if diagnostics and button.engineAuraReady then
         diagnostics.added = diagnostics.added + live
     end
@@ -2133,7 +2149,10 @@ function NS:RefreshAuraEngineTypes()
             if wanted[index] ~= current[index] then same = false break end
         end
     end
-    if same then return false end
+    -- A retry is owed when a previous pass left cells behind: the wanted set is
+    -- already stored by then, so an early return would strand them until the
+    -- next real change or a reload.
+    if same and not self.pendingAuraEngineReconcile then return false end
 
     if InCombatLockdown and InCombatLockdown() then
         self.pendingAuraEngineRebuild = true
@@ -2144,6 +2163,7 @@ function NS:RefreshAuraEngineTypes()
     self.engineAuraTypes = wanted
     local wantedSet = {}
     for _, auraType in ipairs(wanted) do wantedSet[auraType] = true end
+    self.engineAuraTypeSet = wantedSet
     self.auraContainerDiagnostics = {
         expected = MAX_BUTTONS * #wanted, added = 0, readyButtons = 0, firstError = nil,
     }
@@ -2162,6 +2182,27 @@ function NS:RefreshAuraEngineTypes()
             self.auraContainerDiagnostics.readyButtons = self.auraContainerDiagnostics.readyButtons + 1
         end
     end
-    self.engineAuraMode = #wanted > 0 and self.auraContainerDiagnostics.readyButtons > 0
+    local ready = self.auraContainerDiagnostics.readyButtons
+    self.engineAuraMode = #wanted > 0 and ready > 0
+    -- Retry when containers exist but some are not covered: the engine is there
+    -- and the failure is worth another pass. No container at all means the
+    -- engine is unavailable here, and retrying on every spell event would be a
+    -- loop rather than a recovery. Counting ready cells alone was not enough --
+    -- a filter that fails for one slot fails it on all 82. The retry is bounded.
+    local withContainer = 0
+    for _, button in ipairs(self.buttons) do
+        if button.auraContainer then withContainer = withContainer + 1 end
+    end
+    if #wanted > 0 and withContainer > 0 and ready < withContainer then
+        self.auraEngineRetries = (self.auraEngineRetries or 0) + 1
+        self.pendingAuraEngineReconcile = self.auraEngineRetries <= 3
+        if self.auraContainerDiagnostics.firstError then
+            self:Print(self.L.AURA_ENGINE_FAILED, self.auraContainerDiagnostics.added,
+                self.auraContainerDiagnostics.expected,
+                self.auraContainerDiagnostics.firstError)
+        end
+    else
+        self.auraEngineRetries, self.pendingAuraEngineReconcile = 0, false
+    end
     return true
 end
