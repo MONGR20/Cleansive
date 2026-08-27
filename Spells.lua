@@ -105,6 +105,17 @@ local function getSecureSpellName(spellID, fallback)
     return getSpellName(castID) or fallback
 end
 
+-- C_Spell.GetSpellCharges documents a nil return for a spell that is not
+-- charge-based. UpdateSpells only ever runs outside combat, so the answer is
+-- resolved while it is still readable: inside restricted combat the returned
+-- table can be secret, and by then the distinction is no longer observable.
+local function spellHasCharges(spellID)
+    if not (C_Spell and C_Spell.GetSpellCharges) then return nil end
+    local ok, info = pcall(C_Spell.GetSpellCharges, spellID)
+    if not ok or not NS:CanAccess(info) then return nil end
+    return info ~= nil
+end
+
 local function knownInBank(spellID, bank)
     if not C_SpellBook or not bank then
         return false
@@ -172,6 +183,7 @@ function NS:UpdateSpells()
             if name then
                 def.name = name
                 def.secureName = getSecureSpellName(def.id, name)
+                def.hasCharges = spellHasCharges(def.id)
                 def.activeTypes = self:GetActiveSpellTypes(def)
                 self.knownSpells[#self.knownSpells + 1] = def
                 -- Unit cells must only receive spells that can legally act on

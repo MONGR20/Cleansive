@@ -142,10 +142,12 @@ function NS:InitializeProfiles()
     -- lost their engine cell without gaining a reliable replacement, so the
     -- option goes back to opt-in -- including for profiles that already
     -- recorded it. Runs once; a later deliberate choice is left alone.
-    -- The marker is global but the sweep used to visit the logged-in
-    -- character only, so every alt kept the 1.5.4 value forever: the first
-    -- login consumed the marker on their behalf.
-    if not raw.global.groupManualOptOut then
+    -- The original global marker was already consumed by 1.5.8 after only
+    -- visiting the logged-in character. A distinct marker is required here:
+    -- reusing groupManualOptOut would skip this repaired all-profile sweep on
+    -- the exact databases it is meant to fix.
+    if not raw.global.groupManualOptOutAllProfiles159 then
+        raw.global.groupManualOptOutAllProfiles159 = true
         raw.global.groupManualOptOut = true
         for _, character in pairs(raw.profiles) do
             if type(character) == "table" then

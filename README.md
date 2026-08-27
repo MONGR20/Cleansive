@@ -1,4 +1,4 @@
-# Cleansive 1.5.9
+# Cleansive 1.5.11
 
 Cleansive is a standalone one-click cleansing addon for **World of Warcraft Retail 12.1** (`120100`). It provides a compact Decursive-style workflow with a dark, class-colored interface inspired by the clarity of Ellesmere UI. The interface follows the language of your WoW client, English or French; either can be picked from the General page at any time.
 
@@ -93,6 +93,24 @@ remain active so a protected AuraSlot can pass cleansing clicks through during
 combat. Avoid clicking empty grid positions while this mode is enabled.
 
 The hover-cleanse key also respects these restrictions: it casts through a secure action button on your mouseover, target, or player. It never asks Lua to select an afflicted unit during combat, because the secure engine evaluates targeting conditions only and cannot read auras.
+
+## 1.5.11 changes
+
+- The numeric cleanse cooldown came back on cells for spells that have no charges. Since 1.5.3 the charge-recharge duration object was preferred whenever it could not be read as zero, and in restricted combat its `IsZero` is secret. A spell like Cleanse, which has no charges at all, therefore handed `SetCooldownFromDurationObject` an empty object with `clearIfZero` set, and the frame was wiped. The affliction sweep stayed, because a different frame draws it, so the symptom was "only the number disappeared". `C_Spell.GetSpellCharges` documents a nil return for a spell that is not charge-based; the answer is resolved in `UpdateSpells`, which never runs during combat, so it is read while it is still readable and remembered on the spell definition. The charge object is now preferred only for a spell that actually has charges. Reported from the game, and confirmed by `/cleansive cdstatus` answering "source charge, active nil, applied true".
+- Tests: 198 to 200. The charge path had one case, and it used a spell declared to have charges with a readable state -- the exact combination that cannot fail. The new case reproduces the reported one: no charges, unreadable `IsZero`, restricted combat.
+
+## 1.5.10 changes
+
+- Repaired the grouped-manual migration for real 1.5.8 databases. The old marker had already been consumed before all characters were visited; a distinct migration marker now guarantees one complete account-wide pass.
+- The grouped manual badge now paints complete active and inactive states. Its dark plate returns with every alert, while the old colour, count, and exclamation mark are cleared when the alert ends.
+- Toggling unit names immediately restyles Blizzard-managed protected aura cells instead of waiting for another aura update or a reload.
+- Realm-qualified priority and skip entries no longer match a different player with the same short name on another realm. Legacy short-name entries remain supported.
+- Active vehicle tokens are deduplicated when pet scanning is enabled, keeping the owner's descriptor and preventing two cells from representing the same vehicle.
+- Combat-only filter changes immediately recalculate the grouped badge, even when no subsequent `UNIT_AURA` event fires.
+- Manual-only readable afflictions keep their unit name in afflicted-only mode.
+- Filter spell IDs are sorted numerically, and the French seasonal-sound notice now uses the same formal register as the rest of the interface.
+- The Cleansive logo replaces the generic dispel spell icon in WoW's addon list and addon compartment.
+- Regression coverage increased from 176 to 198 tests.
 
 ## 1.5.9 changes
 

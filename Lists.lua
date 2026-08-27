@@ -251,7 +251,13 @@ function NS:RefreshFilterWindow()
     for id in pairs(self.db.ignoredCombat) do
         filters[#filters + 1] = { id = tonumber(id) or id, mode = self.L.FILTER_COMBAT }
     end
-    table.sort(filters, function(a, b) return tostring(a.id) < tostring(b.id) end)
+    table.sort(filters, function(a, b)
+        local aNumber, bNumber = tonumber(a.id), tonumber(b.id)
+        if aNumber and bNumber and aNumber ~= bNumber then return aNumber < bNumber end
+        if aNumber and not bNumber then return true end
+        if bNumber and not aNumber then return false end
+        return tostring(a.id) < tostring(b.id)
+    end)
     local pageSize = #self.filterFrame.rows
     local pages = math.max(1, math.ceil(#filters / math.max(1, pageSize)))
     local maxOffset = (pages - 1) * pageSize

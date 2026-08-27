@@ -5,6 +5,24 @@ Depuis la 1.4.5, les principales branches logiques corrigées sont couvertes
 par des tests de non-régression dans `j/tests` (`npm test`). Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.5.11
+
+- The numeric cleanse cooldown came back on cells for spells that have no charges. Since 1.5.3 the charge-recharge duration object was preferred whenever it could not be read as zero, and in restricted combat its `IsZero` is secret. A spell like Cleanse, which has no charges at all, therefore handed `SetCooldownFromDurationObject` an empty object with `clearIfZero` set, and the frame was wiped. The affliction sweep stayed, because a different frame draws it, so the symptom was "only the number disappeared". `C_Spell.GetSpellCharges` documents a nil return for a spell that is not charge-based; the answer is resolved in `UpdateSpells`, which never runs during combat, so it is read while it is still readable and remembered on the spell definition. The charge object is now preferred only for a spell that actually has charges. Reported from the game, and confirmed by `/cleansive cdstatus` answering "source charge, active nil, applied true".
+- Tests: 198 to 200. The charge path had one case, and it used a spell declared to have charges with a readable state -- the exact combination that cannot fail. The new case reproduces the reported one: no charges, unreadable `IsZero`, restricted combat.
+
+## 1.5.10
+
+- Repaired the grouped-manual migration for real 1.5.8 databases. The previous marker had already been consumed after visiting only the logged-in character, so 1.5.9's corrected loop never ran for existing 1.5.8 users. A distinct marker now performs one complete sweep across every character and specialization.
+- Made grouped-indicator states deterministic. Every active alert restores the dark plate, coloured outline, exclamation mark, and count; the inactive state clears all of them instead of retaining stale alert colours.
+- The "Show names" option immediately restyles protected AuraSlot visuals, matching the stack and click-hint options.
+- Realm-qualified priority and skip entries require an exact full-name match. Legacy entries saved without a realm retain their short-name fallback without merging two current cross-realm players.
+- Deduplicated active vehicle tokens from the pet portion of the roster. The owner descriptor wins, so enabling pet scanning no longer risks two cells resolving to the same vehicle.
+- Combat-only filter transitions now queue a grouped-indicator refresh even when no `UNIT_AURA` follows combat start.
+- Manual-only readable cells retain their unit name in afflicted-only mode instead of requiring a secure click slot that those abilities cannot have.
+- Filter IDs are sorted numerically, and the French seasonal-sound status uses the formal register consistently.
+- The Cleansive logo now replaces the generic dispel spell icon in WoW's addon list and addon compartment.
+- Tests: 176 to 198, adding exact reproductions for the 1.5.8 migration state, badge visual transitions, cross-realm names, vehicle deduplication, combat-filter refreshes, and manual-cell names.
+
 ## 1.5.9
 
 - The version now comes from the `.toc` through `C_AddOns.GetAddOnMetadata`. It was a second literal in `Core.lua`, and it drifted: 1.5.8 shipped with the options sidebar still advertising v1.5.7.

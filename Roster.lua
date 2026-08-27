@@ -63,6 +63,11 @@ function NS:EntryMatches(entry, descriptor)
     if entry.kind == "PLAYER" then
         if not descriptor.name then return false end
         if entry.value == descriptor.name then return true end
+        -- A realm-qualified entry identifies one exact player. Falling back
+        -- to short names here made Alice-RealmA also match Alice-RealmB.
+        -- Keep the short comparison only for legacy entries saved without a
+        -- realm, which remain useful until the player records them again.
+        if type(entry.value) ~= "string" or string.find(entry.value, "-", 1, true) then return false end
         local shortEntry = Ambiguate and Ambiguate(entry.value, "short") or entry.value
         local shortName = Ambiguate and Ambiguate(descriptor.name, "short") or descriptor.name
         return shortEntry == shortName
@@ -92,7 +97,11 @@ end
 
 local function addDescriptor(list, seen, unit)
     if not UnitExists(unit) then return end
-    local guid = UnitGUID(unit)
+    -- The owner's visible/clickable unit becomes the pet token while they are
+    -- in a vehicle. Deduplicate on that resolved token so showPets cannot add
+    -- the very same vehicle a second time after its owner.
+    local displayUnit = NS:GetDisplayUnit(unit) or unit
+    local guid = UnitGUID(displayUnit) or UnitGUID(unit)
     if guid and seen[guid] then return end
     local descriptor = NS:GetUnitDescriptor(unit)
     if NS:IsSkipped(descriptor) then return end

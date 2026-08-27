@@ -761,6 +761,10 @@ function NS:RefreshAuraCandidateFilters()
     if self.InvalidateGroupedCache then self:InvalidateGroupedCache() end
     self.pendingAuraFilters = false
     self:UpdateAuraContainerConfiguration(false)
+    -- Combat-only filters change meaning on PLAYER_REGEN_DISABLED without
+    -- necessarily producing another UNIT_AURA. Repaint the readable grouped
+    -- badge now instead of leaving its pre-combat count on screen.
+    if self.RequestManualIndicatorUpdate then self:RequestManualIndicatorUpdate() end
 end
 
 function NS:CreateFrames()
@@ -1087,7 +1091,12 @@ function NS:ApplySpellCooldown(cooldown, def, durationCache)
         -- An unreadable charge duration is still the most specific object:
         -- the API documents it as the spell's active recharge time. A
         -- readable zero is the only result that can safely reject it.
-        if chargeDuration and chargeActive ~= false then
+        -- But a spell with no charges at all always yields an empty object,
+        -- and in restricted combat its IsZero is secret, so "not readably
+        -- zero" used to promote it over the real cooldown. clearIfZero then
+        -- wiped the frame: the number disappeared while the affliction sweep,
+        -- drawn elsewhere, stayed. Known-chargeless spells never qualify.
+        if chargeDuration and def.hasCharges ~= false and chargeActive ~= false then
             return { duration = chargeDuration, active = chargeActive, source = "charge" }
         elseif cooldownDuration then
             return { duration = cooldownDuration, active = cooldownActive, source = "cooldown" }
@@ -1305,7 +1314,9 @@ function NS:SetButtonState(button, aura, auraType, slot, secret, charmed)
         end
     end
 
-    local showNames = self.db.showNames and (not self.db.afflictedOnly or (aura and slot)) and true or false
+    -- A readable manual-only affliction has an aura but no secure click slot.
+    -- It is still a visible afflicted cell and must keep its unit name.
+    local showNames = self.db.showNames and (not self.db.afflictedOnly or aura ~= nil) and true or false
     if button.lastShowNames ~= showNames then
         button.lastShowNames = showNames
         if showNames then
@@ -1548,9 +1559,20 @@ end
 -- The type colour lives on the outline and the glyphs, never on the fill: a
 -- filled block is what a cell looks like, and the badge is not one.
 function NS:PaintManualIndicator(frame, color)
+    frame.background:SetColorTexture(0.02, 0.03, 0.04, 0.88)
     if frame.border then setBorderColor(frame, color[1], color[2], color[3], 1) end
+    frame.mark:Show()
     frame.mark:SetTextColor(color[1], color[2], color[3], 1)
     frame.count:SetTextColor(1, 1, 1, 1)
+end
+
+function NS:PaintInactiveManualIndicator(frame)
+    frame.background:SetColorTexture(0.05, 0.07, 0.09, self.db.inactiveAlpha)
+    if frame.border then setBorderColor(frame, 1, 1, 1, 0.10) end
+    frame.mark:SetTextColor(1, 1, 1, 0)
+    frame.mark:Hide()
+    frame.count:SetTextColor(1, 1, 1, 0)
+    frame.count:SetText("")
 end
 
 function NS:ScanGroupedTypes(unit, into)
@@ -1666,8 +1688,7 @@ function NS:UpdateManualIndicator()
     elseif self.db.afflictedOnly then
         frame:Hide()
     else
-        frame.background:SetColorTexture(0.05, 0.07, 0.09, self.db.inactiveAlpha)
-        frame.count:SetText("")
+        self:PaintInactiveManualIndicator(frame)
         frame:Show()
     end
 end
