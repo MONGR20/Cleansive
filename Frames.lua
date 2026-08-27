@@ -81,18 +81,19 @@ function NS:CellFontSize(role, size)
     return math.max(rule.min, math.min(rule.max, scaled))
 end
 
--- Each aura type gets its own hint, shifted so two visuals on one cell do not
--- print on top of each other. The shift was a flat 7 px whatever the cell, so
--- on a 12 px cell the third slot started at 16 px -- entirely outside. It
--- follows the cell now, and a hint that still would not fit is not drawn at
--- all rather than spilling onto the neighbour. Returns nil when it does not fit.
+-- One hint, always in the same corner. Each aura type used to get its own,
+-- shifted sideways so two visuals on a cell would not print over each other --
+-- but three plates need 46 px with their margin and the largest cell is 40, so
+-- the third letter could never be drawn at all. Since the aura level already
+-- encodes the type priority (CreateAuraContainer raises it for the more urgent
+-- type), stacking every hint in the same corner puts the winning letter on top
+-- by construction, with no offset and nothing pushed outside.
+-- Returns the offset, or nil if even a single plate cannot fit.
 function NS:ClickHintOffset(slot, size)
     local cell = tonumber(size) or tonumber(self.db and self.db.frameSize) or 22
-    local step = math.max(3, math.floor(7 * cell / 22 + 0.5))
-    local x = math.max(1, slot or 1) - 1
-    local offset = x * step
-    if offset + self:CellFontSize("plate", cell) > cell then return nil end
-    return offset
+    -- The plate is anchored at 1 px, so that pixel counts.
+    if 1 + self:CellFontSize("plate", cell) > cell then return nil end
+    return 0
 end
 
 function NS:CellShowsNames()
@@ -209,6 +210,11 @@ function NS:CreateGrid()
     anchor:SetScript("OnDragStop", function(f)
         f:StopMovingOrSizing()
         self:SavePosition(f, "grid")
+        -- Since 1.5.17 the cell count depends on where the anchor sits, so a
+        -- move that does not recount leaves the grid sized for the old
+        -- position: a run computed at the centre walks off the edge as soon as
+        -- the anchor is dragged towards it.
+        self:LayoutButtons()
     end)
     anchor:SetScript("OnMouseUp", function(_, button)
         if IsControlKeyDown() and button == "LeftButton" then
@@ -999,6 +1005,39 @@ function NS:AvailableExtent(horizontal, towardPositive)
     return anchorBottom - screenBottom
 end
 
+-- When the anchor sits against the edge the grid grows towards, no wrap can
+-- fit: the space there is worth about thirty cells and a raid needs eighty.
+-- Rather than draw half a raid off screen, slide the anchor back until the
+-- rectangle fits. The saved position is deliberately left alone -- this is a
+-- display-time correction, so the grid returns to the chosen spot by itself
+-- once the cells shrink or the group does.
+function NS:NudgeGridOnScreen(neededAcross, neededDown, growRight, growDown)
+    local anchor = self.gridAnchor
+    if not anchor or not UIParent then return end
+    local point, _, relativePoint, x, y = anchor:GetPoint(1)
+    if not point or type(x) ~= "number" or type(y) ~= "number" then return end
+
+    local roomAcross = self:AvailableExtent(true, growRight)
+    local roomDown = self:AvailableExtent(false, not growDown)
+    local dx, dy = 0, 0
+    if roomAcross and neededAcross > roomAcross then
+        local excess = neededAcross - roomAcross
+        dx = growRight and -excess or excess
+    end
+    if roomDown and neededDown > roomDown then
+        local excess = neededDown - roomDown
+        dy = growDown and excess or -excess
+    end
+    if dx == 0 and dy == 0 then return end
+
+    anchor:ClearAllPoints()
+    anchor:SetPoint(point, UIParent, relativePoint or "CENTER", x + dx, y + dy)
+    if self.cooldownBody then
+        self.cooldownBody:ClearAllPoints()
+        self.cooldownBody:SetPoint(point, UIParent, relativePoint or "CENTER", x + dx, y + dy)
+    end
+end
+
 function NS:LayoutButtons()
     if not self.buttons then return end
     if InCombatLockdown and InCombatLockdown() then
@@ -1010,18 +1049,41 @@ function NS:LayoutButtons()
     -- A run that leaves the screen shows nothing, so it wraps instead. The
     -- shape the player asked for is kept: horizontal still fills a row before
     -- starting another, vertical still fills a column.
+    -- Resize the anchor before reading its edges: measuring first and resizing
+    -- afterwards computed the space from the previous rectangle, so a size
+    -- change near a screen edge lost up to a cell.
+    self.gridAnchor:SetSize(size, math.max(12, math.floor(size * 0.55)))
     local growRightEarly = self.db.grow == "RIGHT_DOWN" or self.db.grow == "RIGHT_UP"
     local growDownEarly = self.db.grow == "RIGHT_DOWN" or self.db.grow == "LEFT_DOWN"
+    -- Both axes, not just the run. A capped row still wraps downwards and a
+    -- capped column still wraps sideways, so bounding only the primary axis
+    -- left the fold free to walk off the other edge -- which is what happens
+    -- when the anchor sits near the edge the grid grows towards.
+    -- Fold on the cells the player actually sees. Buttons past the roster are
+    -- hidden by AssignRosterToButtons, so folding on the full pool of 82 shrank
+    -- a five-man grid as if it had to hold a raid.
+    local shown = math.max(1, math.min(MAX_BUTTONS, #(self.roster or {})))
+    if not self.roster or #self.roster == 0 then shown = MAX_BUTTONS end
+    local maxAcross = self:MaxCellsPerRun(size, spacing, self:AvailableExtent(true, growRightEarly))
+    local maxDown = self:MaxCellsPerRun(size, spacing, self:AvailableExtent(false, not growDownEarly), 3)
     local rows
     if layoutMode == "HORIZONTAL" then
-        columns = self:MaxCellsPerRun(size, spacing, self:AvailableExtent(true, growRightEarly)) or MAX_BUTTONS
+        columns = maxAcross or MAX_BUTTONS
+        -- Widen the row so the fold needs no more rows than fit.
+        if maxDown and maxAcross then
+            columns = math.min(maxAcross, math.max(columns, math.ceil(shown / maxDown)))
+        end
     elseif layoutMode == "VERTICAL" then
-        -- The vertical run carries the layout's 3 px margin.
-        rows = self:MaxCellsPerRun(size, spacing, self:AvailableExtent(false, not growDownEarly), 3) or MAX_BUTTONS
+        rows = maxDown or MAX_BUTTONS
+        if maxAcross and maxDown then
+            rows = math.min(maxDown, math.max(rows, math.ceil(shown / maxAcross)))
+        end
         columns = 1
     else
-        local widest = self:MaxCellsPerRun(size, spacing, self:AvailableExtent(true, growRightEarly))
-        if widest then columns = math.min(columns, widest) end
+        if maxAcross then columns = math.min(columns, maxAcross) end
+        if maxDown and maxAcross then
+            columns = math.min(maxAcross, math.max(columns, math.ceil(shown / maxDown)))
+        end
     end
     local growRight = self.db.grow == "RIGHT_DOWN" or self.db.grow == "RIGHT_UP"
     local growDown = self.db.grow == "RIGHT_DOWN" or self.db.grow == "LEFT_DOWN"
@@ -1048,7 +1110,12 @@ function NS:LayoutButtons()
         button:SetPoint(point, self.gridAnchor, relative, x, y)
         button.cooldown:SetPoint(point, self.cooldownBody, relative, x, y)
     end
-    self.gridAnchor:SetSize(size, math.max(12, math.floor(size * 0.55)))
+    -- The rectangle the placed cells actually occupy.
+    local across = rows and math.ceil(shown / rows) or math.min(shown, columns)
+    local down = rows and math.min(shown, rows) or math.ceil(shown / columns)
+    local step = size + spacing
+    self:NudgeGridOnScreen((across - 1) * step + size, (down - 1) * step + size + 3,
+        growRightEarly, growDownEarly)
     self:LayoutManualIndicator()
     self.cooldownBody:SetSize(size, math.max(12, math.floor(size * 0.55)))
     self.pendingLayout = false

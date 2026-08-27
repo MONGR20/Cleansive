@@ -78,6 +78,38 @@ local function normalizePositions(profile, fallback)
     end
 end
 
+-- typeOrder drives priority, click mapping and the grouped indicator. A
+-- duplicate, an unknown name or a missing type silently dropped a dispel type
+-- out of the interface, so it is rebuilt: the valid entries in their saved
+-- order, then whatever is missing.
+local function normalizeDispelTypes(profile, fallback)
+    local known = {}
+    for _, auraType in ipairs(fallback.typeOrder or {}) do known[auraType] = true end
+
+    local rebuilt, seen = {}, {}
+    for _, auraType in ipairs(type(profile.typeOrder) == "table" and profile.typeOrder or {}) do
+        if known[auraType] and not seen[auraType] then
+            seen[auraType] = true
+            rebuilt[#rebuilt + 1] = auraType
+        end
+    end
+    for _, auraType in ipairs(fallback.typeOrder or {}) do
+        if not seen[auraType] then rebuilt[#rebuilt + 1] = auraType end
+    end
+    profile.typeOrder = rebuilt
+
+    if type(profile.enabledTypes) ~= "table" then profile.enabledTypes = {} end
+    for auraType in pairs(known) do
+        local value = profile.enabledTypes[auraType]
+        if type(value) ~= "boolean" then
+            profile.enabledTypes[auraType] = (fallback.enabledTypes or {})[auraType] ~= false
+        end
+    end
+    for auraType in pairs(profile.enabledTypes) do
+        if not known[auraType] then profile.enabledTypes[auraType] = nil end
+    end
+end
+
 local function normalizeProfile(profile, fallback)
     if type(profile) ~= "table" or type(fallback) ~= "table" then return end
     for key, bounds in pairs(NUMERIC_BOUNDS) do
@@ -93,12 +125,17 @@ local function normalizeProfile(profile, fallback)
     for key, allowed in pairs(ALLOWED_VALUES) do
         if not allowed[profile[key]] then profile[key] = fallback[key] end
     end
-    -- A truthy non-boolean survives every check above and then reaches code
-    -- that assumes true or false.
+    -- A non-boolean must fall back to the default, not be read for its Lua
+    -- truthiness: "false", "non" and 0 are all truthy, so a database saying
+    -- locked = "false" came back locked.
     for _, key in ipairs(BOOLEAN_SETTINGS) do
-        if profile[key] ~= nil then profile[key] = profile[key] and true or false end
+        local value = profile[key]
+        if value ~= nil and type(value) ~= "boolean" then
+            profile[key] = fallback[key]
+        end
     end
     normalizePositions(profile, fallback)
+    normalizeDispelTypes(profile, fallback)
 end
 
 local function applyDefaults(source, destination)
@@ -358,8 +395,9 @@ function NS:QueueProfileSwitch()
     self:RebuildRoster()
     self.deferRefreshes = false
     self:ApplySecureBindings()
-    self:LayoutButtons()
+    -- Position first, for the same reason as FlushCombatUpdates.
     self:RestorePosition(self.gridAnchor, "grid")
+    self:LayoutButtons()
     self:UpdateGridVisibilityDriver()
     self:ApplyPriorityDispelBinding()
     self:RefreshOptions()

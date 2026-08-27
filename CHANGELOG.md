@@ -5,6 +5,15 @@ Depuis la 1.4.5, les principales branches logiques corrigées sont couvertes
 par des tests de non-régression dans `j/tests` (`npm test`). Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.5.18
+
+- The grid is laid out again whenever the anchor moves. Since 1.5.17 the cell count depends on where the anchor sits, but dragging it, resetting it or switching profile never recounted, so a run computed at the centre kept its centre-sized wrap once dragged towards an edge -- a cell ended up 2738 px across on a 1920 px screen. Two orderings were inverted as well: `LayoutButtons` read the anchor's edges before the new profile's position had been restored, and the anchor was resized after its edges had been measured.
+- Both axes are bounded, and the wrap is computed from the cells actually shown. A capped row still wraps downwards and a capped column still wraps sideways, so bounding only the primary axis left the fold free to walk off the other edge. Folding on the full pool of 82 buttons also shrank a five-man grid as if it had to hold a raid; buttons past the roster are hidden and never seen.
+- When the anchor sits against the edge the grid grows towards, the grid slides back into view. No wrap can help there: the space is worth about thirty cells and a raid needs eighty. The saved position is deliberately left untouched -- this is a display-time correction, so the grid returns to the chosen spot by itself once the cells shrink or the group does.
+- One click hint, always in the same corner. Each aura type used to get its own, shifted sideways so two visuals would not print over each other, but three plates need 46 px with their margin and the largest cell is 40 -- the Ctrl letter could never be drawn at all. The aura level already encodes type priority, so stacking every hint in one corner puts the winning letter on top by construction. The guard also counts the plate's own 1 px anchor offset, which it had been ignoring: the second hint spilled by a pixel at 12 px and the third did the same at 39 while being hidden at 40.
+- Saved settings: a non-boolean falls back to its default instead of being read for Lua truthiness -- `"false"`, `"non"` and `0` are all truthy, so a database saying `locked = "false"` came back locked. `typeOrder` is rebuilt without duplicates or unknown names and with nothing missing, and `enabledTypes` is cleaned of entries that no longer exist.
+- Tests: 354 to 418. The suite only visited corners opposite the growth direction -- the favourable ones -- and never moved the anchor after a first layout, which is why none of the above turned it red.
+
 ## 1.5.17
 
 - Name and class reads are guarded like GUIDs were. 1.5.14 protected `UnitGUID` and `UnitIsUnit` and assumed that was the whole class of problem; `UnitName`, `UnitFullName` and `UnitClass` are marked secret-capable too, and the roster read all three raw -- a concatenation for the qualified name, an `or` for the display name, a direct read for the class. An unreadable name now falls back to the unit token, an unknown identity matches no priority or skip entry without dropping the unit from the roster, and `/cleansive pradd` refuses rather than recording an entry that can never match. The static rule covers all six APIs.
@@ -14,7 +23,7 @@ du moteur d'auras protégé restent également vérifiées en jeu.
 - Saved settings are validated further: anchor points are checked against the nine WoW accepts, coordinates are repaired, slider values are rounded to whole steps, and booleans that arrived as something else are normalised. Restoring a position falls back to the default rather than raising, so a broken database can never stop the addon from starting.
 - The options preview follows the same label sizes as a real cell and only shows the cells that fit its box; three cells at the vertical cap ran 11 px past the bottom with nothing to clip them.
 - Click-hint offsets scale with the cell instead of a flat 7 px, and a hint that still would not fit is not drawn. Writing this as a property -- every drawn hint fits its cell, across all 29 sizes and 3 slots -- established that the third hint fits no size at all: three plates need 45 px and the largest cell is 40. That settles the audit's "show a single hint" recommendation by geometry rather than by decision.
-- Tests: 280 to 354.
+- Tests: 248 to 354. (An earlier printing of this entry said 280; 1.5.16 shipped with 248.)
 
 ## 1.5.16
 

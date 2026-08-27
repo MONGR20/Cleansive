@@ -200,7 +200,11 @@ function NS:ResetPositions()
         self:Print(self.L.COMBAT_LOCKED)
         return
     end
-    if self.gridAnchor then self:RestorePosition(self.gridAnchor, "grid") end
+    if self.gridAnchor then
+        self:RestorePosition(self.gridAnchor, "grid")
+        -- Same reason as OnDragStop: the cell count depends on the anchor.
+        if self.LayoutButtons then self:LayoutButtons() end
+    end
     self:Print(self.L.RESET_DONE)
 end
 
@@ -576,6 +580,10 @@ function NS:FlushCombatUpdates()
     end
     self.pendingAuraFilters = false
     self.pendingAuraStyle = false
+    -- A profile's position has to be in place before its grid is computed:
+    -- LayoutButtons reads the anchor's edges, and restoring afterwards sized
+    -- the new profile from the old profile's position.
+    if profileChanged and self.gridAnchor then self:RestorePosition(self.gridAnchor, "grid") end
     local configured = false
     if needsRoster or needsLayout then
         self:LayoutButtons()
@@ -591,7 +599,6 @@ function NS:FlushCombatUpdates()
     if self.RefreshOptions then self:RefreshOptions() end
     if self.pendingEnabled ~= nil then self:SetEnabled(self.pendingEnabled) end
     if self.pendingGridVisibility ~= nil then self:SetGridVisible(self.pendingGridVisibility) end
-    if profileChanged and self.gridAnchor then self:RestorePosition(self.gridAnchor, "grid") end
     if self.pendingVisibilityDriver or profileChanged then self:UpdateGridVisibilityDriver() end
     if self.pendingAnchorAppearance and self.UpdateGridAnchorAppearance then
         self:UpdateGridAnchorAppearance()
