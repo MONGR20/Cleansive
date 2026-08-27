@@ -1,4 +1,4 @@
-# Cleansive 1.5.19
+# Cleansive 1.5.20
 
 Cleansive is a standalone one-click cleansing addon for **World of Warcraft Retail 12.1** (`120100`). It provides a compact Decursive-style workflow with a dark, class-colored interface inspired by the clarity of Ellesmere UI. The interface follows the language of your WoW client, English or French; either can be picked from the General page at any time.
 
@@ -93,6 +93,15 @@ remain active so a protected AuraSlot can pass cleansing clicks through during
 combat. Avoid clicking empty grid positions while this mode is enabled.
 
 The hover-cleanse key also respects these restrictions: it casts through a secure action button on your mouseover, target, or player. It never asks Lua to select an afflicted unit during combat, because the secure engine evaluates targeting conditions only and cannot read auras.
+
+## 1.5.20 changes
+
+- A reset asked for during combat recomputes the grid, not just the position. `ResetPositions` deferred the move to the end of combat but set no layout flag, so the position returned to the default while the wrap stayed the one computed for the old corner -- a narrow wrap from a screen edge became a long run off the middle of the screen.
+- The automatic on-screen correction is no longer one-way. 1.5.18 claimed the grid would return to the chosen position once the group or the cells shrank; it never did, because the next layout started from the already-corrected anchor and found nothing to correct. The layout now restores the saved position first and recomputes the correction from there, so the grid comes back on its own.
+- The grouped badge is inside the bounded rectangle. It is anchored on the far side of the anchor, a full cell plus 4 px opposite the growth direction, and only the cells were being measured -- a grid that fit perfectly going down could still push its badge off the top edge.
+- Engine slots reserve only the types a spell can currently clear. `enhancedTypes` were merged in whether or not the talent behind them was taken, so a priest without 390632 paid for a Disease slot on all 82 buttons, and a monk without 388874 for two.
+- The boot fallback that keeps the class-wide set until the spellbook answers now exists. It was written against `knownSpells ~= nil`, but `UpdateSpells` clears that table on entry, so the branch was unreachable and the safety described in 1.5.19 was not real.
+- Tests: 422 to 435.
 
 ## 1.5.19 changes
 

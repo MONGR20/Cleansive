@@ -5,6 +5,15 @@ Depuis la 1.4.5, les principales branches logiques corrigées sont couvertes
 par des tests de non-régression dans `j/tests` (`npm test`). Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.5.20
+
+- A reset asked for during combat recomputes the grid, not just the position. `ResetPositions` deferred the move to the end of combat but set no layout flag, so the position returned to the default while the wrap stayed the one computed for the old corner -- a narrow wrap from a screen edge became a long run off the middle of the screen.
+- The automatic on-screen correction is no longer one-way. 1.5.18 claimed the grid would return to the chosen position once the group or the cells shrank; it never did, because the next layout started from the already-corrected anchor and found nothing to correct. The layout now restores the saved position first and recomputes the correction from there, so the grid comes back on its own.
+- The grouped badge is inside the bounded rectangle. It is anchored on the far side of the anchor, a full cell plus 4 px opposite the growth direction, and only the cells were being measured -- a grid that fit perfectly going down could still push its badge off the top edge.
+- Engine slots reserve only the types a spell can currently clear. `enhancedTypes` were merged in whether or not the talent behind them was taken, so a priest without 390632 paid for a Disease slot on all 82 buttons, and a monk without 388874 for two.
+- The boot fallback that keeps the class-wide set until the spellbook answers now exists. It was written against `knownSpells ~= nil`, but `UpdateSpells` clears that table on entry, so the branch was unreachable and the safety described in 1.5.19 was not real.
+- Tests: 422 to 435.
+
 ## 1.5.19
 
 - Protected aura slots follow the spells the character actually knows. The filter accepted every definition belonging to the class without ever checking the spellbook, so a class whose definitions span five dispel types reserved a slot for all five on all 82 buttons -- 410 protected frames for an evoker who knows one cleanse, where 82 are needed. Learning a spell widens the set on the next spell update, and the class-wide set stays as a boot fallback in case the spellbook is not ready: an empty set would strip the cells of the protected engine, and 1.5.4 already showed what removing a signal costs.

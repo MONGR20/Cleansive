@@ -197,6 +197,10 @@ function NS:ResetPositions()
     self.db.positions.grid = { point = "CENTER", relativePoint = "CENTER", x = -180, y = -120 }
     if InCombatLockdown and InCombatLockdown() then
         self.pendingPositionReset = true
+        -- The wrap depends on where the anchor sits, so replaying the position
+        -- after combat is not enough: without this the grid keeps the wrap it
+        -- computed for the old corner and can end up off screen once centred.
+        self.pendingLayout = true
         self:Print(self.L.COMBAT_LOCKED)
         return
     end

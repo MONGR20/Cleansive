@@ -39,11 +39,22 @@ local function getPotentialAuraTypes()
         -- UpdateSpells runs before CreateFrames, so knownSpells is populated by
         -- then; the class-wide set stays as a boot fallback in case it is not,
         -- and RefreshAuraEngineTypes narrows it on the next spell update.
-        local resolved = NS.knownSpells ~= nil
+        -- "Resolved" means the spellbook answered with something, not merely
+        -- that UpdateSpells ran: it clears knownSpells to an empty table on
+        -- entry, so testing for non-nil made the boot fallback unreachable.
+        local resolved = NS.knownSpells and #NS.knownSpells > 0
         if (resolved and NS:IsSpellKnown(def)) or (not resolved and def.class == NS.playerClass)
             or (not def.class and NS:IsSpellKnown(def)) then
-            for _, list in ipairs({ def.types, def.enhancedTypes }) do
-                for _, auraType in ipairs(list or {}) do supported[auraType] = true end
+            -- Only the types the spell can currently clear. Merging
+            -- enhancedTypes unconditionally reserved a slot for an upgrade the
+            -- character may not have taken: a priest without 390632 paid for
+            -- Disease, a monk without 388874 for Disease and Poison.
+            local types = def.activeTypes
+            if not types and resolved then types = NS:GetActiveSpellTypes(def) end
+            for _, auraType in ipairs(types or def.types or {}) do supported[auraType] = true end
+            if not resolved then
+                -- Boot fallback: nothing is resolved, so stay generous.
+                for _, auraType in ipairs(def.enhancedTypes or {}) do supported[auraType] = true end
             end
         end
     end
@@ -1020,7 +1031,10 @@ end
 -- rectangle fits. The saved position is deliberately left alone -- this is a
 -- display-time correction, so the grid returns to the chosen spot by itself
 -- once the cells shrink or the group does.
-function NS:NudgeGridOnScreen(neededAcross, neededDown, growRight, growDown)
+-- `behind` is the space the grid needs on the far side of the anchor: the
+-- grouped badge is anchored opposite the growth direction, so a grid that fits
+-- perfectly going down can still push its badge off the top edge.
+function NS:NudgeGridOnScreen(neededAcross, neededDown, growRight, growDown, behind)
     local anchor = self.gridAnchor
     if not anchor or not UIParent then return end
     local point, _, relativePoint, x, y = anchor:GetPoint(1)
@@ -1036,6 +1050,12 @@ function NS:NudgeGridOnScreen(neededAcross, neededDown, growRight, growDown)
     if roomDown and neededDown > roomDown then
         local excess = neededDown - roomDown
         dy = growDown and excess or -excess
+    end
+    -- The far side, where the badge lives.
+    local roomBehind = self:AvailableExtent(false, growDown)
+    if behind and behind > 0 and roomBehind and behind > roomBehind then
+        local excess = behind - roomBehind
+        dy = dy + (growDown and -excess or excess)
     end
     if dx == 0 and dy == 0 then return end
 
@@ -1058,6 +1078,13 @@ function NS:LayoutButtons()
     -- A run that leaves the screen shows nothing, so it wraps instead. The
     -- shape the player asked for is kept: horizontal still fills a row before
     -- starting another, vertical still fills a column.
+    -- Start from the position the player chose, not from wherever the last
+    -- correction left the anchor. Without this the nudge was one-way: the grid
+    -- never came back once a raid had pushed it, contrary to what 1.5.18
+    -- claimed. OnDragStop saves before relaying out, so a drag is not lost.
+    if self.RestorePosition and self.db.positions then
+        self:RestorePosition(self.gridAnchor, "grid")
+    end
     -- Resize the anchor before reading its edges: measuring first and resizing
     -- afterwards computed the space from the previous rectangle, so a size
     -- change near a screen edge lost up to a cell.
@@ -1123,8 +1150,14 @@ function NS:LayoutButtons()
     local across = rows and math.ceil(shown / rows) or math.min(shown, columns)
     local down = rows and math.min(shown, rows) or math.ceil(shown / columns)
     local step = size + spacing
+    -- The grouped badge sits a full cell plus 4 px behind the anchor whenever
+    -- a manual-only type exists.
+    local behind = 0
+    if self.db.groupManualTypes and self.GetManualOnlyTypes and #self:GetManualOnlyTypes() > 0 then
+        behind = size + 4
+    end
     self:NudgeGridOnScreen((across - 1) * step + size, (down - 1) * step + size + 3,
-        growRightEarly, growDownEarly)
+        growRightEarly, growDownEarly, behind)
     self:LayoutManualIndicator()
     self.cooldownBody:SetSize(size, math.max(12, math.floor(size * 0.55)))
     self.pendingLayout = false
