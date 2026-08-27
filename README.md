@@ -1,4 +1,4 @@
-# Cleansive 1.5.24
+# Cleansive 1.5.25
 
 Cleansive is a standalone one-click cleansing addon for **World of Warcraft Retail 12.1** (`120100`). It provides a compact Decursive-style workflow with a dark, class-colored interface inspired by the clarity of Ellesmere UI. The interface follows the language of your WoW client, English or French; either can be picked from the General page at any time.
 
@@ -94,12 +94,12 @@ combat. Avoid clicking empty grid positions while this mode is enabled.
 
 The hover-cleanse key also respects these restrictions: it casts through a secure action button on your mouseover, target, or player. It never asks Lua to select an afflicted unit during combat, because the secure engine evaluates targeting conditions only and cannot read auras.
 
-## 1.5.24 changes
+## 1.5.25 changes
 
-- A retired dispel type actually stays inert. 1.5.23 replaced its filters with an empty table, and `ConfigureButtonAuraContainer` handed the real ones straight back -- it walks every accumulated slot key and runs on every layout, roster assignment and filter edit, so the claim in the 1.5.23 notes did not hold in the final state. The active set is remembered now and consulted wherever slot filters are applied.
-- A failed slot reconfiguration is diagnosed and retried instead of being permanent. The wanted set was stored before the cells were reconciled, so a cell that failed was left on the Lua fallback and the next call returned early without retrying it -- until a reload. Failures are recorded, reported once, and retried up to three times; the retry is owed when containers exist but are not all covered, because a filter that fails for one slot fails it on all 82.
-- Tests: 452 to 465. The mock recorded nothing for `SetAuraSlotCandidateFilters` and could not fail it, which is the root of both defects above: the generic stub answered success and the suite could not see either one. It now stores the filters and can be made to fail.
-- README: the layout modes no longer promise a single row or column, and the hover-cleanse key is described as what it is -- it casts the first configured spell on mouseover, target, then player. It never picks an afflicted unit.
+- Retries are scheduled, not merely allowed. 1.5.24 set a flag and waited for some other spell event to call the reconciliation again, so a single transient failure could leave cells on the Lua fallback for the rest of the session. A bounded timer now drives them, guarded by a generation so a change of type set cancels the pending one, and deferring to `PLAYER_REGEN_ENABLED` if it fires during combat.
+- A failed neutralisation counts. Readiness only looked at the wanted types, so a retired type left analysing auras raised no retry at all. The pass now reports two outcomes: whether the cell can use the engine, and whether the pass was complete.
+- The retry budget starts again for each new type set, and the warning prints once per generation rather than once per attempt -- four identical lines in the chat frame, where the 1.5.24 notes promised one. The slot counter adds every configured slot instead of only whole ready cells, which could report `0/246` while 164 slots were live.
+- Tests: 465 to 470. Writing the autonomous-recovery test immediately found a fifth defect of my own: the single-timer guard blocked rescheduling when the generation changed, so the stale timer no-opped and no new one was ever armed.
 ## Français
 
 Cleansive est un addon autonome de dissipation en un clic pour WoW Retail 12.1. Lors d’une nouvelle installation, l’interface suit automatiquement la langue du client WoW : français ou anglais. Vous pouvez en changer depuis la page **Général** de `/cleansive`, puis taper `/reload` pour actualiser les libellés déjà créés.

@@ -2106,11 +2106,16 @@ function NS:ReconcileAuraSlots(button, wanted, wantedSet)
         if diagnostics and not diagnostics.firstError then diagnostics.firstError = tostring(reason) end
     end
 
+    -- Two separate outcomes. Whether the cell can use the engine depends only
+    -- on the wanted types; whether the pass is worth retrying also depends on
+    -- retiring the historical ones, which was recorded but never acted on.
+    local retiredOK = true
     for auraType, slotKey in pairs(button.auraSlotKeys) do
         if not wantedSet[auraType] then
             if not tryCall(container.SetAuraSlotCandidateFilters, container, slotKey,
                 { includeDispelTypes = {} }) then
                 recordFailure("SetAuraSlotCandidateFilters failed for " .. tostring(auraType))
+                retiredOK = false
             end
         end
     end
@@ -2133,10 +2138,32 @@ function NS:ReconcileAuraSlots(button, wanted, wantedSet)
     end
 
     button.engineAuraReady = live == #wanted
-    if diagnostics and button.engineAuraReady then
-        diagnostics.added = diagnostics.added + live
-    end
-    return button.engineAuraReady
+    -- Count every slot that was actually configured. Counting only whole ready
+    -- buttons reported 0/246 while 164 slots were live.
+    if diagnostics then diagnostics.added = diagnostics.added + live end
+    return button.engineAuraReady, button.engineAuraReady and retiredOK
+end
+
+-- The retry was allowed but never scheduled: it waited for some other spell
+-- event to call RefreshAuraEngineTypes again. A single transient failure could
+-- therefore leave cells on the Lua fallback for the rest of the session. One
+-- live timer at a time, guarded by the generation so a set change cancels it.
+function NS:ScheduleAuraEngineRetry()
+    if not (C_Timer and C_Timer.After) then return end
+    if self.auraEngineRetryScheduled then return end
+    local generation = self.auraEngineGeneration or 0
+    self.auraEngineRetryScheduled = true
+    C_Timer.After(0.5 * (self.auraEngineRetries or 1), function()
+        self.auraEngineRetryScheduled = false
+        if generation ~= (self.auraEngineGeneration or 0) then return end
+        if not self.pendingAuraEngineReconcile then return end
+        if InCombatLockdown and InCombatLockdown() then
+            -- PLAYER_REGEN_ENABLED already replays this flag.
+            self.pendingAuraEngineRebuild = true
+            return
+        end
+        self:RefreshAuraEngineTypes()
+    end)
 end
 
 function NS:RefreshAuraEngineTypes()
@@ -2159,11 +2186,22 @@ function NS:RefreshAuraEngineTypes()
         return false
     end
     self.pendingAuraEngineRebuild = false
+    -- A new set gets its own budget. Carrying the previous one over meant a
+    -- later change could inherit an exhausted counter and get no attempt.
+    if not same then
+        self.auraEngineRetries, self.auraEngineWarned = 0, false
+        self.auraEngineGeneration = (self.auraEngineGeneration or 0) + 1
+        -- Release the single-timer guard too: the pending timer belongs to the
+        -- old generation and will now no-op, so holding the slot would block
+        -- the new set from ever arming one.
+        self.auraEngineRetryScheduled = false
+    end
 
     self.engineAuraTypes = wanted
     local wantedSet = {}
     for _, auraType in ipairs(wanted) do wantedSet[auraType] = true end
     self.engineAuraTypeSet = wantedSet
+    local fullyConfigured = true
     self.auraContainerDiagnostics = {
         expected = MAX_BUTTONS * #wanted, added = 0, readyButtons = 0, firstError = nil,
     }
@@ -2172,7 +2210,8 @@ function NS:RefreshAuraEngineTypes()
         -- it -- WoW keeps every frame for the session -- so the old code left a
         -- fresh generation of 82 containers behind on every talent change.
         if button.auraContainer then
-            self:ReconcileAuraSlots(button, wanted, wantedSet)
+            local _, complete = self:ReconcileAuraSlots(button, wanted, wantedSet)
+            if not complete then fullyConfigured = false end
         else
             button.auraSlotKeys, button.auraSlotVisuals = nil, nil
             button.engineAuraReady = false
@@ -2193,14 +2232,19 @@ function NS:RefreshAuraEngineTypes()
     for _, button in ipairs(self.buttons) do
         if button.auraContainer then withContainer = withContainer + 1 end
     end
-    if #wanted > 0 and withContainer > 0 and ready < withContainer then
+    local incomplete = withContainer > 0 and (ready < withContainer or not fullyConfigured)
+    if #wanted > 0 and incomplete then
         self.auraEngineRetries = (self.auraEngineRetries or 0) + 1
         self.pendingAuraEngineReconcile = self.auraEngineRetries <= 3
-        if self.auraContainerDiagnostics.firstError then
+        -- One message per generation, not one per attempt: four identical lines
+        -- in the chat frame is noise, and the changelog promised one.
+        if self.auraContainerDiagnostics.firstError and not self.auraEngineWarned then
+            self.auraEngineWarned = true
             self:Print(self.L.AURA_ENGINE_FAILED, self.auraContainerDiagnostics.added,
                 self.auraContainerDiagnostics.expected,
                 self.auraContainerDiagnostics.firstError)
         end
+        if self.pendingAuraEngineReconcile then self:ScheduleAuraEngineRetry() end
     else
         self.auraEngineRetries, self.pendingAuraEngineReconcile = 0, false
     end

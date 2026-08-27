@@ -5,6 +5,13 @@ Depuis la 1.4.5, les principales branches logiques corrigées sont couvertes
 par des tests de non-régression dans `j/tests` (`npm test`). Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.5.25
+
+- Retries are scheduled, not merely allowed. 1.5.24 set a flag and waited for some other spell event to call the reconciliation again, so a single transient failure could leave cells on the Lua fallback for the rest of the session. A bounded timer now drives them, guarded by a generation so a change of type set cancels the pending one, and deferring to `PLAYER_REGEN_ENABLED` if it fires during combat.
+- A failed neutralisation counts. Readiness only looked at the wanted types, so a retired type left analysing auras raised no retry at all. The pass now reports two outcomes: whether the cell can use the engine, and whether the pass was complete.
+- The retry budget starts again for each new type set, and the warning prints once per generation rather than once per attempt -- four identical lines in the chat frame, where the 1.5.24 notes promised one. The slot counter adds every configured slot instead of only whole ready cells, which could report `0/246` while 164 slots were live.
+- Tests: 465 to 470. Writing the autonomous-recovery test immediately found a fifth defect of my own: the single-timer guard blocked rescheduling when the generation changed, so the stale timer no-opped and no new one was ever armed.
+
 ## 1.5.24
 
 - A retired dispel type actually stays inert. 1.5.23 replaced its filters with an empty table, and `ConfigureButtonAuraContainer` handed the real ones straight back -- it walks every accumulated slot key and runs on every layout, roster assignment and filter edit, so the claim in the 1.5.23 notes did not hold in the final state. The active set is remembered now and consulted wherever slot filters are applied.
