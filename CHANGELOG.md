@@ -5,6 +5,14 @@ Depuis la 1.4.5, les principales branches logiques corrigées sont couvertes
 par des tests de non-régression dans `j/tests` (`npm test`). Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.5.23
+
+- Aura containers are reused instead of replaced. Hiding a container does not destroy it -- WoW keeps every frame for the session -- so each real change of the dispel-type set left a generation of 82 abandoned containers behind, and the cost grew with every talent or specialization change. A change now reconciles what is already there: a new type gains a slot, a type that is no longer needed has its filters replaced by an empty `includeDispelTypes` table, and a type that comes back gets its real filters again. The total is bounded to 82 containers and at worst 410 slots for the whole session. Ten class alternations now allocate nothing at all, which is the measurement three audits had asked for.
+- The visual side needed nothing: `StyleAuraVisual` reads `typeToSlot` and `manualTypeSpell`, so a type the character can no longer clear was already styled invisible.
+- The README no longer duplicates the whole changelog. It carries the current release and points at `CHANGELOG.md`, which takes the package from 48 KB to under 8 KB of readme.
+- A fifth static check refuses the tooltip sentences that were corrected in 1.5.22. A behavioural test guards what the code does; only a text rule stops a wrong sentence from coming back.
+- Tests: 451 to 452.
+
 ## 1.5.22
 
 - Two tooltips said the opposite of what the code does. "Enable or disable Cleansive without changing your saved settings" was wrong -- `SetEnabled` writes `db.enabled`, which is stored in the character and specialization profile; it now says so. The layout tooltip still promised one horizontal row or one vertical column, which stopped being true in 1.5.18 when both modes started wrapping rather than running off the screen.

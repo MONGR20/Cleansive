@@ -671,6 +671,134 @@ function NS:UpdateReadableAfflictionAlert(button, unit, silent)
     self:UpdateButtonAfflictionAlert(button, aura, slot, silent)
 end
 
+-- One protected slot for one dispel type. Extracted from CreateAuraContainer
+-- so that a container can gain a type later instead of being thrown away and
+-- rebuilt: Blizzard exposes AddAuraSlot to addons but keeps UnregisterAuraSlot
+-- and ClearAuraSlots on its private mixins, so slots are added, never removed.
+function NS:AddAuraSlotForType(button, auraType)
+    local container = button.auraContainer
+    if not container then return false end
+    local diagnostics = self.auraContainerDiagnostics
+    local function recordFailure(reason)
+        if diagnostics and not diagnostics.firstError then diagnostics.firstError = tostring(reason) end
+    end
+    local addedForButton = 0
+    local slotKey = "cleansive_" .. string.lower(auraType)
+    button.auraSlotKeys[auraType] = slotKey
+    button.auraSlotVisuals[auraType] = {}
+    local candidateFilters = self:BuildAuraCandidateFilters(auraType)
+
+    local added, auraSlotOrError = pcall(container.AddAuraSlot, container, slotKey, AURA_FILTER, {
+        candidateFilters = candidateFilters,
+        initializeFrame = function(auraButton)
+            -- The protected aura slot inherits the secure cell's rectangle.
+            -- Resizing the cell therefore also resizes every engine-owned
+            -- affliction visual without mutating its protected layout later.
+            auraButton:ClearAllPoints()
+            auraButton:SetAllPoints(button)
+            local auraPriority = self:GetTypePriority(auraType)
+            local auraLevel = button:GetFrameLevel() + 110 + (math.max(0, 10 - auraPriority) * 4)
+            auraButton:SetFrameLevel(auraLevel)
+            tryCall(auraButton.SetMouseClickEnabled, auraButton, false)
+            tryCall(auraButton.SetMouseMotionEnabled, auraButton, self.db.showTooltips)
+            tryCall(auraButton.SetPassThroughButtons, auraButton,
+                "LeftButton", "RightButton", "MiddleButton", "Button4", "Button5")
+            tryCall(auraButton.SetTooltipAnchorPoint, auraButton, "ANCHOR_RIGHT")
+
+            local auraHover = auraButton:CreateTexture(nil, "HIGHLIGHT")
+            auraHover:SetAllPoints(button)
+            auraHover:SetColorTexture(1, 1, 1, 0.08)
+
+            local overlay = auraButton:CreateTexture(nil, "ARTWORK", nil, 1)
+            overlay:SetAllPoints(button)
+
+            local labelLayer = CreateFrame("Frame", nil, auraButton)
+            labelLayer:SetAllPoints(auraButton)
+            labelLayer:SetFrameLevel(auraLevel + 3)
+            labelLayer:EnableMouse(false)
+
+            local typeMark = labelLayer:CreateTexture(nil, "OVERLAY", nil, 3)
+            typeMark:SetPoint("BOTTOMLEFT", button, "BOTTOMLEFT", 1, 1)
+            typeMark:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -1, 1)
+            typeMark:SetHeight(3)
+
+            local stack = labelLayer:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
+            stack:SetPoint("TOPRIGHT", button, "TOPRIGHT", -1, -1)
+            if auraButton.SetApplicationCount then
+                tryCall(auraButton.SetApplicationCount, auraButton, stack, {})
+            end
+
+            local durationCooldown
+            if auraButton.SetDurationCooldown then
+                local created, candidate = pcall(CreateFrame, "Cooldown", nil, auraButton, "CooldownFrameTemplate")
+                if created and candidate then
+                    local configured = pcall(function()
+                        candidate:SetAllPoints(auraButton)
+                        candidate:SetFrameLevel(auraLevel + 1)
+                        candidate:SetDrawBling(false)
+                        candidate:SetDrawEdge(false)
+                        candidate:SetDrawSwipe(true)
+                        candidate:SetHideCountdownNumbers(true)
+                        candidate:SetReverse(true)
+                        candidate:SetSwipeColor(0.025, 0.035, 0.045, 0.98)
+                        local countdown = candidate.GetCountdownFontString and candidate:GetCountdownFontString()
+                        if countdown then countdown:SetAlpha(0) end
+                        candidate:Show()
+                        auraButton:SetDurationCooldown(candidate)
+                    end)
+                    if configured then
+                        durationCooldown = candidate
+                    else
+                        candidate:Hide()
+                    end
+                end
+            end
+
+            local hintPlate = labelLayer:CreateTexture(nil, "ARTWORK", nil, 2)
+            hintPlate:SetSize(9, 11)
+            hintPlate:SetColorTexture(0.015, 0.025, 0.030, 0.78)
+            local hint = labelLayer:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+            hint:SetPoint("TOPLEFT", button, "TOPLEFT", 2, -1)
+            hint:SetTextColor(1, 1, 1, 1)
+            hint:SetShadowColor(0, 0, 0, 1)
+            hint:SetShadowOffset(1, -1)
+            if self.GetUXFont then hint:SetFont(self:GetUXFont(), self:CellFontSize("hint"), "OUTLINE") end
+
+            local unitName = labelLayer:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            unitName:SetPoint("BOTTOM", button, "BOTTOM", 0, 3)
+            unitName:SetWidth(math.max(8, self.db.frameSize - 4))
+            unitName:SetJustifyH("CENTER")
+            if unitName.SetWordWrap then unitName:SetWordWrap(false) end
+            if unitName.SetMaxLines then unitName:SetMaxLines(1) end
+            if self.GetUXFont then unitName:SetFont(self:GetUXFont(), self:CellFontSize("name"), "") end
+
+            local visual = {
+                auraButton = auraButton,
+                overlay = overlay,
+                typeMark = typeMark,
+                stack = stack,
+                durationCooldown = durationCooldown,
+                clickHint = hint,
+                clickHintPlate = hintPlate,
+                unitName = unitName,
+                labelLayer = labelLayer,
+                auraHover = auraHover,
+            }
+            local visuals = button.auraSlotVisuals[auraType]
+            visuals[#visuals + 1] = visual
+            self:StyleAuraVisual(button, auraType, visual)
+        end,
+    })
+    if added then
+        addedForButton = addedForButton + 1
+    else
+        recordFailure(auraSlotOrError or "AddAuraSlot failed")
+        button.auraSlotKeys[auraType] = nil
+        button.auraSlotVisuals[auraType] = nil
+    end
+    return addedForButton > 0
+end
+
 function NS:CreateAuraContainer(button)
     local diagnostics = self.auraContainerDiagnostics
     button.engineAuraReady = false
@@ -704,119 +832,8 @@ function NS:CreateAuraContainer(button)
     local addedForButton = 0
 
     for index = 1, #self.engineAuraTypes do
-        local auraType = self.engineAuraTypes[index]
-        local slotKey = "cleansive_" .. string.lower(auraType)
-        button.auraSlotKeys[auraType] = slotKey
-        button.auraSlotVisuals[auraType] = {}
-        local candidateFilters = self:BuildAuraCandidateFilters(auraType)
-
-        local added, auraSlotOrError = pcall(container.AddAuraSlot, container, slotKey, AURA_FILTER, {
-            candidateFilters = candidateFilters,
-            initializeFrame = function(auraButton)
-                -- The protected aura slot inherits the secure cell's rectangle.
-                -- Resizing the cell therefore also resizes every engine-owned
-                -- affliction visual without mutating its protected layout later.
-                auraButton:ClearAllPoints()
-                auraButton:SetAllPoints(button)
-                local auraPriority = self:GetTypePriority(auraType)
-                local auraLevel = button:GetFrameLevel() + 110 + (math.max(0, 10 - auraPriority) * 4)
-                auraButton:SetFrameLevel(auraLevel)
-                tryCall(auraButton.SetMouseClickEnabled, auraButton, false)
-                tryCall(auraButton.SetMouseMotionEnabled, auraButton, self.db.showTooltips)
-                tryCall(auraButton.SetPassThroughButtons, auraButton,
-                    "LeftButton", "RightButton", "MiddleButton", "Button4", "Button5")
-                tryCall(auraButton.SetTooltipAnchorPoint, auraButton, "ANCHOR_RIGHT")
-
-                local auraHover = auraButton:CreateTexture(nil, "HIGHLIGHT")
-                auraHover:SetAllPoints(button)
-                auraHover:SetColorTexture(1, 1, 1, 0.08)
-
-                local overlay = auraButton:CreateTexture(nil, "ARTWORK", nil, 1)
-                overlay:SetAllPoints(button)
-
-                local labelLayer = CreateFrame("Frame", nil, auraButton)
-                labelLayer:SetAllPoints(auraButton)
-                labelLayer:SetFrameLevel(auraLevel + 3)
-                labelLayer:EnableMouse(false)
-
-                local typeMark = labelLayer:CreateTexture(nil, "OVERLAY", nil, 3)
-                typeMark:SetPoint("BOTTOMLEFT", button, "BOTTOMLEFT", 1, 1)
-                typeMark:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -1, 1)
-                typeMark:SetHeight(3)
-
-                local stack = labelLayer:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
-                stack:SetPoint("TOPRIGHT", button, "TOPRIGHT", -1, -1)
-                if auraButton.SetApplicationCount then
-                    tryCall(auraButton.SetApplicationCount, auraButton, stack, {})
-                end
-
-                local durationCooldown
-                if auraButton.SetDurationCooldown then
-                    local created, candidate = pcall(CreateFrame, "Cooldown", nil, auraButton, "CooldownFrameTemplate")
-                    if created and candidate then
-                        local configured = pcall(function()
-                            candidate:SetAllPoints(auraButton)
-                            candidate:SetFrameLevel(auraLevel + 1)
-                            candidate:SetDrawBling(false)
-                            candidate:SetDrawEdge(false)
-                            candidate:SetDrawSwipe(true)
-                            candidate:SetHideCountdownNumbers(true)
-                            candidate:SetReverse(true)
-                            candidate:SetSwipeColor(0.025, 0.035, 0.045, 0.98)
-                            local countdown = candidate.GetCountdownFontString and candidate:GetCountdownFontString()
-                            if countdown then countdown:SetAlpha(0) end
-                            candidate:Show()
-                            auraButton:SetDurationCooldown(candidate)
-                        end)
-                        if configured then
-                            durationCooldown = candidate
-                        else
-                            candidate:Hide()
-                        end
-                    end
-                end
-
-                local hintPlate = labelLayer:CreateTexture(nil, "ARTWORK", nil, 2)
-                hintPlate:SetSize(9, 11)
-                hintPlate:SetColorTexture(0.015, 0.025, 0.030, 0.78)
-                local hint = labelLayer:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-                hint:SetPoint("TOPLEFT", button, "TOPLEFT", 2, -1)
-                hint:SetTextColor(1, 1, 1, 1)
-                hint:SetShadowColor(0, 0, 0, 1)
-                hint:SetShadowOffset(1, -1)
-                if self.GetUXFont then hint:SetFont(self:GetUXFont(), self:CellFontSize("hint"), "OUTLINE") end
-
-                local unitName = labelLayer:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-                unitName:SetPoint("BOTTOM", button, "BOTTOM", 0, 3)
-                unitName:SetWidth(math.max(8, self.db.frameSize - 4))
-                unitName:SetJustifyH("CENTER")
-                if unitName.SetWordWrap then unitName:SetWordWrap(false) end
-                if unitName.SetMaxLines then unitName:SetMaxLines(1) end
-                if self.GetUXFont then unitName:SetFont(self:GetUXFont(), self:CellFontSize("name"), "") end
-
-                local visual = {
-                    auraButton = auraButton,
-                    overlay = overlay,
-                    typeMark = typeMark,
-                    stack = stack,
-                    durationCooldown = durationCooldown,
-                    clickHint = hint,
-                    clickHintPlate = hintPlate,
-                    unitName = unitName,
-                    labelLayer = labelLayer,
-                    auraHover = auraHover,
-                }
-                local visuals = button.auraSlotVisuals[auraType]
-                visuals[#visuals + 1] = visual
-                self:StyleAuraVisual(button, auraType, visual)
-            end,
-        })
-        if added then
+        if self:AddAuraSlotForType(button, self.engineAuraTypes[index]) then
             addedForButton = addedForButton + 1
-        else
-            recordFailure(auraSlotOrError or "AddAuraSlot failed")
-            button.auraSlotKeys[auraType] = nil
-            button.auraSlotVisuals[auraType] = nil
         end
     end
 
@@ -2062,6 +2079,50 @@ end
 -- engineAuraTypes is decided once, when the grid is built. A specialization
 -- or talent change can alter it, and reconfiguring existing slots cannot add
 -- a type that was never created. Rebuild rather than leave a stale set.
+-- Bring an existing container in line with the wanted set instead of replacing
+-- it. A slot cannot be removed -- UnregisterAuraSlot and ClearAuraSlots are on
+-- Blizzard's private mixins -- but an empty includeDispelTypes table is not nil
+-- and matches no aura at all, so an unwanted slot can be made inert. The visual
+-- side already handles it: StyleAuraVisual reads typeToSlot and manualTypeSpell,
+-- so a type the character can no longer clear is styled invisible anyway.
+-- Slots therefore accumulate to the union of types seen this session, at most
+-- five, instead of 82 fresh containers per change.
+function NS:ReconcileAuraSlots(button, wanted, wantedSet)
+    local container = button.auraContainer
+    if not container then return false end
+    button.auraSlotKeys = button.auraSlotKeys or {}
+    button.auraSlotVisuals = button.auraSlotVisuals or {}
+
+    for auraType, slotKey in pairs(button.auraSlotKeys) do
+        if not wantedSet[auraType] then
+            tryCall(container.SetAuraSlotCandidateFilters, container, slotKey,
+                { includeDispelTypes = {} })
+        end
+    end
+
+    local live = 0
+    for _, auraType in ipairs(wanted) do
+        local slotKey = button.auraSlotKeys[auraType]
+        if slotKey then
+            -- Present already, possibly made inert by an earlier pass: hand its
+            -- real filters back.
+            if tryCall(container.SetAuraSlotCandidateFilters, container, slotKey,
+                self:BuildAuraCandidateFilters(auraType)) then
+                live = live + 1
+            end
+        elseif self:AddAuraSlotForType(button, auraType) then
+            live = live + 1
+        end
+    end
+
+    button.engineAuraReady = live == #wanted
+    local diagnostics = self.auraContainerDiagnostics
+    if diagnostics and button.engineAuraReady then
+        diagnostics.added = diagnostics.added + live
+    end
+    return button.engineAuraReady
+end
+
 function NS:RefreshAuraEngineTypes()
     if not self.buttons or not self.gridBody then return end
     local wanted = getPotentialAuraTypes()
@@ -2081,17 +2142,22 @@ function NS:RefreshAuraEngineTypes()
     self.pendingAuraEngineRebuild = false
 
     self.engineAuraTypes = wanted
+    local wantedSet = {}
+    for _, auraType in ipairs(wanted) do wantedSet[auraType] = true end
     self.auraContainerDiagnostics = {
         expected = MAX_BUTTONS * #wanted, added = 0, readyButtons = 0, firstError = nil,
     }
     for _, button in ipairs(self.buttons) do
+        -- Reuse whatever is already there. Hiding a container does not destroy
+        -- it -- WoW keeps every frame for the session -- so the old code left a
+        -- fresh generation of 82 containers behind on every talent change.
         if button.auraContainer then
-            pcall(button.auraContainer.Hide, button.auraContainer)
-            button.auraContainer = nil
+            self:ReconcileAuraSlots(button, wanted, wantedSet)
+        else
+            button.auraSlotKeys, button.auraSlotVisuals = nil, nil
+            button.engineAuraReady = false
+            self:CreateAuraContainer(button)
         end
-        button.auraSlotKeys, button.auraSlotVisuals = nil, nil
-        button.engineAuraReady = false
-        self:CreateAuraContainer(button)
         if button.engineAuraReady then
             self.auraContainerDiagnostics.readyButtons = self.auraContainerDiagnostics.readyButtons + 1
         end
