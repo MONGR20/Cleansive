@@ -105,15 +105,20 @@ local function getSecureSpellName(spellID, fallback)
     return getSpellName(castID) or fallback
 end
 
--- C_Spell.GetSpellCharges documents a nil return for a spell that is not
--- charge-based. UpdateSpells only ever runs outside combat, so the answer is
--- resolved while it is still readable: inside restricted combat the returned
--- table can be secret, and by then the distinction is no longer observable.
+-- The documentation promises nil for a spell that is not charge-based, but the
+-- live client returns a table for those too, with maxCharges = 1. Testing for
+-- nil therefore called every spell charge-based, and 1.5.11 shipped with the
+-- defect it meant to fix. maxCharges is documented NeverSecret, so it stays
+-- readable where the rest of the cooldown state is protected -- including
+-- inside an instance, which is exactly where this matters. Blizzard's own code
+-- uses the same test: charge-based means it can bank more than one.
 local function spellHasCharges(spellID)
     if not (C_Spell and C_Spell.GetSpellCharges) then return nil end
     local ok, info = pcall(C_Spell.GetSpellCharges, spellID)
-    if not ok or not NS:CanAccess(info) then return nil end
-    return info ~= nil
+    if not ok or info == nil then return false end
+    local readable, maxCharges = pcall(function() return info.maxCharges end)
+    if not readable or type(maxCharges) ~= "number" then return nil end
+    return maxCharges > 1
 end
 
 local function knownInBank(spellID, bank)

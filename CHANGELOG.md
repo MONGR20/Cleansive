@@ -5,6 +5,11 @@ Depuis la 1.4.5, les principales branches logiques corrigées sont couvertes
 par des tests de non-régression dans `j/tests` (`npm test`). Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.5.12
+
+- 1.5.11 shipped the defect it meant to fix. `C_Spell.GetSpellCharges` is documented to return nil for a spell that is not charge-based, and the fix tested for exactly that. The live client returns a table for those spells too, with `maxCharges = 1`, so every spell was treated as charge-based and the numeric cleanse cooldown stayed missing. The test passed because the mock had been written from the documentation rather than from the client. It now returns what the game returns, and the case turns red without the fix.
+- Charge detection uses `maxCharges > 1`, the same test Blizzard's own code uses. That field is documented `NeverSecret`, so it stays readable inside an instance, where the rest of the cooldown state is protected and where this bug lives.
+
 ## 1.5.11
 
 - The numeric cleanse cooldown came back on cells for spells that have no charges. Since 1.5.3 the charge-recharge duration object was preferred whenever it could not be read as zero, and in restricted combat its `IsZero` is secret. A spell like Cleanse, which has no charges at all, therefore handed `SetCooldownFromDurationObject` an empty object with `clearIfZero` set, and the frame was wiped. The affliction sweep stayed, because a different frame draws it, so the symptom was "only the number disappeared". `C_Spell.GetSpellCharges` documents a nil return for a spell that is not charge-based; the answer is resolved in `UpdateSpells`, which never runs during combat, so it is read while it is still readable and remembered on the spell definition. The charge object is now preferred only for a spell that actually has charges. Reported from the game, and confirmed by `/cleansive cdstatus` answering "source charge, active nil, applied true".

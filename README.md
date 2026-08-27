@@ -1,4 +1,4 @@
-# Cleansive 1.5.11
+# Cleansive 1.5.12
 
 Cleansive is a standalone one-click cleansing addon for **World of Warcraft Retail 12.1** (`120100`). It provides a compact Decursive-style workflow with a dark, class-colored interface inspired by the clarity of Ellesmere UI. The interface follows the language of your WoW client, English or French; either can be picked from the General page at any time.
 
@@ -93,6 +93,11 @@ remain active so a protected AuraSlot can pass cleansing clicks through during
 combat. Avoid clicking empty grid positions while this mode is enabled.
 
 The hover-cleanse key also respects these restrictions: it casts through a secure action button on your mouseover, target, or player. It never asks Lua to select an afflicted unit during combat, because the secure engine evaluates targeting conditions only and cannot read auras.
+
+## 1.5.12 changes
+
+- 1.5.11 shipped the defect it meant to fix. `C_Spell.GetSpellCharges` is documented to return nil for a spell that is not charge-based, and the fix tested for exactly that. The live client returns a table for those spells too, with `maxCharges = 1`, so every spell was treated as charge-based and the numeric cleanse cooldown stayed missing. The test passed because the mock had been written from the documentation rather than from the client. It now returns what the game returns, and the case turns red without the fix.
+- Charge detection uses `maxCharges > 1`, the same test Blizzard's own code uses. That field is documented `NeverSecret`, so it stays readable inside an instance, where the rest of the cooldown state is protected and where this bug lives.
 
 ## 1.5.11 changes
 
