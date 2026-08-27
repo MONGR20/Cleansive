@@ -1,6 +1,6 @@
-# Cleansive 1.5.7
+# Cleansive 1.5.8
 
-Cleansive is a standalone one-click cleansing addon for **World of Warcraft Retail 12.1** (`120100`). It provides a compact Decursive-style workflow with a dark, class-colored interface inspired by the clarity of Ellesmere UI. English is the default language; French is available from the General page.
+Cleansive is a standalone one-click cleansing addon for **World of Warcraft Retail 12.1** (`120100`). It provides a compact Decursive-style workflow with a dark, class-colored interface inspired by the clarity of Ellesmere UI. The interface follows the language of your WoW client, English or French; either can be picked from the General page at any time.
 
 ## Installation
 
@@ -35,7 +35,7 @@ Red, blue, and orange identify the click to use. The optional L/R/C corner lette
 - Class-colored interface, test mode, dual timers (numeric cleanse cooldown plus a clockwise affliction-duration fade), stacks, tooltips, color-independent click hints, sound-channel selection, and sound diagnostics.
 - Grid, single-row horizontal, and single-column vertical cell arrangements with independent growth direction.
 - English and French localization.
-- A guided first-time setup, with English kept as the default language.
+- A guided first-time setup, preselecting the language of your WoW client.
 - Separate settings profiles for every character and specialization.
 - Optional grouping for dispel types you can only clear with an area or
   self-only ability: one indicator with a count instead of one cell per
@@ -93,6 +93,14 @@ remain active so a protected AuraSlot can pass cleansing clicks through during
 combat. Avoid clicking empty grid positions while this mode is enabled.
 
 The hover-cleanse key also respects these restrictions: it casts through a secure action button on your mouseover, target, or player. It never asks Lua to select an afflicted unit during combat, because the secure engine evaluates targeting conditions only and cannot read auras.
+
+## 1.5.8 changes
+
+- The interface language now follows the WoW client on a fresh install. Until 1.5.7 an unset language fell back to English on every client, so a French player saw English labels next to the French spell and class names the game API returns. It read as missing translations; the French strings had been complete all along. A language the player chose explicitly still wins over the client.
+- Unified the French wording on the formal register used by the French game client. Twenty-one strings mixed the two forms, sometimes within the same page.
+- Normalised French apostrophes to the typographic form. The file mixed both.
+- The resize note no longer sits on the columns and opacity sliders. A slider anchored at y draws its frame from y-25 to y-55; the note was anchored at -286, inside the second row's band. Present in English too, and reported from the game.
+- Tests: a static layout check flags any element anchored inside a slider's band in the same column. It catches this and the 1.4.7 overlap between the sound budget slider and the Quick tools heading, neither of which the mock or the game reports. A further test asserts that every English locale key has a French counterpart, since the lookup falls back to English without a word.
 
 ## 1.5.7 changes
 

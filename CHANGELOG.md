@@ -5,6 +5,14 @@ Depuis la 1.4.5, les principales branches logiques corrigées sont couvertes
 par des tests de non-régression dans `j/tests` (`npm test`). Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.5.8
+
+- The interface language now follows the WoW client on a fresh install. Until 1.5.7 an unset language fell back to English on every client, so a French player saw English labels next to the French spell and class names the game API returns. It read as missing translations; the French strings had been complete all along. A language the player chose explicitly still wins over the client.
+- Unified the French wording on the formal register used by the French game client. Twenty-one strings mixed the two forms, sometimes within the same page.
+- Normalised French apostrophes to the typographic form. The file mixed both.
+- The resize note no longer sits on the columns and opacity sliders. A slider anchored at y draws its frame from y-25 to y-55; the note was anchored at -286, inside the second row's band. Present in English too, and reported from the game.
+- Tests: a static layout check flags any element anchored inside a slider's band in the same column. It catches this and the 1.4.7 overlap between the sound budget slider and the Quick tools heading, neither of which the mock or the game reports. A further test asserts that every English locale key has a French counterpart, since the lookup falls back to English without a word.
+
 ## 1.5.7
 
 - Replaced every glyph the interface font cannot draw. Arrows, bullets, a check mark and a quarter-circle all rendered as empty boxes, which made the growth selector unreadable: it showed "[] then []" and gave no way to tell which direction was selected. Reported from the game; no amount of reading the code would have shown it.

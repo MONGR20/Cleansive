@@ -173,7 +173,7 @@ function NS:RefreshSetupWizardText()
     frame.step:SetText(tr("CONFIGURATION RAPIDE", "QUICK SETUP"))
     frame.heading:SetText(tr("Première configuration", "First-time setup"))
     frame.description:SetText(tr(
-        "Choisis un point de départ. Chaque réglage reste modifiable ensuite dans /cleansive.",
+        "Choisissez un point de départ. Chaque réglage reste modifiable ensuite dans /cleansive.",
         "Choose a starting point. Every setting remains editable later in /cleansive."))
     frame.languageLabel:SetText(tr("Langue", "Language"))
     frame.englishButton:SetText(frame.values.language == "enUS" and "English  <" or "English")

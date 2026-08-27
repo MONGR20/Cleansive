@@ -2,6 +2,15 @@ local _, NS = ...
 
 local SCHEMA_VERSION = 2
 
+-- Until 1.5.7 an unset language fell back to English, so a French client
+-- showed English labels next to the French spell and class names the game
+-- API returns. Only a value the player actually chose is preserved; anything
+-- else follows the client.
+local function normalizeLanguage(value)
+    if value == "frFR" or value == "enUS" then return value end
+    return GetLocale() == "frFR" and "frFR" or "enUS"
+end
+
 local function deepCopy(source)
     if type(source) ~= "table" then return source end
     local result = {}
@@ -108,7 +117,7 @@ function NS:InitializeProfiles()
         raw = {
             schemaVersion = SCHEMA_VERSION,
             global = {
-                language = migrated.language == "frFR" and "frFR" or "enUS",
+                language = normalizeLanguage(migrated.language),
                 setupComplete = not freshInstall,
                 -- The pre-1.4 database was account-wide. Keep it as the seed
                 -- for every character's first profile, otherwise every alt
@@ -123,7 +132,7 @@ function NS:InitializeProfiles()
     end
 
     raw.global = type(raw.global) == "table" and raw.global or {}
-    raw.global.language = raw.global.language == "frFR" and "frFR" or "enUS"
+    raw.global.language = normalizeLanguage(raw.global.language)
     if raw.global.setupComplete == nil then raw.global.setupComplete = true end
     raw.profiles[characterKey] = type(raw.profiles[characterKey]) == "table" and raw.profiles[characterKey] or {}
     self.dbRoot = raw
