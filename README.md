@@ -1,4 +1,4 @@
-# Cleansive 1.5.21
+# Cleansive 1.5.22
 
 Cleansive is a standalone one-click cleansing addon for **World of Warcraft Retail 12.1** (`120100`). It provides a compact Decursive-style workflow with a dark, class-colored interface inspired by the clarity of Ellesmere UI. The interface follows the language of your WoW client, English or French; either can be picked from the General page at any time.
 
@@ -93,6 +93,13 @@ remain active so a protected AuraSlot can pass cleansing clicks through during
 combat. Avoid clicking empty grid positions while this mode is enabled.
 
 The hover-cleanse key also respects these restrictions: it casts through a secure action button on your mouseover, target, or player. It never asks Lua to select an afflicted unit during combat, because the secure engine evaluates targeting conditions only and cannot read auras.
+
+## 1.5.22 changes
+
+- Two tooltips said the opposite of what the code does. "Enable or disable Cleansive without changing your saved settings" was wrong -- `SetEnabled` writes `db.enabled`, which is stored in the character and specialization profile; it now says so. The layout tooltip still promised one horizontal row or one vertical column, which stopped being true in 1.5.18 when both modes started wrapping rather than running off the screen.
+- Tests: 448 to 451, guarding the behaviour the enable tooltip now describes.
+
+Not changed: the audit recommends reconfiguring aura containers through `ClearAuraSlots` and `UnregisterAuraSlot` rather than replacing them. Those exist only on Blizzard's private mixins. What a `CustomAuraContainerTemplate` exposes to an addon is `AddAuraSlot`, `SetAuraSlotFilterString`, `SetAuraSlotCandidateFilters` and `SetAuraSlotSortMethod` -- a slot can be added and reconfigured, never removed. Reusing containers therefore means never destroying them and styling the unwanted types invisible instead, which is a change to the protected path and is being weighed separately.
 
 ## 1.5.21 changes
 

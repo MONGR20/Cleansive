@@ -5,6 +5,13 @@ Depuis la 1.4.5, les principales branches logiques corrigées sont couvertes
 par des tests de non-régression dans `j/tests` (`npm test`). Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.5.22
+
+- Two tooltips said the opposite of what the code does. "Enable or disable Cleansive without changing your saved settings" was wrong -- `SetEnabled` writes `db.enabled`, which is stored in the character and specialization profile; it now says so. The layout tooltip still promised one horizontal row or one vertical column, which stopped being true in 1.5.18 when both modes started wrapping rather than running off the screen.
+- Tests: 448 to 451, guarding the behaviour the enable tooltip now describes.
+
+Not changed: the audit recommends reconfiguring aura containers through `ClearAuraSlots` and `UnregisterAuraSlot` rather than replacing them. Those exist only on Blizzard's private mixins. What a `CustomAuraContainerTemplate` exposes to an addon is `AddAuraSlot`, `SetAuraSlotFilterString`, `SetAuraSlotCandidateFilters` and `SetAuraSlotSortMethod` -- a slot can be added and reconfigured, never removed. Reusing containers therefore means never destroying them and styling the unwanted types invisible instead, which is a change to the protected path and is being weighed separately.
+
 ## 1.5.21
 
 - The grouped badge's space is reserved before the rows are chosen, not after they are placed. 1.5.20 picked the row count against the whole height and only then slid the grid to save the badge, so the last row went off the bottom by exactly the amount the badge was rescued by. Only what the correction would actually take is subtracted, so a grid whose badge already fits keeps its full height.
