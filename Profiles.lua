@@ -85,7 +85,7 @@ function NS:GetActiveProfileLabel()
     local specName = self.activeSpecName
     if not specName then specName = select(2, self:GetSpecializationProfileKey()) end
     return tostring(self.activeCharacterKey or self:GetCharacterProfileKey())
-        .. "  •  " .. tostring(specName or "Default")
+        .. "  -  " .. tostring(specName or "Default")
 end
 
 function NS:GetAuraHistory()

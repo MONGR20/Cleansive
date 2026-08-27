@@ -209,8 +209,8 @@ function NS:RefreshAuraHistoryPage()
             local id = entry.id
             local ignored = self.db.ignoredAlways[id] or self.db.ignoredAlways[tostring(id)]
                 or self.db.ignoredCombat[id] or self.db.ignoredCombat[tostring(id)]
-            local typeLabel = entry.auraType and ("  •  " .. tostring(self:GetTypeLabel(entry.auraType))) or ""
-            row.label:SetText(tostring(entry.name or self.L.UNKNOWN) .. "  •  " .. tostring(id) .. typeLabel)
+            local typeLabel = entry.auraType and ("  -  " .. tostring(self:GetTypeLabel(entry.auraType))) or ""
+            row.label:SetText(tostring(entry.name or self.L.UNKNOWN) .. "  -  " .. tostring(id) .. typeLabel)
             row.action:SetText(ignored and self.L.HISTORY_UNIGNORE or self.L.HISTORY_IGNORE)
             row.action:SetScript("OnClick", function() self:ToggleHistoryFilter(id) end)
             row:Show()

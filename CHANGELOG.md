@@ -5,6 +5,12 @@ Depuis la 1.4.5, les principales branches logiques corrigées sont couvertes
 par des tests de non-régression dans `j/tests` (`npm test`). Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.5.7
+
+- Replaced every glyph the interface font cannot draw. Arrows, bullets, a check mark and a quarter-circle all rendered as empty boxes, which made the growth selector unreadable: it showed "[] then []" and gave no way to tell which direction was selected. Reported from the game; no amount of reading the code would have shown it.
+- Growth directions are spelled out ("Right, then down") and moved into Locale.lua, replacing the last private label tables outside it.
+- The grouped indicator no longer anchors itself twice. Placement lived both at creation, hardcoded above the grid, and in the layout pass that honours the growth direction; until the second ran, it sat on the first cell in the upward layouts.
+
 ## 1.5.6
 
 - Grouped dispel types keep their protected engine cell. 1.5.4 removed it, which is what made grouping unsafe: an aura the addon may not read had no cell, no indicator and no sound. The cell is now drawn as a thin type stripe instead of a filled block, so the wall of cells is gone without the signal going with it.

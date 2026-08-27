@@ -176,8 +176,8 @@ function NS:RefreshSetupWizardText()
         "Choisis un point de départ. Chaque réglage reste modifiable ensuite dans /cleansive.",
         "Choose a starting point. Every setting remains editable later in /cleansive."))
     frame.languageLabel:SetText(tr("Langue", "Language"))
-    frame.englishButton:SetText(frame.values.language == "enUS" and "English  ✓" or "English")
-    frame.frenchButton:SetText(frame.values.language == "frFR" and "Français  ✓" or "Français")
+    frame.englishButton:SetText(frame.values.language == "enUS" and "English  <" or "English")
+    frame.frenchButton:SetText(frame.values.language == "frFR" and "Français  <" or "Français")
     frame.note:SetText(tr(
         "Les profils sont enregistrés séparément pour ce personnage et cette spécialisation.",
         "Profiles are saved separately for this character and specialization."))

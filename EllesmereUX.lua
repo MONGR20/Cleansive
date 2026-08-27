@@ -441,19 +441,12 @@ local function getClassLabel(classToken)
     return labels[classToken] or classToken
 end
 
-local GROW_LABELS_EN = {
-    RIGHT_DOWN = "→  then  ↓", RIGHT_UP = "→  then  ↑",
-    LEFT_DOWN = "←  then  ↓", LEFT_UP = "←  then  ↑",
-}
-
-local GROW_LABELS_FR = {
-    RIGHT_DOWN = "→  puis  ↓", RIGHT_UP = "→  puis  ↑",
-    LEFT_DOWN = "←  puis  ↓", LEFT_UP = "←  puis  ↑",
-}
-
+-- Arrow glyphs render as empty boxes: neither Expressway nor FRIZQT__.TTF
+-- carries U+2190..U+2193, so the control was unreadable and the player could
+-- not tell which direction was selected. Words instead, and in Locale.lua
+-- rather than a private table the rest of the addon cannot reach.
 local function growthLabel(growth)
-    local labels = NS.db and NS.db.language == "frFR" and GROW_LABELS_FR or GROW_LABELS_EN
-    return labels[growth] or growth
+    return NS.L["GROW_" .. tostring(growth)] or growth
 end
 
 local function layoutModeLabel(mode)
@@ -573,7 +566,7 @@ function NS:CreateOptions()
         control:SetScript("OnClick", function() self:ShowOptionsPage(pageKey) end)
     end
 
-    local version = text(sidebar, "v" .. self.version .. "  •  Retail 12.1", 10, C.dim)
+    local version = text(sidebar, "v" .. self.version .. "  -  Retail 12.1", 10, C.dim)
     version:SetPoint("BOTTOMLEFT", 18, 18)
 
     local heading = text(frame, self.L.PAGE_GENERAL_TITLE, 23, C.text)
@@ -870,18 +863,19 @@ function NS:CreateOptions()
         mapping:SetPoint("LEFT", 225, 0)
         mapping:SetWidth(245)
         mapping:SetJustifyH("LEFT")
-        local up = button(row, "↑", 36, 28)
+        -- No arrow glyphs in the UI font: these rendered as empty boxes.
+        local up = button(row, "^", 36, 28)
         up:SetPoint("RIGHT", -48, 0)
         up:SetScript("OnClick", function() self:MoveType(auraType, -1) end)
         attachHelp(up, self.L.MOVE_UP, self.L.MOVE_UP)
-        local down = button(row, "↓", 36, 28)
+        local down = button(row, "v", 36, 28)
         down:SetPoint("RIGHT", -8, 0)
         down:SetScript("OnClick", function() self:MoveType(auraType, 1) end)
         attachHelp(down, self.L.MOVE_DOWN, self.L.MOVE_DOWN)
         self.typeRows[#self.typeRows + 1] = { frame = row, check = check, label = typeLabel, badge = clickBadge, mapping = mapping, up = up, down = down, type = auraType }
     end
 
-    local hint = text(dispels, localized("Rouge : clic gauche   •   Bleu : clic droit   •   Orange : Ctrl + clic gauche", "Red: left click   •   Blue: right click   •   Orange: Ctrl + left click"), 11, C.dim)
+    local hint = text(dispels, localized("Rouge : clic gauche   -   Bleu : clic droit   -   Orange : Ctrl + clic gauche", "Red: left click   -   Blue: right click   -   Orange: Ctrl + left click"), 11, C.dim)
     hint:SetPoint("TOPLEFT", 0, -372)
 
     local history = CreateFrame("Frame", nil, content)
@@ -1017,7 +1011,7 @@ function NS:RefreshCellPreview()
             maps[#maps + 1] = click .. " : " .. def.name
         end
     end
-    preview.durationLegend:SetText("◔  " .. self.L.PREVIEW_DURATION)
+    preview.durationLegend:SetText(self.L.PREVIEW_DURATION)
     preview.cooldownLegend:SetText("4.2  " .. self.L.PREVIEW_COOLDOWN)
     preview.mapping:SetText(#maps > 0 and table.concat(maps, "\n") or self.L.NO_CURE)
 end
@@ -1079,7 +1073,7 @@ function NS:RefreshOptions()
             end
             row.badge.label:SetText(shortClick)
         end
-        row.mapping:SetText(def and (click .. "  •  " .. def.name)
+        row.mapping:SetText(def and (click .. "  -  " .. def.name)
             or (manual and string.format(self.L.MANUAL_ONLY, manual.name) or "—"))
         row.mapping:SetTextColor(1, 1, 1, (def or manual) and 0.72 or 0.34)
         row.up:SetEnabled(position > 1)
@@ -1157,10 +1151,10 @@ function NS:CreateListWindow()
         bg:SetAllPoints()
         row.text = text(row, "", 12, C.text)
         row.text:SetPoint("LEFT", 10, 0)
-        row.up = button(row, "↑", 32, 22)
+        row.up = button(row, "^", 32, 22)
         row.up:SetPoint("RIGHT", -82, 0)
         attachHelp(row.up, self.L.MOVE_UP, self.L.MOVE_UP)
-        row.down = button(row, "↓", 32, 22)
+        row.down = button(row, "v", 32, 22)
         row.down:SetPoint("RIGHT", -45, 0)
         attachHelp(row.down, self.L.MOVE_DOWN, self.L.MOVE_DOWN)
         row.remove = button(row, "×", 32, 22)

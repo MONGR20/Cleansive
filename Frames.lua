@@ -184,7 +184,6 @@ function NS:CreateGrid()
     -- written during combat and it follows the grid for free.
     local manualIndicator = CreateFrame("Button", "CleansiveManualIndicator", cooldownBody)
     manualIndicator:SetSize(24, 24)
-    manualIndicator:SetPoint("BOTTOMLEFT", cooldownBody, "TOPLEFT", 0, 4)
     manualIndicator:EnableMouse(true)
     manualIndicator.background = manualIndicator:CreateTexture(nil, "BACKGROUND")
     manualIndicator.background:SetAllPoints()
@@ -200,6 +199,10 @@ function NS:CreateGrid()
     manualIndicator:SetScript("OnLeave", GameTooltip_Hide)
     manualIndicator:Hide()
     self.manualIndicator = manualIndicator
+    -- Anchoring lived in two places: here, hardcoded above the grid, and in
+    -- LayoutManualIndicator which honours the growth direction. Until the
+    -- second ran, the indicator sat on the first cell in the upward layouts.
+    self:LayoutManualIndicator()
 
     self.buttons = {}
     self.engineAuraTypes = getPotentialAuraTypes()

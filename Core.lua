@@ -1,7 +1,7 @@
 local addonName, NS = ...
 
 NS.addonName = addonName
-NS.version = "1.5.6"
+NS.version = "1.5.7"
 NS.playerClass = select(2, UnitClass("player"))
 NS.blacklist = {}
 NS.testMode = false

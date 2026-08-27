@@ -1,4 +1,4 @@
-# Cleansive 1.5.6
+# Cleansive 1.5.7
 
 Cleansive is a standalone one-click cleansing addon for **World of Warcraft Retail 12.1** (`120100`). It provides a compact Decursive-style workflow with a dark, class-colored interface inspired by the clarity of Ellesmere UI. English is the default language; French is available from the General page.
 
@@ -93,6 +93,12 @@ remain active so a protected AuraSlot can pass cleansing clicks through during
 combat. Avoid clicking empty grid positions while this mode is enabled.
 
 The hover-cleanse key also respects these restrictions: it casts through a secure action button on your mouseover, target, or player. It never asks Lua to select an afflicted unit during combat, because the secure engine evaluates targeting conditions only and cannot read auras.
+
+## 1.5.7 changes
+
+- Replaced every glyph the interface font cannot draw. Arrows, bullets, a check mark and a quarter-circle all rendered as empty boxes, which made the growth selector unreadable: it showed "[] then []" and gave no way to tell which direction was selected. Reported from the game; no amount of reading the code would have shown it.
+- Growth directions are spelled out ("Right, then down") and moved into Locale.lua, replacing the last private label tables outside it.
+- The grouped indicator no longer anchors itself twice. Placement lived both at creation, hardcoded above the grid, and in the layout pass that honours the growth direction; until the second ran, it sat on the first cell in the upward layouts.
 
 ## 1.5.6 changes
 
