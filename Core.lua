@@ -1,12 +1,71 @@
 local addonName, NS = ...
 
 NS.addonName = addonName
+
+-- Retail 12.1 marks five unit APIs secret-capable: UnitGUID and UnitClass and
+-- UnitFullName under SecretWhenUnitIdentityRestricted, UnitName under
+-- SecretWhenUnitNameIdentityRestricted, UnitIsUnit under
+-- SecretWhenUnitComparisonRestricted. An unreadable value cannot be used in
+-- `or`, in a comparison, in a concatenation, or as a table key. 1.5.14 guarded
+-- the first two and stopped there; the rest are guarded here.
+function NS:CanAccess(value)
+    if canaccessvalue then
+        return canaccessvalue(value)
+    end
+    return true
+end
+
+function NS:SafeUnitGUID(unit)
+    if not unit or not UnitGUID then return nil end
+    local ok, guid = pcall(UnitGUID, unit)
+    if not ok or not self:CanAccess(guid) then return nil end
+    return guid
+end
+
+function NS:IsPlayerUnit(unit)
+    -- Two literal tokens compare without ever asking the client.
+    if unit == "player" then return true end
+    if not unit or not UnitIsUnit then return false end
+    local ok, same = pcall(UnitIsUnit, unit, "player")
+    if not ok or not self:CanAccess(same) then return false end
+    return same == true
+end
+
+function NS:SafeUnitName(unit)
+    if not unit or not UnitName then return nil end
+    local ok, name = pcall(UnitName, unit)
+    if not ok or not self:CanAccess(name) or type(name) ~= "string" then return nil end
+    return name
+end
+
+-- GetUnitName is not an escape hatch: Blizzard's own implementation calls
+-- UnitName, tests the realm and concatenates the two, so a secret is evaluated
+-- before this addon ever sees it. Build the qualified name here instead.
+function NS:SafeUnitFullName(unit)
+    local name = self:SafeUnitName(unit)
+    if not name then return nil end
+    if UnitFullName then
+        local ok, _, realm = pcall(UnitFullName, unit)
+        if ok and self:CanAccess(realm) and type(realm) == "string" and realm ~= "" then
+            return name .. "-" .. realm
+        end
+    end
+    return name
+end
+
+function NS:SafeUnitClass(unit)
+    if not unit or not UnitClass then return nil end
+    local ok, _, token = pcall(UnitClass, unit)
+    if not ok or not self:CanAccess(token) or type(token) ~= "string" then return nil end
+    return token
+end
+
 -- The .toc is the single source of truth for the version. This used to be a
 -- second literal and it drifted: 1.5.8 shipped with the sidebar still saying
 -- v1.5.7, because bumping the .toc does not touch a copy kept here.
 NS.version = (C_AddOns and C_AddOns.GetAddOnMetadata
     and C_AddOns.GetAddOnMetadata(addonName, "Version")) or "dev"
-NS.playerClass = select(2, UnitClass("player"))
+NS.playerClass = NS:SafeUnitClass("player")
 NS.blacklist = {}
 NS.testMode = false
 NS.enabled = true
@@ -37,7 +96,7 @@ local defaults = {
     failureSound = true,
     showCooldown = true,
     showStacks = false,
-    showClickHints = true,
+    showClickHints = false,
     autoHide = false,
     afflictedOnly = false,
     groupManualTypes = false,
@@ -94,34 +153,6 @@ function NS:Print(message, ...)
     DEFAULT_CHAT_FRAME:AddMessage("|c" .. colorCode .. "Cleansive:|r " .. tostring(message))
 end
 
--- UnitGUID is SecretWhenUnitIdentityRestricted and UnitIsUnit is
--- SecretWhenUnitComparisonRestricted: both come back unreadable in PvP and in
--- other restricted contexts. An unreadable value cannot be used in `or`, in a
--- comparison, or as a table key -- and every caller here did at least one of
--- those. Unreadable means unknown, as everywhere else in the addon.
-function NS:SafeUnitGUID(unit)
-    if not unit or not UnitGUID then return nil end
-    local ok, guid = pcall(UnitGUID, unit)
-    if not ok or not self:CanAccess(guid) then return nil end
-    return guid
-end
-
-function NS:IsPlayerUnit(unit)
-    -- Two literal tokens compare without ever asking the client.
-    if unit == "player" then return true end
-    if not unit or not UnitIsUnit then return false end
-    local ok, same = pcall(UnitIsUnit, unit, "player")
-    if not ok or not self:CanAccess(same) then return false end
-    return same == true
-end
-
-function NS:CanAccess(value)
-    if canaccessvalue then
-        return canaccessvalue(value)
-    end
-    return true
-end
-
 function NS:SetLanguage(language)
     if language ~= "frFR" then language = "enUS" end
     if self.db.language == language then return end
@@ -146,6 +177,14 @@ end
 
 function NS:RestorePosition(frame, key)
     local pos = self.db.positions[key] or defaults.positions[key]
+    -- Normalisation repairs a saved position at load, but this runs on every
+    -- restore and SetPoint raises on a bad anchor. A grid that cannot be placed
+    -- must not stop the addon from starting.
+    if type(pos) ~= "table" or type(pos.point) ~= "string"
+        or type(pos.relativePoint) ~= "string"
+        or type(pos.x) ~= "number" or type(pos.y) ~= "number" then
+        pos = defaults.positions[key]
+    end
     frame:ClearAllPoints()
     frame:SetPoint(pos.point, UIParent, pos.relativePoint, pos.x, pos.y)
     if key == "grid" and frame == self.gridAnchor and self.cooldownBody then
@@ -488,7 +527,7 @@ function NS:Initialize()
         self.db = CleansiveDB
     end
     self.enabled = self.db.enabled
-    self.playerClass = select(2, UnitClass("player"))
+    self.playerClass = self:SafeUnitClass("player")
     self:RefreshBindingLabels()
 
     -- Resolve the click mapping before the 12.1 engine-owned aura slots are

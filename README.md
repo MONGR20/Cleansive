@@ -1,4 +1,4 @@
-# Cleansive 1.5.16
+# Cleansive 1.5.17
 
 Cleansive is a standalone one-click cleansing addon for **World of Warcraft Retail 12.1** (`120100`). It provides a compact Decursive-style workflow with a dark, class-colored interface inspired by the clarity of Ellesmere UI. The interface follows the language of your WoW client, English or French; either can be picked from the General page at any time.
 
@@ -93,6 +93,17 @@ remain active so a protected AuraSlot can pass cleansing clicks through during
 combat. Avoid clicking empty grid positions while this mode is enabled.
 
 The hover-cleanse key also respects these restrictions: it casts through a secure action button on your mouseover, target, or player. It never asks Lua to select an afflicted unit during combat, because the secure engine evaluates targeting conditions only and cannot read auras.
+
+## 1.5.17 changes
+
+- Name and class reads are guarded like GUIDs were. 1.5.14 protected `UnitGUID` and `UnitIsUnit` and assumed that was the whole class of problem; `UnitName`, `UnitFullName` and `UnitClass` are marked secret-capable too, and the roster read all three raw -- a concatenation for the qualified name, an `or` for the display name, a direct read for the class. An unreadable name now falls back to the unit token, an unknown identity matches no priority or skip entry without dropping the unit from the roster, and `/cleansive pradd` refuses rather than recording an entry that can never match. The static rule covers all six APIs.
+- Layout limits are measured from the anchor, not from the whole screen. The 1.5.15 cap was only correct when the anchor sat against the opposite edge: from a centred anchor it allowed roughly twice the cells that fit, and the far half of a raid was still drawn off screen -- the exact defect 1.5.15 announced as fixed. The count is exact now, including the layout's own 3 px margin and the last cell's own width.
+- The 1.5.16 sweep that turned the stack counter off in every existing profile is removed. A migration may repair invalid data or a feature that no longer exists, but the stack counter is still supported and still has its button, so the sweep erased a choice players had deliberately made. Databases already touched by 1.5.16 cannot be recovered. The new default applies to new profiles only, which is what a changed default means.
+- Click letters are off by default, without touching anyone's setting.
+- Saved settings are validated further: anchor points are checked against the nine WoW accepts, coordinates are repaired, slider values are rounded to whole steps, and booleans that arrived as something else are normalised. Restoring a position falls back to the default rather than raising, so a broken database can never stop the addon from starting.
+- The options preview follows the same label sizes as a real cell and only shows the cells that fit its box; three cells at the vertical cap ran 11 px past the bottom with nothing to clip them.
+- Click-hint offsets scale with the cell instead of a flat 7 px, and a hint that still would not fit is not drawn. Writing this as a property -- every drawn hint fits its cell, across all 29 sizes and 3 slots -- established that the third hint fits no size at all: three plates need 45 px and the largest cell is 40. That settles the audit's "show a single hint" recommendation by geometry rather than by decision.
+- Tests: 280 to 354.
 
 ## 1.5.16 changes
 

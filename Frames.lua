@@ -81,6 +81,20 @@ function NS:CellFontSize(role, size)
     return math.max(rule.min, math.min(rule.max, scaled))
 end
 
+-- Each aura type gets its own hint, shifted so two visuals on one cell do not
+-- print on top of each other. The shift was a flat 7 px whatever the cell, so
+-- on a 12 px cell the third slot started at 16 px -- entirely outside. It
+-- follows the cell now, and a hint that still would not fit is not drawn at
+-- all rather than spilling onto the neighbour. Returns nil when it does not fit.
+function NS:ClickHintOffset(slot, size)
+    local cell = tonumber(size) or tonumber(self.db and self.db.frameSize) or 22
+    local step = math.max(3, math.floor(7 * cell / 22 + 0.5))
+    local x = math.max(1, slot or 1) - 1
+    local offset = x * step
+    if offset + self:CellFontSize("plate", cell) > cell then return nil end
+    return offset
+end
+
 function NS:CellShowsNames()
     if not self.db or not self.db.showNames then return false end
     return (tonumber(self.db.frameSize) or 22) >= NAME_MIN_CELL
@@ -550,17 +564,20 @@ function NS:StyleAuraVisual(button, auraType, visual)
             visual.unitName:SetText(button.descriptor and button.descriptor.displayName or button.unit or "")
             visual.unitName:SetShown(enabled and self:CellShowsNames())
         end
+        local hintOffset = self:ClickHintOffset(slot, self.db.frameSize)
+        local hintShown = enabled and (slot ~= nil or manual ~= nil)
+            and self.db.showClickHints and hintOffset ~= nil
         if visual.clickHint then
             visual.clickHint:ClearAllPoints()
-            visual.clickHint:SetPoint("TOPLEFT", button, "TOPLEFT", 2 + (math.max(1, slot or 1) - 1) * 7, -1)
+            visual.clickHint:SetPoint("TOPLEFT", button, "TOPLEFT", 2 + (hintOffset or 0), -1)
             visual.clickHint:SetText(slot and clickHint(slot) or (manual and "!" or ""))
             -- Manual abilities use an exclamation mark, never a click letter.
-            visual.clickHint:SetShown(enabled and (slot ~= nil or manual ~= nil) and self.db.showClickHints)
+            visual.clickHint:SetShown(hintShown)
         end
         if visual.clickHintPlate then
             visual.clickHintPlate:ClearAllPoints()
-            visual.clickHintPlate:SetPoint("TOPLEFT", button, "TOPLEFT", 1 + (math.max(1, slot or 1) - 1) * 7, -1)
-            visual.clickHintPlate:SetShown(enabled and (slot ~= nil or manual ~= nil) and self.db.showClickHints)
+            visual.clickHintPlate:SetPoint("TOPLEFT", button, "TOPLEFT", 1 + (hintOffset or 0), -1)
+            visual.clickHintPlate:SetShown(hintShown)
         end
         if visual.durationCooldown then
             visual.durationCooldown:SetFrameLevel(level + 1)
@@ -929,20 +946,57 @@ end
 -- SetClampedToScreen only holds the little anchor in place, so a strict run of
 -- 82 cells walks off the screen on its own. Cap a run at what actually fits;
 -- nil means the screen size is unknown and nothing is capped.
-function NS:MaxCellsPerRun(size, spacing, extent)
+-- Exact rather than approximate: the run costs (n-1) steps plus one whole cell
+-- plus the layout's own margin. Dividing the extent by the step alone allowed
+-- one cell too many, which showed up as a single row hanging off the edge.
+function NS:MaxCellsPerRun(size, spacing, extent, margin)
     if type(extent) ~= "number" or extent <= 0 then return nil end
-    local step = (tonumber(size) or 0) + (tonumber(spacing) or 0)
+    local cell = tonumber(size) or 0
+    local step = cell + (tonumber(spacing) or 0)
     if step <= 0 then return nil end
-    return math.max(1, math.min(MAX_BUTTONS, math.floor(extent / step)))
+    local usable = extent - (tonumber(margin) or 0) - cell
+    if usable < 0 then return 1 end
+    return math.max(1, math.min(MAX_BUTTONS, math.floor(usable / step) + 1))
 end
 
-local function screenExtent(dimension)
-    if not UIParent then return nil end
-    local getter = dimension == "height" and UIParent.GetHeight or UIParent.GetWidth
-    if not getter then return nil end
-    local ok, value = pcall(getter, UIParent)
+local function edgeOf(frame, getter)
+    if not frame or not frame[getter] then return nil end
+    local ok, value = pcall(frame[getter], frame)
     if not ok or type(value) ~= "number" then return nil end
     return value
+end
+
+-- Space from the anchor's own edge to the screen edge, in the direction the
+-- grid actually grows. 1.5.15 used the full screen size instead, which is only
+-- correct when the anchor happens to sit against the opposite edge: from a
+-- centred anchor it allowed roughly twice the cells that fit, and the far half
+-- of a raid was drawn off screen. A nil result means the frames are not placed
+-- yet and nothing is capped.
+function NS:AvailableExtent(horizontal, towardPositive)
+    local anchor = self.gridAnchor
+    if not anchor or not UIParent then return nil end
+    if horizontal then
+        if towardPositive then
+            local left, right = edgeOf(anchor, "GetLeft"), edgeOf(UIParent, "GetRight")
+            if not left or not right then return nil end
+            return right - left
+        end
+        local right, left = edgeOf(anchor, "GetRight"), edgeOf(UIParent, "GetLeft")
+        if not right or not left then return nil end
+        return right - left
+    end
+    -- The run starts at the anchor edge it is attached to, not the opposite
+    -- one: growing down, cells hang from the anchor's bottom; growing up, they
+    -- stack from its top. Measuring from the far edge gave a few pixels too
+    -- many and the last row hung off the screen.
+    if towardPositive then
+        local anchorTop, screenTop = edgeOf(anchor, "GetTop"), edgeOf(UIParent, "GetTop")
+        if not anchorTop or not screenTop then return nil end
+        return screenTop - anchorTop
+    end
+    local anchorBottom, screenBottom = edgeOf(anchor, "GetBottom"), edgeOf(UIParent, "GetBottom")
+    if not anchorBottom or not screenBottom then return nil end
+    return anchorBottom - screenBottom
 end
 
 function NS:LayoutButtons()
@@ -956,14 +1010,17 @@ function NS:LayoutButtons()
     -- A run that leaves the screen shows nothing, so it wraps instead. The
     -- shape the player asked for is kept: horizontal still fills a row before
     -- starting another, vertical still fills a column.
+    local growRightEarly = self.db.grow == "RIGHT_DOWN" or self.db.grow == "RIGHT_UP"
+    local growDownEarly = self.db.grow == "RIGHT_DOWN" or self.db.grow == "LEFT_DOWN"
     local rows
     if layoutMode == "HORIZONTAL" then
-        columns = self:MaxCellsPerRun(size, spacing, screenExtent("width")) or MAX_BUTTONS
+        columns = self:MaxCellsPerRun(size, spacing, self:AvailableExtent(true, growRightEarly)) or MAX_BUTTONS
     elseif layoutMode == "VERTICAL" then
-        rows = self:MaxCellsPerRun(size, spacing, screenExtent("height")) or MAX_BUTTONS
+        -- The vertical run carries the layout's 3 px margin.
+        rows = self:MaxCellsPerRun(size, spacing, self:AvailableExtent(false, not growDownEarly), 3) or MAX_BUTTONS
         columns = 1
     else
-        local widest = self:MaxCellsPerRun(size, spacing, screenExtent("width"))
+        local widest = self:MaxCellsPerRun(size, spacing, self:AvailableExtent(true, growRightEarly))
         if widest then columns = math.min(columns, widest) end
     end
     local growRight = self.db.grow == "RIGHT_DOWN" or self.db.grow == "RIGHT_UP"

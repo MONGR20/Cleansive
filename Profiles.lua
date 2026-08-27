@@ -38,6 +38,46 @@ local ALLOWED_VALUES = {
     soundChannel = { Master = true, SFX = true, Dialog = true },
 }
 
+-- The nine anchor points SetPoint accepts. Anything else raises, and a saved
+-- position goes straight there at load: a hand-edited or truncated database
+-- could stop the addon from starting at all.
+local ANCHOR_POINTS = {
+    TOPLEFT = true, TOP = true, TOPRIGHT = true,
+    LEFT = true, CENTER = true, RIGHT = true,
+    BOTTOMLEFT = true, BOTTOM = true, BOTTOMRIGHT = true,
+}
+
+-- The sliders all represent whole steps, so a fractional value that survived
+-- clamping produced fractional layout arithmetic.
+local INTEGER_SETTINGS = {
+    frameSize = true, spacing = true, columns = true,
+    blacklistTime = true, soundMaxRegistrations = true,
+}
+
+local BOOLEAN_SETTINGS = {
+    "enabled", "locked", "showPets", "showFocus", "showNames", "showTooltips",
+    "sound", "failureSound", "showCooldown", "showStacks", "showClickHints",
+    "autoHide", "afflictedOnly", "groupManualTypes",
+}
+
+local function normalizePositions(profile, fallback)
+    if type(profile.positions) ~= "table" then
+        profile.positions = deepCopy(fallback.positions)
+        return
+    end
+    for key, default in pairs(fallback.positions or {}) do
+        local saved = profile.positions[key]
+        if type(saved) ~= "table" then
+            profile.positions[key] = deepCopy(default)
+        else
+            if not ANCHOR_POINTS[saved.point] then saved.point = default.point end
+            if not ANCHOR_POINTS[saved.relativePoint] then saved.relativePoint = default.relativePoint end
+            saved.x = tonumber(saved.x) or default.x
+            saved.y = tonumber(saved.y) or default.y
+        end
+    end
+end
+
 local function normalizeProfile(profile, fallback)
     if type(profile) ~= "table" or type(fallback) ~= "table" then return end
     for key, bounds in pairs(NUMERIC_BOUNDS) do
@@ -45,12 +85,20 @@ local function normalizeProfile(profile, fallback)
         if not value then
             profile[key] = fallback[key]
         else
-            profile[key] = math.max(bounds[1], math.min(bounds[2], value))
+            value = math.max(bounds[1], math.min(bounds[2], value))
+            if INTEGER_SETTINGS[key] then value = math.floor(value + 0.5) end
+            profile[key] = value
         end
     end
     for key, allowed in pairs(ALLOWED_VALUES) do
         if not allowed[profile[key]] then profile[key] = fallback[key] end
     end
+    -- A truthy non-boolean survives every check above and then reaches code
+    -- that assumes true or false.
+    for _, key in ipairs(BOOLEAN_SETTINGS) do
+        if profile[key] ~= nil then profile[key] = profile[key] and true or false end
+    end
+    normalizePositions(profile, fallback)
 end
 
 local function applyDefaults(source, destination)
@@ -65,9 +113,11 @@ local function applyDefaults(source, destination)
 end
 
 function NS:GetCharacterProfileKey()
-    local name, realm
-    if UnitFullName then name, realm = UnitFullName("player") end
-    if not name and UnitName then name, realm = UnitName("player") end
+    local realm
+    -- The short name only: the realm is appended below. SafeUnitFullName
+    -- already carries it and would produce "Ekinoks-Hyjal-Hyjal", orphaning
+    -- every profile ever saved.
+    local name = NS:SafeUnitName("player")
     if not realm or realm == "" then
         realm = GetNormalizedRealmName and GetNormalizedRealmName() or GetRealmName and GetRealmName() or "Realm"
     end
@@ -193,21 +243,12 @@ function NS:InitializeProfiles()
         end
     end
 
-    -- 1.5.16 strips the cell down to colour, sweep and dispel cooldown. The
-    -- affliction stack count goes with it: the option stays for anyone who
-    -- wants it back, but flipping the default alone would leave every existing
-    -- profile showing the number it is meant to remove. Runs once; a later
-    -- deliberate choice is left alone.
-    if not raw.global.stacksOffByDefault1516 then
-        raw.global.stacksOffByDefault1516 = true
-        for _, character in pairs(raw.profiles) do
-            if type(character) == "table" then
-                for _, stored in pairs(character) do
-                    if type(stored) == "table" then stored.showStacks = false end
-                end
-            end
-        end
-    end
+    -- 1.5.16 swept showStacks to false in every existing profile. That was
+    -- wrong: a migration may repair invalid data or a removed feature, but the
+    -- stack count is still supported and still has its button, so the sweep
+    -- erased a choice a player had deliberately made. The new default applies
+    -- to new profiles only, which is what a changed default means. The sweep is
+    -- gone; the databases it already touched cannot be recovered.
 
     for _, stored in pairs(raw.profiles[characterKey]) do
         prune(stored)

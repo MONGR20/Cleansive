@@ -5,6 +5,17 @@ Depuis la 1.4.5, les principales branches logiques corrigées sont couvertes
 par des tests de non-régression dans `j/tests` (`npm test`). Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.5.17
+
+- Name and class reads are guarded like GUIDs were. 1.5.14 protected `UnitGUID` and `UnitIsUnit` and assumed that was the whole class of problem; `UnitName`, `UnitFullName` and `UnitClass` are marked secret-capable too, and the roster read all three raw -- a concatenation for the qualified name, an `or` for the display name, a direct read for the class. An unreadable name now falls back to the unit token, an unknown identity matches no priority or skip entry without dropping the unit from the roster, and `/cleansive pradd` refuses rather than recording an entry that can never match. The static rule covers all six APIs.
+- Layout limits are measured from the anchor, not from the whole screen. The 1.5.15 cap was only correct when the anchor sat against the opposite edge: from a centred anchor it allowed roughly twice the cells that fit, and the far half of a raid was still drawn off screen -- the exact defect 1.5.15 announced as fixed. The count is exact now, including the layout's own 3 px margin and the last cell's own width.
+- The 1.5.16 sweep that turned the stack counter off in every existing profile is removed. A migration may repair invalid data or a feature that no longer exists, but the stack counter is still supported and still has its button, so the sweep erased a choice players had deliberately made. Databases already touched by 1.5.16 cannot be recovered. The new default applies to new profiles only, which is what a changed default means.
+- Click letters are off by default, without touching anyone's setting.
+- Saved settings are validated further: anchor points are checked against the nine WoW accepts, coordinates are repaired, slider values are rounded to whole steps, and booleans that arrived as something else are normalised. Restoring a position falls back to the default rather than raising, so a broken database can never stop the addon from starting.
+- The options preview follows the same label sizes as a real cell and only shows the cells that fit its box; three cells at the vertical cap ran 11 px past the bottom with nothing to clip them.
+- Click-hint offsets scale with the cell instead of a flat 7 px, and a hint that still would not fit is not drawn. Writing this as a property -- every drawn hint fits its cell, across all 29 sizes and 3 slots -- established that the third hint fits no size at all: three plates need 45 px and the largest cell is 40. That settles the audit's "show a single hint" recommendation by geometry rather than by decision.
+- Tests: 280 to 354.
+
 ## 1.5.16
 
 - Cell labels scale with the cell instead of carrying a size tuned for the default 22 px. At 12 px the click-hint plate alone covered most of the cell -- it was a fixed 11x11 texture -- and the labels overlapped; at 40 px the same labels floated in empty space. Every size is now derived from the cell and clamped at both ends, calibrated so a 22 px cell is unchanged to the pixel. The unit name is hidden below 16 px rather than drawn as two illegible letters, and the grouped badge follows the same rule since it already resized with the cell.

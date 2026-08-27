@@ -22,7 +22,7 @@ local function localized(fr, en)
 end
 
 local function accent()
-    local class = NS.playerClass or select(2, UnitClass("player"))
+    local class = NS.playerClass or NS:SafeUnitClass("player")
     local classColors = _G.CUSTOM_CLASS_COLORS or RAID_CLASS_COLORS
     local classColor = classColors and classColors[class]
     if classColor and classColor.r and classColor.g and classColor.b then
@@ -974,11 +974,22 @@ function NS:RefreshCellPreview()
     elseif layoutMode == "VERTICAL" then cap = 26 end
     local previewSize = math.max(12, math.min(self.db.frameSize, cap))
     local verticalStep = previewSize + 3
+    -- The preview box is 78 px tall with a 5 px margin. Three cells at the
+    -- vertical cap ran 11 px past the bottom, and nothing clips them: show only
+    -- what fits, and let the labels follow the same rule as a real cell so the
+    -- preview stops promising a layout the game will not draw.
+    local previewRoom = 78 - 5
+    local verticalFits = math.max(1, math.floor((previewRoom - previewSize) / verticalStep) + 1)
+    local font = self.GetUXFont and self:GetUXFont()
     for index, cell in ipairs(preview.cells) do
         cell:ClearAllPoints()
+        if font and cell.label and cell.label.SetFont then
+            cell.label:SetFont(font, self:CellFontSize("hint", previewSize), "")
+            cell.cooldown:SetFont(font, self:CellFontSize("countdown", previewSize), "")
+        end
         if layoutMode == "VERTICAL" then
             cell:SetPoint("TOPLEFT", 24, -5 - ((index - 1) * verticalStep))
-            cell:SetShown(index <= 3)
+            cell:SetShown(index <= math.min(3, verticalFits))
         elseif layoutMode == "HORIZONTAL" then
             cell:SetPoint("LEFT", 14 + ((index - 1) * (previewSize + 7)), 0)
             cell:Show()

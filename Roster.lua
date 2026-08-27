@@ -1,18 +1,15 @@
 local _, NS = ...
 
+-- Names and classes are secret-capable in Retail 12.1, so both go through the
+-- guards. An unreadable name falls back to the unit token for display and
+-- counts as "no match" for the priority and skip lists: the unit stays in the
+-- roster either way.
 local function fullUnitName(unit)
-    if GetUnitName then
-        return GetUnitName(unit, true)
-    end
-    local name, realm = UnitName(unit)
-    if not name then return nil end
-    if realm and realm ~= "" then return name .. "-" .. realm end
-    return name
+    return NS:SafeUnitFullName(unit)
 end
 
 local function displayUnitName(unit)
-    local name = UnitName(unit)
-    return name or unit
+    return NS:SafeUnitName(unit) or unit
 end
 
 -- When a group member takes a vehicle, their afflictions move to the pet
@@ -40,7 +37,7 @@ end
 
 function NS:GetUnitDescriptor(unit)
     local name = fullUnitName(unit)
-    local class = select(2, UnitClass(unit))
+    local class = NS:SafeUnitClass(unit)
     local group = 1
     local raidIndex = string.match(unit, "^raid(%d+)$") or string.match(unit, "^raidpet(%d+)$")
     if raidIndex then
@@ -189,6 +186,11 @@ function NS:AddTargetToList(kind)
         return
     end
     local name = fullUnitName("target")
+    -- Recording an entry that can never match again is worse than refusing.
+    if not name then
+        self:Print(self.L.TARGET_NEEDED)
+        return
+    end
     self:AddListEntry(kind, "PLAYER", name, Ambiguate and Ambiguate(name, "short") or name)
 end
 
