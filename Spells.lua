@@ -214,6 +214,7 @@ function NS:UpdateSpells()
     end
 
     self.pendingSpells = false
+    if self.InvalidateGroupedCache then self:InvalidateGroupedCache() end
     if self.deferRefreshes then return end
     if self.RefreshAuraEngineTypes then self:RefreshAuraEngineTypes() end
     if self.ApplySecureBindings then

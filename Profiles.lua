@@ -142,10 +142,17 @@ function NS:InitializeProfiles()
     -- lost their engine cell without gaining a reliable replacement, so the
     -- option goes back to opt-in -- including for profiles that already
     -- recorded it. Runs once; a later deliberate choice is left alone.
+    -- The marker is global but the sweep used to visit the logged-in
+    -- character only, so every alt kept the 1.5.4 value forever: the first
+    -- login consumed the marker on their behalf.
     if not raw.global.groupManualOptOut then
         raw.global.groupManualOptOut = true
-        for _, stored in pairs(raw.profiles[characterKey]) do
-            if type(stored) == "table" then stored.groupManualTypes = false end
+        for _, character in pairs(raw.profiles) do
+            if type(character) == "table" then
+                for _, stored in pairs(character) do
+                    if type(stored) == "table" then stored.groupManualTypes = false end
+                end
+            end
         end
     end
 
@@ -169,6 +176,9 @@ function NS:InitializeProfiles()
     absorbHistory(raw.global, profile)
     profile.language = raw.global.language
 
+    -- Two profiles can share a grouped set but not a skip list, and the
+    -- indicator signature only watches the set. Forget on every switch.
+    if self.InvalidateGroupedCache then self:InvalidateGroupedCache() end
     self.db = profile
     self.activeCharacterKey = characterKey
     self.activeSpecKey = specKey
@@ -224,6 +234,9 @@ function NS:LoadCurrentProfile(cloneCurrent)
     prune(profile)
     absorbHistory(self.dbRoot.global, profile)
     profile.language = self.dbRoot.global.language
+    -- Two profiles can share a grouped set but not a skip list, and the
+    -- indicator signature only watches the set. Forget on every switch.
+    if self.InvalidateGroupedCache then self:InvalidateGroupedCache() end
     self.db = profile
     self.activeCharacterKey = characterKey
     self.activeSpecKey = specKey

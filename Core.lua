@@ -1,7 +1,11 @@
 local addonName, NS = ...
 
 NS.addonName = addonName
-NS.version = "1.5.7"
+-- The .toc is the single source of truth for the version. This used to be a
+-- second literal and it drifted: 1.5.8 shipped with the sidebar still saying
+-- v1.5.7, because bumping the .toc does not touch a copy kept here.
+NS.version = (C_AddOns and C_AddOns.GetAddOnMetadata
+    and C_AddOns.GetAddOnMetadata(addonName, "Version")) or "dev"
 NS.playerClass = select(2, UnitClass("player"))
 NS.blacklist = {}
 NS.testMode = false

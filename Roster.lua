@@ -151,6 +151,7 @@ function NS:RebuildRoster()
         return
     end
     self.roster = self:BuildRoster()
+    if self.InvalidateGroupedCache then self:InvalidateGroupedCache() end
     self.unitToButton = {}
     self:AssignRosterToButtons()
     self.pendingRoster = false

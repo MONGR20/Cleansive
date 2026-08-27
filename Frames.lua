@@ -182,11 +182,21 @@ function NS:CreateGrid()
     -- One indicator for every type the character can only clear with an area
     -- or self-only ability. It rides the unprotected layer, so it can be
     -- written during combat and it follows the grid for free.
-    local manualIndicator = CreateFrame("Button", "CleansiveManualIndicator", cooldownBody)
+    -- A plain Frame, not a Button: nothing here can be clicked, and a Button
+    -- that answers to nothing is a promise the addon cannot keep. Motion stays
+    -- enabled for the tooltip while clicks pass straight through to whatever
+    -- is underneath, so the badge never swallows one.
+    local manualIndicator = CreateFrame("Frame", "CleansiveManualIndicator", cooldownBody)
     manualIndicator:SetSize(24, 24)
     manualIndicator:EnableMouse(true)
+    manualIndicator:SetMouseClickEnabled(false)
+    manualIndicator:SetMouseMotionEnabled(true)
+    -- Cells are filled blocks of colour. The badge is a dark plate with a
+    -- coloured outline, so the two never read as the same kind of object.
     manualIndicator.background = manualIndicator:CreateTexture(nil, "BACKGROUND")
     manualIndicator.background:SetAllPoints()
+    manualIndicator.background:SetColorTexture(0.02, 0.03, 0.04, 0.88)
+    createBorder(manualIndicator)
     -- Same reasoning as the L/R/C click letters: colour alone is not a
     -- readable signal. "!" says "you press this yourself" without hue.
     manualIndicator.mark = manualIndicator:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -746,6 +756,9 @@ function NS:UpdateAuraContainerConfiguration(restyle)
 end
 
 function NS:RefreshAuraCandidateFilters()
+    -- A filter edit changes what a scan means while the grouped set stays
+    -- identical, so the signature never notices. Forget explicitly.
+    if self.InvalidateGroupedCache then self:InvalidateGroupedCache() end
     self.pendingAuraFilters = false
     self:UpdateAuraContainerConfiguration(false)
 end
@@ -1360,7 +1373,7 @@ function NS:RefreshUnit(unit)
             end
         end
     end
-    self:RequestManualIndicatorUpdate()
+    self:RequestManualIndicatorUpdate(unit)
 end
 
 function NS:RefreshAll(force)
@@ -1491,24 +1504,76 @@ end
 -- Readable-only by design. In restricted combat Lua cannot see the aura, so
 -- the count under-reports rather than guessing; the native sound alert still
 -- covers those cases and the tooltip says so.
-function NS:ScanGroupedType(unit)
-    if not self.groupedTypes or #self.groupedTypes == 0 then return nil end
+-- With `wanted`, answers whether the unit carries that one type. Without it,
+-- returns the highest-priority grouped type present -- the player's configured
+-- order, not the order WoW happens to return auras in. Scanning aura-first
+-- meant the indicator took its colour from whichever affliction was listed
+-- first, so the same two afflictions could paint either colour.
+-- Without a unit, forgets everything; with one, marks just that unit for a
+-- rescan. Before 1.5.9 every UNIT_AURA re-read the whole roster: up to 82
+-- units times 40 auras, ten times a second in the worst case, to answer a
+-- question only one unit had changed the answer to.
+function NS:InvalidateGroupedCache(unit)
+    self.groupedCache = self.groupedCache or {}
+    self.groupedDirty = self.groupedDirty or {}
+    if unit then
+        self.groupedDirty[unit] = true
+    else
+        wipe(self.groupedCache)
+        wipe(self.groupedDirty)
+    end
+end
+
+-- The unit's highest-priority grouped type that the player can actually act
+-- on, or false for "scanned, nothing there" -- which is a cacheable answer,
+-- unlike nil.
+function NS:ResolveGroupedType(unit, grouped)
+    local present = self.groupedPresent or {}
+    self.groupedPresent = present
+    self:ScanGroupedTypes(unit, present)
+    local isPlayer = UnitIsUnit(unit, "player") and true or false
+    for _, auraType in ipairs(grouped) do
+        local spell = self.manualTypeSpell and self.manualTypeSpell[auraType]
+        if present[auraType] and (isPlayer or not (spell and spell.selfOnly)) then
+            return auraType
+        end
+    end
+    return false
+end
+
+-- Fills `into[type] = true` for every grouped type carried by the unit, in a
+-- single pass over its auras whatever the number of grouped types. Callers
+-- apply priority and scope themselves: the aura order WoW returns says
+-- nothing about which type the player wants to see first.
+-- The type colour lives on the outline and the glyphs, never on the fill: a
+-- filled block is what a cell looks like, and the badge is not one.
+function NS:PaintManualIndicator(frame, color)
+    if frame.border then setBorderColor(frame, color[1], color[2], color[3], 1) end
+    frame.mark:SetTextColor(color[1], color[2], color[3], 1)
+    frame.count:SetTextColor(1, 1, 1, 1)
+end
+
+function NS:ScanGroupedTypes(unit, into)
+    wipe(into)
+    if not self.groupedTypes or #self.groupedTypes == 0 then return into end
     for index = 1, 40 do
         local aura = self:GetAuraByIndex(unit, index)
         if not aura then break end
         local dispelName = aura.dispelName
         if self:CanAccess(dispelName) and dispelName and not self:IsAuraIgnored(aura) then
             for _, auraType in ipairs(self.groupedTypes) do
-                if dispelName == auraType then return auraType end
+                if dispelName == auraType then into[auraType] = true end
             end
         end
     end
-    return nil
+    return into
 end
+
 
 -- UNIT_AURA fires constantly. Recomputing the indicator on each one would
 -- rescan the whole roster, so coalesce them into a single pass.
-function NS:RequestManualIndicatorUpdate()
+function NS:RequestManualIndicatorUpdate(unit)
+    if unit then self:InvalidateGroupedCache(unit) end
     if not self.manualIndicator or self.manualIndicatorScheduled then return end
     if not (C_Timer and C_Timer.After) then return self:UpdateManualIndicator() end
     self.manualIndicatorScheduled = true
@@ -1539,36 +1604,63 @@ function NS:UpdateManualIndicator()
         frame.activeCount, frame.activeType = 2, grouped[1]
         self:LayoutManualIndicator()
         local color = self.TYPE_COLORS[grouped[1]] or { 1, 1, 1 }
-        frame.background:SetColorTexture(color[1], color[2], color[3], 0.92)
+        self:PaintManualIndicator(frame, color)
         frame.count:SetText(2)
         frame:Show()
         return
     end
 
-    -- A self-only ability cannot help anyone else, so counting the raid would
-    -- promise something the player cannot deliver. Mirrors the scoping the
-    -- sound plan already applies.
-    local selfOnly = true
-    for _, auraType in ipairs(grouped) do
-        local spell = self.manualTypeSpell and self.manualTypeSpell[auraType]
-        if not (spell and spell.selfOnly) then selfOnly = false end
+    -- The grouped set and the configured order both change what a cached
+    -- answer means, so a move there forgets everything.
+    local signature = table.concat(grouped, ",")
+    if signature ~= self.groupedSignature then
+        self.groupedSignature = signature
+        self:InvalidateGroupedCache()
     end
 
-    local count, firstType = 0, nil
-    local scanned = selfOnly and { { unit = "player" } } or (self.roster or {})
-    for _, descriptor in ipairs(scanned) do
-        local found = self:ScanGroupedType(self:GetDisplayUnit(descriptor.unit))
-        if found then
-            count = count + 1
-            firstType = firstType or found
+    local rank = {}
+    for position, auraType in ipairs(grouped) do rank[auraType] = position end
+
+    self.groupedCache = self.groupedCache or {}
+    self.groupedDirty = self.groupedDirty or {}
+    local cache, dirty = self.groupedCache, self.groupedDirty
+    local counted, count, bestRank, firstType = {}, 0, nil, nil
+    for _, descriptor in ipairs(self.roster or {}) do
+        local token = descriptor.unit
+        local unit = self:GetDisplayUnit(token)
+        if unit then
+            local guid = UnitGUID(unit) or unit
+            local entry = cache[token]
+            -- A token gets recycled onto somebody else the moment the group
+            -- changes, so an entry is only trusted while its GUID holds.
+            if not entry or entry.guid ~= guid or dirty[token] then
+                entry = entry or {}
+                entry.guid = guid
+                entry.type = self:ResolveGroupedType(unit, grouped)
+                cache[token] = entry
+            end
+            if entry.type then
+                -- One unit hit by two grouped types is still one unit.
+                if not counted[guid] then
+                    counted[guid] = true
+                    count = count + 1
+                end
+                -- Priority is global: the colour is the most urgent type in
+                -- the group, not the best type of whichever unit came first.
+                local position = rank[entry.type]
+                if position and (not bestRank or position < bestRank) then
+                    bestRank, firstType = position, entry.type
+                end
+            end
         end
     end
+    wipe(dirty)
 
     frame.activeCount, frame.activeType = count, firstType
     self:LayoutManualIndicator()
     if count > 0 then
         local color = self.TYPE_COLORS[firstType] or { 1, 1, 1 }
-        frame.background:SetColorTexture(color[1], color[2], color[3], 0.92)
+        self:PaintManualIndicator(frame, color)
         frame.count:SetText(count)
         frame:Show()
     elseif self.db.afflictedOnly then
@@ -1583,6 +1675,9 @@ end
 function NS:ShowManualIndicatorTooltip(frame)
     if not self.db.showTooltips then return end
     GameTooltip:SetOwner(frame, "ANCHOR_RIGHT")
+    -- The badge looks like part of the grid, so it says outright that it is
+    -- not one before it says anything else.
+    GameTooltip:AddLine(self.L.MANUAL_BADGE_TITLE, 1, 0.82, 0.30)
     for _, auraType in ipairs(self.groupedTypes or {}) do
         local manual = self.manualTypeSpell and self.manualTypeSpell[auraType]
         local color = self.TYPE_COLORS[auraType] or { 1, 1, 1 }

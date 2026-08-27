@@ -5,6 +5,20 @@ Depuis la 1.4.5, les principales branches logiques corrigées sont couvertes
 par des tests de non-régression dans `j/tests` (`npm test`). Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.5.9
+
+- The version now comes from the `.toc` through `C_AddOns.GetAddOnMetadata`. It was a second literal in `Core.lua`, and it drifted: 1.5.8 shipped with the options sidebar still advertising v1.5.7.
+- The 1.5.5 opt-in migration reaches every character. Its marker was global but the sweep visited the logged-in character only, so the first login consumed it on behalf of every alt, who kept the 1.5.4 value forever.
+- The grouped-indicator tooltip no longer promises a sound that always fires. A protected spell ID outside the seasonal list, or past the registration budget, stays silent; the text now says "may still trigger" instead of "still fires".
+- The grouped indicator is a badge, not a cell that answers to nothing. It was a `Button` with the mouse enabled, painted as a filled block exactly like an afflicted cell, and no click did anything. It is now a plain frame with a dark plate and a coloured outline, clicks pass through to whatever sits underneath, and the tooltip opens by saying it is not clickable.
+- The indicator colour follows the configured type order across the whole group. The aura loop sat outside the type loop, so the colour came from whichever affliction WoW happened to return first; priority was then resolved per unit, so the first afflicted unit won over a higher-priority type elsewhere.
+- Scope is applied per ability instead of to the set. One area type widened the scan for every type, and a self-only ability then counted allies it can never help.
+- Roster scanning is cached per unit. Every `UNIT_AURA` re-read the whole roster -- up to 82 units times 40 auras, ten times a second in the worst case -- to answer a question a single unit had changed. Ten events on a 40-player raid now cost 10 unit scans instead of 400. The cache is dropped on a roster, profile, spell or filter change, and an entry is only trusted while its unit GUID holds, so a recycled token never inherits the previous player's affliction.
+- "%d allies affected" produced "1 allies affected". Both languages now read "Affected units: %d".
+- Rewrote the French section of the README, which still described English as the default language -- the behaviour 1.5.8 had already changed.
+- Packaging: every tracked file is back to normal permissions. The repository carried the executable bit on all fifteen of them.
+- Tests: 122 to 176. The post-combat deferral is now exercised rather than asserted to exist -- the two cases it replaced only checked that a function was defined. The harness gained a controllable protected aura engine, so container rebuilds, partial failures and the Lua fallback can be reproduced. Three static checks run alongside: every Lua file must parse (the two UI files were never loaded before, and they are 27% of the code), no element may be anchored on a slider's bar, and no glyph may fall outside what the interface font can draw. Every fix in this release was verified by reintroducing the defect and watching the suite turn red.
+
 ## 1.5.8
 
 - The interface language now follows the WoW client on a fresh install. Until 1.5.7 an unset language fell back to English on every client, so a French player saw English labels next to the French spell and class names the game API returns. It read as missing translations; the French strings had been complete all along. A language the player chose explicitly still wins over the client.
