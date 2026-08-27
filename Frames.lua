@@ -39,10 +39,14 @@ local function getPotentialAuraTypes()
         -- UpdateSpells runs before CreateFrames, so knownSpells is populated by
         -- then; the class-wide set stays as a boot fallback in case it is not,
         -- and RefreshAuraEngineTypes narrows it on the next spell update.
-        -- "Resolved" means the spellbook answered with something, not merely
-        -- that UpdateSpells ran: it clears knownSpells to an empty table on
-        -- entry, so testing for non-nil made the boot fallback unreachable.
-        local resolved = NS.knownSpells and #NS.knownSpells > 0
+        -- An explicit state, not the contents of the table. Testing for
+        -- non-nil made the fallback unreachable (UpdateSpells clears the table
+        -- on entry); testing for non-empty then kept the cautious class-wide
+        -- set forever for a character who genuinely knows no cleanse. The
+        -- client confirms readiness on PLAYER_ENTERING_WORLD or SPELLS_CHANGED,
+        -- and an empty answer after that is a real answer.
+        local resolved = NS.spellbookResolved
+            or (NS.knownSpells and #NS.knownSpells > 0) or false
         if (resolved and NS:IsSpellKnown(def)) or (not resolved and def.class == NS.playerClass)
             or (not def.class and NS:IsSpellKnown(def)) then
             -- Only the types the spell can currently clear. Merging
@@ -1100,8 +1104,24 @@ function NS:LayoutButtons()
     -- a five-man grid as if it had to hold a raid.
     local shown = math.max(1, math.min(MAX_BUTTONS, #(self.roster or {})))
     if not self.roster or #self.roster == 0 then shown = MAX_BUTTONS end
+    -- The grouped badge sits a full cell plus 4 px behind the anchor. Reserving
+    -- it only at the final nudge was too late: the rows were already chosen
+    -- against the whole height, so sliding the grid down to save the badge
+    -- pushed the last row out by exactly as much. Work out here how much the
+    -- correction will steal, and choose the rows against what is left.
+    local behind = 0
+    if self.db.groupManualTypes and self.GetManualOnlyTypes and #self:GetManualOnlyTypes() > 0 then
+        behind = size + 4
+    end
+    local roomBehind = self:AvailableExtent(false, growDownEarly)
+    local stolen = 0
+    if behind > 0 and roomBehind and behind > roomBehind then
+        stolen = behind - roomBehind
+    end
+
     local maxAcross = self:MaxCellsPerRun(size, spacing, self:AvailableExtent(true, growRightEarly))
-    local maxDown = self:MaxCellsPerRun(size, spacing, self:AvailableExtent(false, not growDownEarly), 3)
+    local forwardRoom = self:AvailableExtent(false, not growDownEarly)
+    local maxDown = self:MaxCellsPerRun(size, spacing, forwardRoom and (forwardRoom - stolen), 3)
     local rows
     if layoutMode == "HORIZONTAL" then
         columns = maxAcross or MAX_BUTTONS
@@ -1150,12 +1170,6 @@ function NS:LayoutButtons()
     local across = rows and math.ceil(shown / rows) or math.min(shown, columns)
     local down = rows and math.min(shown, rows) or math.ceil(shown / columns)
     local step = size + spacing
-    -- The grouped badge sits a full cell plus 4 px behind the anchor whenever
-    -- a manual-only type exists.
-    local behind = 0
-    if self.db.groupManualTypes and self.GetManualOnlyTypes and #self:GetManualOnlyTypes() > 0 then
-        behind = size + 4
-    end
     self:NudgeGridOnScreen((across - 1) * step + size, (down - 1) * step + size + 3,
         growRightEarly, growDownEarly, behind)
     self:LayoutManualIndicator()

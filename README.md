@@ -1,4 +1,4 @@
-# Cleansive 1.5.20
+# Cleansive 1.5.21
 
 Cleansive is a standalone one-click cleansing addon for **World of Warcraft Retail 12.1** (`120100`). It provides a compact Decursive-style workflow with a dark, class-colored interface inspired by the clarity of Ellesmere UI. The interface follows the language of your WoW client, English or French; either can be picked from the General page at any time.
 
@@ -93,6 +93,14 @@ remain active so a protected AuraSlot can pass cleansing clicks through during
 combat. Avoid clicking empty grid positions while this mode is enabled.
 
 The hover-cleanse key also respects these restrictions: it casts through a secure action button on your mouseover, target, or player. It never asks Lua to select an afflicted unit during combat, because the secure engine evaluates targeting conditions only and cannot read auras.
+
+## 1.5.21 changes
+
+- The grouped badge's space is reserved before the rows are chosen, not after they are placed. 1.5.20 picked the row count against the whole height and only then slid the grid to save the badge, so the last row went off the bottom by exactly the amount the badge was rescued by. Only what the correction would actually take is subtracted, so a grid whose badge already fits keeps its full height.
+- "Spellbook resolved" is an explicit state rather than a guess from the table's contents. Testing for a non-nil table made the boot fallback unreachable in 1.5.19; testing for a non-empty one in 1.5.20 then kept the cautious class-wide slot set for a whole session on a character who genuinely knows no cleanse. The client confirms readiness on `PLAYER_ENTERING_WORLD` and `SPELLS_CHANGED`, and an empty answer after that is a real answer: no spells, no engine slots.
+- Tests: 435 to 448.
+
+Not changed: `usesAuraEngine` has been reported twice as an accidental global. It is not one -- `Frames.lua` forward-declares it as a local on line 7. Settled by loading the addon in the test VM and reading `_G`, which returns nil.
 
 ## 1.5.20 changes
 

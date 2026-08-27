@@ -706,6 +706,7 @@ events:SetScript("OnEvent", function(_, event, ...)
     elseif event == "GROUP_ROSTER_UPDATE" or event == "PLAYER_ENTERING_WORLD" or event == "PLAYER_FOCUS_CHANGED" then
         local profileChanged = false
         if event == "PLAYER_ENTERING_WORLD" then
+            NS.spellbookResolved = true
             NS:RegisterCompatibilitySlashAliases()
             profileChanged = NS:QueueProfileSwitch()
         end
@@ -722,6 +723,9 @@ events:SetScript("OnEvent", function(_, event, ...)
         local unit = ...
         if not unit or unit == "player" then NS:QueueProfileSwitch() end
     elseif event == "SPELLS_CHANGED" or event == "TRAIT_CONFIG_UPDATED" then
+        -- The client has spoken about the spellbook: an empty result is now a
+        -- real answer, not a sign that it was not ready.
+        NS.spellbookResolved = true
         NS:UpdateSpells()
     elseif event == "SPELL_UPDATE_COOLDOWN" or event == "SPELL_UPDATE_CHARGES" then
         NS:RefreshDispelCooldowns()

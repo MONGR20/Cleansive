@@ -5,6 +5,14 @@ Depuis la 1.4.5, les principales branches logiques corrigées sont couvertes
 par des tests de non-régression dans `j/tests` (`npm test`). Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.5.21
+
+- The grouped badge's space is reserved before the rows are chosen, not after they are placed. 1.5.20 picked the row count against the whole height and only then slid the grid to save the badge, so the last row went off the bottom by exactly the amount the badge was rescued by. Only what the correction would actually take is subtracted, so a grid whose badge already fits keeps its full height.
+- "Spellbook resolved" is an explicit state rather than a guess from the table's contents. Testing for a non-nil table made the boot fallback unreachable in 1.5.19; testing for a non-empty one in 1.5.20 then kept the cautious class-wide slot set for a whole session on a character who genuinely knows no cleanse. The client confirms readiness on `PLAYER_ENTERING_WORLD` and `SPELLS_CHANGED`, and an empty answer after that is a real answer: no spells, no engine slots.
+- Tests: 435 to 448.
+
+Not changed: `usesAuraEngine` has been reported twice as an accidental global. It is not one -- `Frames.lua` forward-declares it as a local on line 7. Settled by loading the addon in the test VM and reading `_G`, which returns nil.
+
 ## 1.5.20
 
 - A reset asked for during combat recomputes the grid, not just the position. `ResetPositions` deferred the move to the end of combat but set no layout flag, so the position returned to the default while the wrap stayed the one computed for the old corner -- a narrow wrap from a screen edge became a long run off the middle of the screen.
