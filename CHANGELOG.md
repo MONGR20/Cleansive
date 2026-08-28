@@ -2,8 +2,15 @@
 
 Les versions 1.4.1 et suivantes sont des correctifs issus d'une revue de code.
 Depuis la 1.4.5, les principales branches logiques corrigées sont couvertes
-par des tests de non-régression dans `j/tests` (`npm test`). Les interactions
+par une suite de tests de non-régression maintenue dans le dépôt de
+développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
+
+## 1.5.27
+
+- The engine diagnostic names the type that actually failed. Retired types are reconciled before the wanted ones and both shared a single first-error slot, so a pass that failed on a retired Magic slot *and* on an active Poison slot reported the cell's real fallback with the name of a cleanup operation. Active and cleanup failures are now recorded apart, and each message reads its own.
+- Changelog: the test suite is no longer described by a path that only exists on the development machine.
+- Tests: 487 to 492. The mock could only fail one slot key at a time, which is exactly why a simultaneous retired/active failure had never been exercised; it now accepts a set of keys.
 
 ## 1.5.26
 

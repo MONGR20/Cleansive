@@ -680,7 +680,9 @@ function NS:AddAuraSlotForType(button, auraType)
     if not container then return false end
     local diagnostics = self.auraContainerDiagnostics
     local function recordFailure(reason)
-        if diagnostics and not diagnostics.firstError then diagnostics.firstError = tostring(reason) end
+        if not diagnostics then return end
+        if not diagnostics.firstError then diagnostics.firstError = tostring(reason) end
+        diagnostics.activeError = diagnostics.activeError or tostring(reason)
     end
     local addedForButton = 0
     local slotKey = "cleansive_" .. string.lower(auraType)
@@ -2102,8 +2104,13 @@ function NS:ReconcileAuraSlots(button, wanted, wantedSet)
     button.auraSlotVisuals = button.auraSlotVisuals or {}
 
     local diagnostics = self.auraContainerDiagnostics
-    local function recordFailure(reason)
-        if diagnostics and not diagnostics.firstError then diagnostics.firstError = tostring(reason) end
+    -- The retired types are walked first, so a single shared firstError meant
+    -- the engine message could name a cleanup operation while describing a
+    -- cell that had really lost an active type. Each side keeps its own.
+    local function recordFailure(reason, active)
+        if not diagnostics then return end
+        if not diagnostics.firstError then diagnostics.firstError = tostring(reason) end
+        if active then diagnostics.activeError = diagnostics.activeError or tostring(reason) end
     end
 
     -- Two separate outcomes. Whether the cell can use the engine depends only
@@ -2135,7 +2142,7 @@ function NS:ReconcileAuraSlots(button, wanted, wantedSet)
                 self:BuildAuraCandidateFilters(auraType)) then
                 live = live + 1
             else
-                recordFailure("SetAuraSlotCandidateFilters failed for " .. tostring(auraType))
+                recordFailure("SetAuraSlotCandidateFilters failed for " .. tostring(auraType), true)
             end
         elseif self:AddAuraSlotForType(button, auraType) then
             live = live + 1
@@ -2216,7 +2223,7 @@ function NS:RefreshAuraEngineTypes()
     local fullyConfigured = true
     self.auraContainerDiagnostics = {
         expected = MAX_BUTTONS * #wanted, added = 0, readyButtons = 0, firstError = nil,
-        retired = 0, retiredError = nil,
+        retired = 0, retiredError = nil, activeError = nil,
     }
     for _, button in ipairs(self.buttons) do
         -- Reuse whatever is already there. Hiding a container does not destroy
@@ -2260,7 +2267,8 @@ function NS:RefreshAuraEngineTypes()
             if ready < withContainer then
                 self:Print(self.L.AURA_ENGINE_FAILED, self.auraContainerDiagnostics.added,
                     self.auraContainerDiagnostics.expected,
-                    self.auraContainerDiagnostics.firstError)
+                    self.auraContainerDiagnostics.activeError
+                        or self.auraContainerDiagnostics.firstError)
             else
                 -- Every wanted type is live on every cell; only the retired
                 -- ones resisted. Announcing "incomplete (82/82 slots)" and a
