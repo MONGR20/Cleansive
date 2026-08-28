@@ -246,7 +246,10 @@ local function chevron(control, up)
         bar:SetColorTexture(1, 1, 1, 1)
         bar:SetSize(9, 2)
         bar:SetPoint("CENTER", (index == 1 and -2.5 or 2.5), 0)
-        local angle = (index == 1 and 1 or -1) * (up and -0.6 or 0.6)
+        -- Le signe etait inverse : « Monter » dessinait une descente. Les
+        -- actions, elles, ont toujours ete bonnes -- seule la rotation etait
+        -- fausse, ce qu'aucun test ne pouvait voir sans la mesurer.
+        local angle = (index == 1 and 1 or -1) * (up and 0.6 or -0.6)
         bar:SetRotation(angle)
         control.chevron[index] = bar
     end
@@ -1065,11 +1068,26 @@ function NS:RefreshCellPreview()
     local previewRoom = 78 - 5
     local verticalFits = math.max(1, math.floor((previewRoom - previewSize) / verticalStep) + 1)
     local font = self.GetUXFont and self:GetUXFont()
+    -- La case etait plafonnee mais ses textes etaient dimensionnes POUR le
+    -- plafond : a 40 px reglés, une lettre calculee pour une case de 26
+    -- recouvrait le nombre. L'apercu est une reduction de la vraie case, donc
+    -- tout son contenu subit la meme echelle.
+    local realSize = math.max(1, self.db.frameSize)
+    local previewScale = previewSize / realSize
+    local function scaled(role)
+        local real = self:CellFontSize(role, realSize)
+        return math.max(6, math.floor(real * previewScale + 0.5))
+    end
+    local inset = math.max(1, math.floor(3 * previewScale + 0.5))
+    preview.scale, preview.hintFont, preview.countdownFont =
+        previewScale, scaled("hint"), scaled("countdown")
     for index, cell in ipairs(preview.cells) do
         cell:ClearAllPoints()
         if font and cell.label and cell.label.SetFont then
-            cell.label:SetFont(font, self:CellFontSize("hint", previewSize), "")
-            cell.cooldown:SetFont(font, self:CellFontSize("countdown", previewSize), "")
+            cell.label:SetFont(font, preview.hintFont, "")
+            cell.cooldown:SetFont(font, preview.countdownFont, "")
+            cell.label:ClearAllPoints()
+            cell.label:SetPoint("TOPLEFT", inset, -inset)
         end
         if layoutMode == "VERTICAL" then
             cell:SetPoint("TOPLEFT", 24, -5 - ((index - 1) * verticalStep))

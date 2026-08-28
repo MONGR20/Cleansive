@@ -6,6 +6,12 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.5.30
+
+- The priority chevrons pointed the wrong way. The actions were always right -- "move up" moved up -- but the drawing was inverted: the left button showed a downward chevron. Only the sign of the rotation was wrong, and no test could see it because the mock did not record `SetRotation`. It does now.
+- The live preview is a faithful reduction of the cell instead of a cropped one. The cell was capped at 26 to 38 px depending on the layout, but its texts were sized *for that cap*: at a real 40 px the click letter was computed for a 26 px cell and covered the cooldown number. Every part of the preview -- letter, number, inset -- now takes the same scale as the cell it stands for.
+- Tests: 570 to 591, including the preview at 12, 22 and 40 px.
+
 ## 1.5.29
 
 - The six sliders show their value again -- they never showed one. `SetPoint("TOPRIGHT", x, y)` is the three-argument form: it anchors to the parent's TOPRIGHT, so a positive x pushed the number 265 to 575 px past the right edge of the panel. Size, spacing, columns, opacity, blacklist duration and the sound limit were all mute.
