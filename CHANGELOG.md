@@ -6,6 +6,13 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.5.32
+
+- The grid no longer starts at raid group 1 for everyone. It starts at your own group and wraps: from group 3 the order is 3, 4, 1, 2. When every dispeller sees the same order, they all reach for the same cell first and most of them arrive to find the work already done. Starting somewhere different for each player spreads it with nothing to agree on beforehand. The priority list is still read first and still wins.
+- `PlayerRaidGroup` had to be written because the owner's own group was always reported as 1: the subgroup is read out of the unit token, and `player` carries no raid index. It resolves identity through `IsPlayerUnit`, the only guarded path allowed to touch `UnitIsUnit`.
+- Nothing changes in a party or a dungeon: everyone is in group 1 there, so there is nothing to spread.
+- Tests: 609 to 615. `IsInRaid` and `GetRaidRosterInfo` were wired to "no" and nil in the mock, so no test could place the player in a raid group at all -- the cell order in a raid was verified nowhere. `UnitGUID` now answers with one GUID for a character seen through two tokens, which is what made the deduplication testable.
+
 ## 1.5.31
 
 - Auras that punish the dispeller are flagged. Dispelling Unstable Affliction turns its damage on you and silences you; Cleansive painted it like any other magic debuff and invited the reflex. A cell carrying one now gets a warning ring and a `!` on top of its normal click colour. The click is still there -- eating the backlash is sometimes correct -- but it can no longer be made without seeing it.

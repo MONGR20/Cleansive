@@ -1,5 +1,7 @@
 local _, NS = ...
 
+local RAID_GROUPS = 8
+
 -- Names and classes are secret-capable in Retail 12.1, so both go through the
 -- guards. An unreadable name falls back to the unit token for display and
 -- counts as "no match" for the priority and skip lists: the unit stays in the
@@ -106,6 +108,23 @@ local function addDescriptor(list, seen, unit)
     if guid then seen[guid] = true end
 end
 
+-- GetUnitDescriptor reads the subgroup out of the unit token, and "player"
+-- carries no raid index: the owner's own group always came back as 1. Ask the
+-- roster instead, by identity rather than by name -- two servers can share a
+-- name, and IsPlayerUnit cannot be fooled by one. It is also the only place
+-- allowed to touch UnitIsUnit, whose result is secret under comparison
+-- restriction.
+function NS:PlayerRaidGroup()
+    if not IsInRaid or not IsInRaid() then return 1 end
+    for index = 1, MAX_RAID_MEMBERS or 40 do
+        local unit = "raid" .. index
+        if UnitExists(unit) and self:IsPlayerUnit(unit) then
+            return select(3, GetRaidRosterInfo(index)) or 1
+        end
+    end
+    return 1
+end
+
 function NS:BuildRoster()
     local descriptors, seen = {}, {}
     addDescriptor(descriptors, seen, "player")
@@ -140,11 +159,23 @@ function NS:BuildRoster()
         end
     end
 
+    -- Sorting groups 1 to 8 the same way for everyone means every dispeller in
+    -- the raid reaches for the same cell first, and most of them arrive to find
+    -- the work already done. Starting from your own group and wrapping around
+    -- spreads it with nothing to agree on beforehand: the order is just as
+    -- stable, it only begins somewhere else for each player. The priority list
+    -- still wins -- it is read before this.
+    local myGroup = self:PlayerRaidGroup()
+    local function groupRank(group)
+        local offset = (tonumber(group) or 1) - myGroup
+        if offset < 0 then offset = offset + RAID_GROUPS end
+        return offset
+    end
     table.sort(descriptors, function(a, b)
         local ar, br = self:PriorityRank(a), self:PriorityRank(b)
         if ar ~= br then return ar < br end
         if a.isPet ~= b.isPet then return not a.isPet end
-        if a.group ~= b.group then return a.group < b.group end
+        if a.group ~= b.group then return groupRank(a.group) < groupRank(b.group) end
         return (a.displayName or a.unit) < (b.displayName or b.unit)
     end)
     return descriptors

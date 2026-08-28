@@ -1,4 +1,4 @@
-# Cleansive 1.5.31
+# Cleansive 1.5.32
 
 Cleansive is a standalone one-click cleansing addon for **World of Warcraft Retail 12.1** (`120100`). It provides a compact Decursive-style workflow with a dark, class-colored interface inspired by the clarity of Ellesmere UI. The interface follows the language of your WoW client, English or French; either can be picked from the General page at any time.
 
@@ -33,6 +33,8 @@ Red, blue, and orange identify the click to use. The optional L/R/C corner lette
 - A warning marker on auras whose dispel backfires on the dispeller, filtered
   engine-side by spell ID so it works while the aura itself is protected.
 - Player, class, and raid-group priorities and exclusions.
+- A default raid order relative to your own group rather than an absolute
+  1-to-8 order, so cleansing work spreads across dispellers on its own.
 - Permanent and combat-only aura filters.
 - Class-colored interface, test mode, dual timers (numeric cleanse cooldown plus a clockwise affliction-duration fade), stacks, tooltips, color-independent click hints, sound-channel selection, and sound diagnostics.
 - Wrapping grid, horizontal-fill and vertical-fill cell arrangements with independent growth direction.
@@ -95,6 +97,10 @@ remain active so a protected AuraSlot can pass cleansing clicks through during
 combat. Avoid clicking empty grid positions while this mode is enabled.
 
 The hover-cleanse key also respects these restrictions: it casts through a secure action button on your mouseover, target, or player. It never asks Lua to select an afflicted unit during combat, because the secure engine evaluates targeting conditions only and cannot read auras.
+
+## 1.5.32 changes
+
+- In a raid, the cell order starts at your own group and wraps, so two dispellers no longer reach for the same cell first. The priority list still comes before it.
 
 ## 1.5.31 changes
 
