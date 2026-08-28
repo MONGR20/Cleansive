@@ -179,7 +179,7 @@ end
 
 function NS:UpdateSpells()
     if InCombatLockdown and InCombatLockdown() then
-        self.pendingSpells = true
+        self:MarkPending("pendingSpells")
         return
     end
 
@@ -254,6 +254,10 @@ function NS:UpdateSpells()
     if self.RequestAuraSoundRefresh then
         self:RequestAuraSoundRefresh("spells updated")
     end
+    -- The state this announces is decided right here: it has to be re-read
+    -- when the spellbook answers, not only when an affliction refresh happens
+    -- -- and for a character with no cleanse, no affliction refresh ever does.
+    if self.UpdateNoCureNotice then self:UpdateNoCureNotice() end
 end
 
 function NS:IsSpellInRange(def, unit)

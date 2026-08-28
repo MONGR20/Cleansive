@@ -196,11 +196,11 @@ end
 function NS:ResetPositions()
     self.db.positions.grid = { point = "CENTER", relativePoint = "CENTER", x = -180, y = -120 }
     if InCombatLockdown and InCombatLockdown() then
-        self.pendingPositionReset = true
+        self:MarkPending("pendingPositionReset")
         -- The wrap depends on where the anchor sits, so replaying the position
         -- after combat is not enough: without this the grid keeps the wrap it
         -- computed for the old corner and can end up off screen once centred.
-        self.pendingLayout = true
+        self:MarkPending("pendingLayout")
         self:Print(self.L.COMBAT_LOCKED)
         return
     end
@@ -270,7 +270,7 @@ function NS:UpdateGridVisibilityDriver()
     if not self.gridAnchor then return end
     if self.UpdateCooldownOverlayVisibility then self:UpdateCooldownOverlayVisibility() end
     if InCombatLockdown and InCombatLockdown() then
-        self.pendingVisibilityDriver = true
+        self:MarkPending("pendingVisibilityDriver")
         return
     end
     local body = self.gridBody or self.gridAnchor

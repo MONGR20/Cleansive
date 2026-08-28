@@ -6,6 +6,16 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.5.28
+
+- A protected change asked for during combat says so. Blizzard locks layout, roster, bindings and profile work while you fight; Cleansive deferred them correctly and silently, so the option moved and the screen did not. A plate now appears beside the grid for as long as something is waiting, and it goes out when the change lands. It lives on the unprotected layer, which is the only reason it can appear during the fight it is describing.
+- A character with no cleansing spell gets an explanation instead of a grid of grey cells that can never light up. The notice only appears once the client has actually answered about the spellbook -- before that an empty book is ignorance, not a fact about the character.
+- Every combat deferral now goes through `MarkPending`, and a static check refuses a flag set by hand: a deferral the plate does not know about is exactly the silent state it exists to remove. `pendingSoundRefresh` is the one exception, and it is documented as such -- see below.
+- `ApplyPriorityDispelBinding` clears its pending flag when there is no binding owner. The flag was set and never cleared for the session; harmless while nothing read it, but the plate would have stayed lit with nothing able to put it out.
+- Tests: 492 to 512, and a sixth static check.
+
+Known, not fixed: `pendingSoundRefresh` is set when a sound registration fails in combat and is never read again -- nothing replays it when the fight ends. It is left alone rather than announced, because a plate nothing can extinguish is worse than no plate.
+
 ## 1.5.27
 
 - The engine diagnostic names the type that actually failed. Retired types are reconciled before the wanted ones and both shared a single first-error slot, so a pass that failed on a retired Magic slot *and* on an active Poison slot reported the cell's real fallback with the name of a cleanup operation. Active and cleanup failures are now recorded apart, and each message reads its own.

@@ -177,6 +177,28 @@ local function createBorder(frame)
     frame.border[4]:SetWidth(1)
 end
 
+-- Both status notices are plates, not cells: a filled block of colour is what
+-- an afflicted unit looks like, and neither of these is a unit. They also live
+-- on the unprotected cooldownBody, which is the whole point of the first one --
+-- it has to be able to appear while the player is in combat.
+local function createStatusPlate(name, parent)
+    local frame = CreateFrame("Frame", name, parent)
+    frame:SetSize(24, 16)
+    frame:EnableMouse(true)
+    frame:SetMouseClickEnabled(false)
+    frame:SetMouseMotionEnabled(true)
+    frame.background = frame:CreateTexture(nil, "BACKGROUND")
+    frame.background:SetAllPoints()
+    frame.background:SetColorTexture(0.02, 0.03, 0.04, 0.88)
+    createBorder(frame)
+    frame.label = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    frame.label:SetPoint("CENTER")
+    frame:SetScript("OnLeave", GameTooltip_Hide)
+    frame:Hide()
+    return frame
+end
+
+
 local function setBorderColor(frame, r, g, b, a)
     for _, texture in ipairs(frame.border) do
         texture:SetColorTexture(r, g, b, a or 1)
@@ -190,7 +212,7 @@ function NS:UpdateGridAnchorAppearance()
     -- EnableMouse is protected on this secure anchor. Apply it immediately
     -- out of combat and defer only that protected operation when necessary.
     if InCombatLockdown and InCombatLockdown() then
-        self.pendingAnchorAppearance = true
+        self:MarkPending("pendingAnchorAppearance")
     else
         anchor:EnableMouse(shown)
         self.pendingAnchorAppearance = false
@@ -318,6 +340,32 @@ function NS:CreateGrid()
     -- second ran, the indicator sat on the first cell in the upward layouts.
     self:LayoutManualIndicator()
 
+    -- A protected change asked for during combat used to be silent: the option
+    -- moved, nothing happened, and nothing said why. The plate is written from
+    -- the unprotected layer, so it can appear at the moment the deferral is
+    -- decided rather than after the fight.
+    self.pendingIndicator = createStatusPlate("CleansivePendingIndicator", cooldownBody)
+    self.pendingIndicator:SetScript("OnEnter", function(frame)
+        if not self.db.showTooltips then return end
+        GameTooltip:SetOwner(frame, "ANCHOR_RIGHT")
+        GameTooltip:AddLine(self.L.PENDING_TITLE, 1, 0.82, 0.30)
+        GameTooltip:AddLine(self.L.PENDING_HINT, 1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+
+    -- A character with no cleanse saw a grid of grey cells that could never do
+    -- anything, and no explanation anywhere on screen. This says which of the
+    -- two it is: the addon is fine, this specialization simply has nothing to
+    -- dispel with.
+    self.noCureNotice = createStatusPlate("CleansiveNoCureNotice", cooldownBody)
+    self.noCureNotice:SetScript("OnEnter", function(frame)
+        if not self.db.showTooltips then return end
+        GameTooltip:SetOwner(frame, "ANCHOR_RIGHT")
+        GameTooltip:AddLine(self.L.NO_CURE_TITLE, 1, 0.82, 0.30)
+        GameTooltip:AddLine(self.L.NO_CURE_HINT, 1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+
     self.buttons = {}
     self.engineAuraTypes = getPotentialAuraTypes()
     self.auraContainerDiagnostics = {
@@ -367,7 +415,7 @@ end
 function NS:ConfigurePriorityDispelButton()
     if not self.priorityDispelButton then return end
     if InCombatLockdown and InCombatLockdown() then
-        self.pendingPriorityBinding = true
+        self:MarkPending("pendingPriorityBinding")
         return
     end
     local macro = self:BuildPriorityDispelMacro()
@@ -376,9 +424,15 @@ function NS:ConfigurePriorityDispelButton()
 end
 
 function NS:ApplyPriorityDispelBinding(skipConfigure)
-    if not self.priorityBindingOwner then return end
+    -- Sans proprietaire de binding il n'y a rien a rejouer, et le report reste
+    -- pose pour la session : inoffensif tant que rien ne le lisait, mais la
+    -- plaque « en attente » resterait allumee sans que rien puisse l'eteindre.
+    if not self.priorityBindingOwner then
+        self.pendingPriorityBinding = false
+        return
+    end
     if InCombatLockdown and InCombatLockdown() then
-        self.pendingPriorityBinding = true
+        self:MarkPending("pendingPriorityBinding")
         return
     end
     if not skipConfigure then self:ConfigurePriorityDispelButton() end
@@ -615,7 +669,7 @@ function NS:StyleAuraVisual(button, auraType, visual)
         end
         if visual.labelLayer then visual.labelLayer:SetFrameLevel(level + 3) end
     end)
-    if not ok then self.pendingAuraStyle = true end
+    if not ok then self:MarkPending("pendingAuraStyle") end
 end
 
 function NS:UpdateButtonAfflictionAlert(button, aura, slot, silent)
@@ -871,7 +925,7 @@ function NS:ConfigureButtonAuraContainer(button, restyle)
                 and self:BuildAuraCandidateFilters(auraType)
                 or { includeDispelTypes = {} }
             local ok = pcall(container.SetAuraSlotCandidateFilters, container, slotKey, filters)
-            if not ok then self.pendingAuraFilters = true end
+            if not ok then self:MarkPending("pendingAuraFilters") end
         end
     end
 
@@ -913,7 +967,7 @@ end
 function NS:ApplySecureBindings()
     if not self.buttons then return end
     if InCombatLockdown and InCombatLockdown() then
-        self.pendingSpells = true
+        self:MarkPending("pendingSpells")
         return
     end
     local one = self.clickSpells and self.clickSpells[1]
@@ -951,7 +1005,7 @@ end
 function NS:AssignRosterToButtons()
     if not self.buttons then return end
     if InCombatLockdown and InCombatLockdown() then
-        self.pendingRoster = true
+        self:MarkPending("pendingRoster")
         return
     end
     wipe(self.unitToButton)
@@ -1101,7 +1155,7 @@ end
 function NS:LayoutButtons()
     if not self.buttons then return end
     if InCombatLockdown and InCombatLockdown() then
-        self.pendingLayout = true
+        self:MarkPending("pendingLayout")
         return
     end
     local size, spacing, columns = self.db.frameSize, self.db.spacing, self.db.columns
@@ -1200,6 +1254,7 @@ function NS:LayoutButtons()
     self:NudgeGridOnScreen((across - 1) * step + size, (down - 1) * step + size + 3,
         growRightEarly, growDownEarly, behind)
     self:LayoutManualIndicator()
+    self:LayoutStatusNotices()
     self.cooldownBody:SetSize(size, math.max(12, math.floor(size * 0.55)))
     self.pendingLayout = false
     self:UpdateAuraContainerConfiguration(true)
@@ -1761,6 +1816,8 @@ function NS:RefreshAll(force)
         end
     end
     self:UpdateManualIndicator()
+    self:UpdatePendingIndicator()
+    self:UpdateNoCureNotice()
 end
 
 function NS:ShowButtonTooltip(button)
@@ -1828,7 +1885,7 @@ end
 function NS:ApplyVehicleDriver(frame, unit)
     if not frame then return end
     if InCombatLockdown and InCombatLockdown() then
-        self.pendingRoster = true
+        self:MarkPending("pendingRoster")
         return
     end
     self.vehicleOwner = self.vehicleOwner or {}
@@ -2086,6 +2143,88 @@ function NS:LayoutManualIndicator()
     frame:SetPoint(corner, self.cooldownBody, anchor, 0, up and -4 or 4)
 end
 
+-- The two notices share the manual badge's corner. They can never both be
+-- needed at once -- a character with no cleanse has no area-only type either --
+-- but the pending plate can, so it steps aside by the badge's width.
+function NS:LayoutStatusNotices()
+    if not self.cooldownBody then return end
+    local size = self.db.frameSize
+    local grow = self.db.grow or "RIGHT_DOWN"
+    local up = grow == "RIGHT_UP" or grow == "LEFT_UP"
+    local left = grow == "RIGHT_DOWN" or grow == "RIGHT_UP"
+    local corner = (up and "TOP" or "BOTTOM") .. (left and "LEFT" or "RIGHT")
+    local anchorPoint = (up and "BOTTOM" or "TOP") .. (left and "LEFT" or "RIGHT")
+    local font = self.GetUXFont and self:GetUXFont()
+    local labelSize = self:CellFontSize("stack", size)
+    local height = math.max(16, math.floor(size * 0.7))
+    local manualShown = self.manualIndicator and self.manualIndicator:IsShown()
+
+    for _, entry in ipairs({
+        { frame = self.pendingIndicator, text = self.L.PENDING_BADGE, shift = manualShown },
+        { frame = self.noCureNotice, text = self.L.NO_CURE_BADGE, shift = false },
+    }) do
+        local frame = entry.frame
+        if frame then
+            if font then frame.label:SetFont(font, labelSize, "") end
+            frame.label:SetText(entry.text)
+            frame:SetSize(math.max(24, math.ceil(frame.label:GetStringWidth()) + 10), height)
+            frame:ClearAllPoints()
+            local offset = entry.shift and (size + 4) or 0
+            frame:SetPoint(corner, self.cooldownBody, anchorPoint,
+                left and offset or -offset, up and -4 or 4)
+        end
+    end
+end
+
+-- Every deferral goes through here so the plate can never disagree with the
+-- flags: setting one directly was how the previous silent state happened.
+function NS:MarkPending(flag)
+    self[flag] = true
+    self:UpdatePendingIndicator()
+end
+
+local PENDING_FLAGS = {
+    "pendingLayout", "pendingProfileSwitch", "pendingPositionReset",
+    "pendingVisibilityDriver", "pendingAnchorAppearance", "pendingAuraStyle",
+    "pendingAuraFilters", "pendingSpells", "pendingRoster",
+    "pendingAuraEngineRebuild", "pendingPriorityBinding",
+}
+
+function NS:UpdatePendingIndicator()
+    local frame = self.pendingIndicator
+    if not frame then return end
+    local waiting = false
+    for _, flag in ipairs(PENDING_FLAGS) do
+        if self[flag] then waiting = true break end
+    end
+    -- Out of combat a pending flag is about to be flushed, not waiting on
+    -- anything the player can see. Showing it there would be a plate that
+    -- blinks for one frame on every option change.
+    local inCombat = InCombatLockdown and InCombatLockdown()
+    if not (waiting and inCombat and self.enabled and not self.gridManuallyHidden) then
+        frame:Hide()
+        return
+    end
+    self:LayoutStatusNotices()
+    frame:Show()
+end
+
+function NS:UpdateNoCureNotice()
+    local frame = self.noCureNotice
+    if not frame then return end
+    -- Only once the client has actually answered. Before that an empty
+    -- spellbook is ignorance, not a fact about the character.
+    local resolved = self.spellbookResolved
+    local none = resolved and #(self.clickSpells or {}) == 0
+        and #(self.engineAuraTypes or {}) == 0
+    if not (none and self.enabled and not self.gridManuallyHidden) then
+        frame:Hide()
+        return
+    end
+    self:LayoutStatusNotices()
+    frame:Show()
+end
+
 -- engineAuraTypes is decided once, when the grid is built. A specialization
 -- or talent change can alter it, and reconfiguring existing slots cannot add
 -- a type that was never created. Rebuild rather than leave a stale set.
@@ -2178,7 +2317,7 @@ function NS:ScheduleAuraEngineRetry()
         if not self.pendingAuraEngineReconcile then return end
         if InCombatLockdown and InCombatLockdown() then
             -- PLAYER_REGEN_ENABLED already replays this flag.
-            self.pendingAuraEngineRebuild = true
+            self:MarkPending("pendingAuraEngineRebuild")
             return
         end
         self:RefreshAuraEngineTypes()
@@ -2201,7 +2340,7 @@ function NS:RefreshAuraEngineTypes()
     if same and not self.pendingAuraEngineReconcile then return false end
 
     if InCombatLockdown and InCombatLockdown() then
-        self.pendingAuraEngineRebuild = true
+        self:MarkPending("pendingAuraEngineRebuild")
         return false
     end
     self.pendingAuraEngineRebuild = false

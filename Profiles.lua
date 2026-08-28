@@ -383,7 +383,7 @@ end
 
 function NS:QueueProfileSwitch()
     if InCombatLockdown and InCombatLockdown() then
-        self.pendingProfileSwitch = true
+        self:MarkPending("pendingProfileSwitch")
         return false
     end
     if not self:LoadCurrentProfile(true) then

@@ -153,7 +153,7 @@ end
 function NS:RebuildRoster()
     if not self.db then return end
     if InCombatLockdown and InCombatLockdown() then
-        self.pendingRoster = true
+        self:MarkPending("pendingRoster")
         return
     end
     self.roster = self:BuildRoster()
