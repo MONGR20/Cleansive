@@ -670,6 +670,8 @@ function NS:HandleSlash(message)
                 tostring(status.spellID or "-"), tostring(status.source or "-"),
                 tostring(status.active), tostring(status.applied), suffix)
         end
+    elseif command == "diag" then
+        if rest == "reset" then NS:ResetDiagnostics() else NS:PrintDiagnostics() end
     elseif command == "help" then
         self:Print(self.L.HELP)
     elseif command == "ignore" then
@@ -705,6 +707,7 @@ events:SetScript("OnEvent", function(_, event, ...)
             "UNIT_CONNECTION", "UNIT_ENTERED_VEHICLE", "UNIT_EXITED_VEHICLE", "PLAYER_FOCUS_CHANGED", "SPELLS_CHANGED", "SPELL_UPDATE_COOLDOWN", "SPELL_UPDATE_CHARGES",
             "PLAYER_SPECIALIZATION_CHANGED", "TRAIT_CONFIG_UPDATED", "PLAYER_REGEN_DISABLED",
             "PLAYER_REGEN_ENABLED", "UI_ERROR_MESSAGE",
+            "COMBAT_LOG_EVENT_UNFILTERED", "PLAYER_LOGOUT",
         }) do
             events:RegisterEvent(name)
         end
@@ -712,6 +715,7 @@ events:SetScript("OnEvent", function(_, event, ...)
     end
 
     NS.pendingNoticeSuppressed = GAME_DRIVEN_EVENTS[event] or nil
+    NS.currentEvent = event
 
     if event == "UNIT_AURA" or event == "UNIT_FLAGS" or event == "UNIT_FACTION" or event == "UNIT_CONNECTION" then
         local unit = ...
@@ -751,9 +755,17 @@ events:SetScript("OnEvent", function(_, event, ...)
         NS:OnCombatEnded()
     elseif event == "UI_ERROR_MESSAGE" then
         NS:OnUIError(...)
+    elseif event == "COMBAT_LOG_EVENT_UNFILTERED" then
+        -- The combat log carries spell IDs for auras C_UnitAuras refuses to
+        -- read. Only SPELL_DISPEL is looked at, so the busiest event in the
+        -- game costs one string comparison here.
+        NS:OnCombatLogEvent()
+    elseif event == "PLAYER_LOGOUT" then
+        NS:SnapshotDiagnostics()
     end
 
     NS.pendingNoticeSuppressed = nil
+    NS.currentEvent = nil
 end)
 
 local function isDecursiveEnabled()

@@ -1,4 +1,4 @@
-# Cleansive 1.5.35
+# Cleansive 1.5.36
 
 Cleansive is a standalone one-click cleansing addon for **World of Warcraft Retail 12.1** (`120100`). It provides a compact Decursive-style workflow with a dark, class-colored interface inspired by the clarity of Ellesmere UI. The interface follows the language of your WoW client, English or French; either can be picked from the General page at any time.
 
@@ -64,6 +64,7 @@ Red, blue, and orange identify the click to use. The optional L/R/C corner lette
 - `/cleansive skadd`: add the current player target to the skip list.
 - `/cleansive soundtest`: play the configured alert.
 - `/cleansive soundstatus`: show native sound-registration and performance diagnostics.
+- `/cleansive diag`: report this session's diagnostics; `diag reset` clears them.
 - `/cleansive cdstatus`: show the last inspected cleansing-spell cooldown and display result.
 - `/cleansive history`: open the clickable affliction history.
 - `/cleansive setup`: reopen the setup assistant.
@@ -97,6 +98,10 @@ remain active so a protected AuraSlot can pass cleansing clicks through during
 combat. Avoid clicking empty grid positions while this mode is enabled.
 
 The hover-cleanse key also respects these restrictions: it casts through a secure action button on your mouseover, target, or player. It never asks Lua to select an afflicted unit during combat, because the secure engine evaluates targeting conditions only and cannot read auras.
+
+## 1.5.36 changes
+
+- `/cleansive diag` reports the session's deferrals and their causes, the protected engine's failures, and any dispelled affliction the seasonal sound list does not know.
 
 ## 1.5.35 changes
 

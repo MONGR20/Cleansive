@@ -6,6 +6,16 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.5.36
+
+- `/cleansive diag` reports what a session leaves behind, and the same record is kept in SavedVariables. Three things earned their place, each because its absence cost an evening.
+- **Deferrals now name what caused them.** Explaining why the pending plate appeared during dungeon pulls meant auditing eleven flags by hand against every event that can raise one. A flag now records its count and the event being dispatched when it went up, or `player` when no event was.
+- **Afflictions the seasonal sound list has never heard of are collected.** The combat log carries spell IDs for auras `C_UnitAuras` refuses to read; finding one missing meant reading 82 MB of log with grep. Only `SPELL_DISPEL` is inspected, so the busiest event in the game costs one string comparison. Enemy buffs removed by a purge are excluded on `auraType`: in a combat log a purge looks exactly like a dispel, and two of them nearly entered the sound list by hand.
+- **The engine's own failure table is kept instead of being discarded at logout.** It existed all along and died with the session.
+- The dispel type is still not in there. A combat log never carries it -- only the school, which does not separate Magic from Poison or Disease. The recorder narrows the work to one tooltip per affliction; it cannot remove it.
+- A new static check refuses a Lua file that the addon loads and no test ever executes, with an explicit list of the two deliberate exclusions. `spec.lua` keeps its own hand-written file list, and it drifts: that is how `EllesmereUX.lua` stayed out of the suite for years, and `Diagnostics.lua` was forgotten in it the same day it was written.
+- Tests: 635 to 647. Static checks: 7 to 8.
+
 ## 1.5.35
 
 - A font the client refuses can no longer take the whole grid down with it. `ApplyCellFonts` sets a font on the labels the protected engine owns, and in 12.1 the client can declare those forbidden to addon code: `SetFont` then raises. The error aborted `LayoutButtons`, whose *last* line is `pendingLayout = false` -- so the flag stayed raised for the rest of the session, the layout never completed again, and the pending plate lit up on every subsequent fight. Both symptoms, one cause.

@@ -2335,6 +2335,9 @@ function NS:MarkPending(flag, silent)
     if not self[flag] then announced[flag] = false end
     if not (silent or self.pendingNoticeSuppressed) then announced[flag] = true end
     self[flag] = true
+    -- Diagnosing the plate meant auditing eleven flags against every event that
+    -- can raise one. Recording the cause here makes that a one-line answer.
+    if self.NotePendingFlag then self:NotePendingFlag(flag, self.currentEvent) end
     self:UpdatePendingIndicator()
 end
 
