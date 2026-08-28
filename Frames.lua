@@ -2310,7 +2310,20 @@ end
 
 -- Every deferral goes through here so the plate can never disagree with the
 -- flags: setting one directly was how the previous silent state happened.
-function NS:MarkPending(flag)
+-- Not every deferral is worth announcing. SPELLS_CHANGED fires on a shapeshift
+-- or a temporary ability, UNIT_PET and GROUP_ROSTER_UPDATE fire on their own:
+-- those are the game talking to itself, and the player can neither act on them
+-- nor understand them. Announcing them lit the plate on nearly every pull and
+-- turned it into weather. The work is still deferred and still replayed; only
+-- the announcement is withheld. The plate exists for a change the player asked
+-- for and cannot see land.
+function NS:MarkPending(flag, silent)
+    local announced = self.pendingAnnounced or {}
+    self.pendingAnnounced = announced
+    -- A fresh flag starts unannounced; one already raised keeps its status, so
+    -- a background event cannot silence a change the player is waiting on.
+    if not self[flag] then announced[flag] = false end
+    if not (silent or self.pendingNoticeSuppressed) then announced[flag] = true end
     self[flag] = true
     self:UpdatePendingIndicator()
 end
@@ -2326,8 +2339,9 @@ function NS:UpdatePendingIndicator()
     local frame = self.pendingIndicator
     if not frame then return end
     local waiting = false
+    local announced = self.pendingAnnounced or {}
     for _, flag in ipairs(PENDING_FLAGS) do
-        if self[flag] then waiting = true break end
+        if self[flag] and announced[flag] then waiting = true break end
     end
     -- Out of combat a pending flag is about to be flushed, not waiting on
     -- anything the player can see. Showing it there would be a plate that

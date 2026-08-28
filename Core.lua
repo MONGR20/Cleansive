@@ -680,6 +680,17 @@ function NS:HandleSlash(message)
     end
 end
 
+-- Events the game raises on its own. A deferral caused by one of these is
+-- bookkeeping, not a change the player is waiting for. PLAYER_FOCUS_CHANGED is
+-- deliberately absent: setting a focus is a deliberate act, and its cell really
+-- does wait for the end of the fight.
+local GAME_DRIVEN_EVENTS = {
+    PLAYER_ENTERING_WORLD = true, GROUP_ROSTER_UPDATE = true, UNIT_PET = true,
+    SPELLS_CHANGED = true, TRAIT_CONFIG_UPDATED = true,
+    UNIT_ENTERED_VEHICLE = true, UNIT_EXITED_VEHICLE = true,
+    UNIT_AURA = true, UNIT_FLAGS = true, UNIT_FACTION = true, UNIT_CONNECTION = true,
+}
+
 local events = CreateFrame("Frame")
 NS.eventFrame = events
 events:RegisterEvent("ADDON_LOADED")
@@ -699,6 +710,8 @@ events:SetScript("OnEvent", function(_, event, ...)
         end
         return
     end
+
+    NS.pendingNoticeSuppressed = GAME_DRIVEN_EVENTS[event] or nil
 
     if event == "UNIT_AURA" or event == "UNIT_FLAGS" or event == "UNIT_FACTION" or event == "UNIT_CONNECTION" then
         local unit = ...
@@ -739,6 +752,8 @@ events:SetScript("OnEvent", function(_, event, ...)
     elseif event == "UI_ERROR_MESSAGE" then
         NS:OnUIError(...)
     end
+
+    NS.pendingNoticeSuppressed = nil
 end)
 
 local function isDecursiveEnabled()

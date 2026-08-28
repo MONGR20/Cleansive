@@ -6,6 +6,19 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.5.34
+
+- The pending plate only speaks about changes you made. It watched every deferred write, including the ones the game raises on its own: `SPELLS_CHANGED` fires on a shapeshift, a mount or an item, `UNIT_PET` and `GROUP_ROSTER_UPDATE` fire unprompted. In a dungeon that lit the plate on nearly every pull, saying "something is waiting" about bookkeeping the player can neither act on nor understand. Reported from a real session, where it appeared with nothing having been changed.
+- The work is still deferred and still replayed at the end of combat; only the announcement is withheld. A background event cannot silence a change you are actually waiting on, and the announcement does not stick to a flag from one fight to the next.
+- Setting a focus stays announced: it is a deliberate act, and its cell really does wait for the end of the fight.
+- Tests: 617 to 626, driven through the real event dispatcher rather than by setting flags by hand -- the wiring between an event and its deferral was what needed proving.
+
+## 1.5.33
+
+- `Fonte d'armure` (1250043) joins the seasonal sound list as a Magic affliction, confirmed in game. It was dispelled seven times in a recorded session and was absent from the list, so no alert ever fired for it. A combat log never carries the dispel type -- only the school, Fire here, which does not separate Magic from Poison or Disease. Any aura found this way needs the same on-screen check before it can be typed.
+- `Afflux sanguin` (1254826) is deliberately *not* added, although it appears among the dispels of the same log: it is an enemy buff removed by Tranquilizing Shot, not an affliction on an ally. A test now holds that distinction, because the log makes the two look alike.
+- This is the first entry in that list to come from a recorded session rather than from a reference. The list was 5 out of 7 correct for that dungeon, which is the first measurement of its staleness anyone has had.
+
 ## 1.5.32
 
 - The grid no longer starts at raid group 1 for everyone. It starts at your own group and wraps: from group 3 the order is 3, 4, 1, 2. When every dispeller sees the same order, they all reach for the same cell first and most of them arrive to find the work already done. Starting somewhere different for each player spreads it with nothing to agree on beforehand. The priority list is still read first and still wins.

@@ -12,6 +12,14 @@ NS.KNOWN_DISPELLABLE_AURAS_SEASON = "2"
 
 NS.KNOWN_DISPELLABLE_AURAS = {
     Magic = {
+        -- 1250043 « Fonte d'armure » : releve dans un journal de combat du
+        -- 28/08/2026, dissipe sept fois et absent de cette liste, donc jamais
+        -- annonce. Type confirme en jeu par Rodolphe : dissipation magique.
+        -- Le journal de combat ne donne jamais le type, seulement l'ecole --
+        -- ici le Feu -- ce qui ne suffit pas a trancher entre Magie, Poison et
+        -- Maladie. Toute aura relevee de cette facon demande la meme
+        -- verification a l'ecran.
+        1250043,
         1294569, 1217633, 1228198, 1201554, 1235549, 1239860, 1259365,
         1238084, 1249238, 276031, 1294815, 270920, 270499, 372682,
         373589, 1305234, 381515, 392641, 392924, 1296052,
