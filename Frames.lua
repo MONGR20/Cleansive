@@ -2115,6 +2115,11 @@ function NS:ReconcileAuraSlots(button, wanted, wantedSet)
             if not tryCall(container.SetAuraSlotCandidateFilters, container, slotKey,
                 { includeDispelTypes = {} }) then
                 recordFailure("SetAuraSlotCandidateFilters failed for " .. tostring(auraType))
+                if diagnostics then
+                    diagnostics.retired = (diagnostics.retired or 0) + 1
+                    diagnostics.retiredError = diagnostics.retiredError
+                        or ("SetAuraSlotCandidateFilters failed for " .. tostring(auraType))
+                end
                 retiredOK = false
             end
         end
@@ -2152,8 +2157,15 @@ function NS:ScheduleAuraEngineRetry()
     if not (C_Timer and C_Timer.After) then return end
     if self.auraEngineRetryScheduled then return end
     local generation = self.auraEngineGeneration or 0
+    -- C_Timer.After cannot be cancelled, so a superseded callback stays in the
+    -- queue. The token says which timer owns the guard: without it the stale
+    -- one released a slot the newer timer was already holding, and a third
+    -- could then be armed for the same generation.
+    local token = (self.auraEngineRetryToken or 0) + 1
+    self.auraEngineRetryToken = token
     self.auraEngineRetryScheduled = true
     C_Timer.After(0.5 * (self.auraEngineRetries or 1), function()
+        if token ~= self.auraEngineRetryToken then return end
         self.auraEngineRetryScheduled = false
         if generation ~= (self.auraEngineGeneration or 0) then return end
         if not self.pendingAuraEngineReconcile then return end
@@ -2204,6 +2216,7 @@ function NS:RefreshAuraEngineTypes()
     local fullyConfigured = true
     self.auraContainerDiagnostics = {
         expected = MAX_BUTTONS * #wanted, added = 0, readyButtons = 0, firstError = nil,
+        retired = 0, retiredError = nil,
     }
     for _, button in ipairs(self.buttons) do
         -- Reuse whatever is already there. Hiding a container does not destroy
@@ -2232,17 +2245,30 @@ function NS:RefreshAuraEngineTypes()
     for _, button in ipairs(self.buttons) do
         if button.auraContainer then withContainer = withContainer + 1 end
     end
+    -- Losing every dispel type is a real transition, not a reason to stop
+    -- retrying: the historical slots still have to be neutralized, and gating
+    -- this on a non-empty set left them filtering auras forever. An empty set
+    -- reports every cell ready, so this can only fire on a cleanup failure.
     local incomplete = withContainer > 0 and (ready < withContainer or not fullyConfigured)
-    if #wanted > 0 and incomplete then
+    if incomplete then
         self.auraEngineRetries = (self.auraEngineRetries or 0) + 1
         self.pendingAuraEngineReconcile = self.auraEngineRetries <= 3
         -- One message per generation, not one per attempt: four identical lines
         -- in the chat frame is noise, and the changelog promised one.
         if self.auraContainerDiagnostics.firstError and not self.auraEngineWarned then
             self.auraEngineWarned = true
-            self:Print(self.L.AURA_ENGINE_FAILED, self.auraContainerDiagnostics.added,
-                self.auraContainerDiagnostics.expected,
-                self.auraContainerDiagnostics.firstError)
+            if ready < withContainer then
+                self:Print(self.L.AURA_ENGINE_FAILED, self.auraContainerDiagnostics.added,
+                    self.auraContainerDiagnostics.expected,
+                    self.auraContainerDiagnostics.firstError)
+            else
+                -- Every wanted type is live on every cell; only the retired
+                -- ones resisted. Announcing "incomplete (82/82 slots)" and a
+                -- fallback nobody fell back to was a contradiction.
+                self:Print(self.L.AURA_CLEANUP_FAILED, self.auraContainerDiagnostics.retired,
+                    self.auraContainerDiagnostics.retiredError
+                        or self.auraContainerDiagnostics.firstError)
+            end
         end
         if self.pendingAuraEngineReconcile then self:ScheduleAuraEngineRetry() end
     else

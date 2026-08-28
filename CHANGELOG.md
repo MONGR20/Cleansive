@@ -5,6 +5,13 @@ Depuis la 1.4.5, les principales branches logiques corrigées sont couvertes
 par des tests de non-régression dans `j/tests` (`npm test`). Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.5.26
+
+- A superseded retry timer no longer releases the guard a newer one holds. `C_Timer.After` cannot be cancelled, so the stale callback stayed queued and cleared the single-timer flag before checking its generation; a further event could then arm a second timer for the current set. Each schedule now carries a token, and a callback that does not own it returns without touching anything.
+- Losing every dispel type no longer strands the retired slots. The retry was gated on a non-empty wanted set, so a character who ends up with no dispel spell -- and whose historical slot failed to be neutralised -- kept it filtering auras with no retry and no warning. An empty set reports every cell ready, so this branch can only fire on a real cleanup failure.
+- The diagnostic no longer contradicts itself. When every wanted type was live and only a retired one resisted, the message announced an incomplete engine with `82/82 slots` and a fallback nothing had fallen back to. Cleanup failures now have their own line, counting the retired slots still filtering; the original message is kept for cells that genuinely lost the engine.
+- Tests: 470 to 487. The mock ran its timers in one batch, which could not express a stale callback firing after a newer one was armed; it can now run a single timer by index.
+
 ## 1.5.25
 
 - Retries are scheduled, not merely allowed. 1.5.24 set a flag and waited for some other spell event to call the reconciliation again, so a single transient failure could leave cells on the Lua fallback for the rest of the session. A bounded timer now drives them, guarded by a generation so a change of type set cancels the pending one, and deferring to `PLAYER_REGEN_ENABLED` if it fires during combat.
