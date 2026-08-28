@@ -13,6 +13,11 @@ local CLICK_COLORS = {
     [3] = { 1.00, 0.46, 0.02 },
 }
 
+-- Deliberately not one of the three click colours: a warning that reads as
+-- "this is the right-click one" would be worse than no warning. The ring is
+-- doubled by a "!" so the cue survives colour blindness, like the L/R/C hints.
+local DANGER_COLOR = { 1.00, 0.86, 0.12 }
+
 local function clickHint(slot)
     if slot == 1 then return NS.L.CLICK_SHORT_LEFT end
     if slot == 2 then return NS.L.CLICK_SHORT_RIGHT end
@@ -144,6 +149,9 @@ function NS:ApplyCellFonts(button)
     local cooldown = button.cooldown
     if cooldown and cooldown.GetCountdownFontString then
         setFont(cooldown:GetCountdownFontString(), "countdown", "OUTLINE")
+    end
+    for _, visual in ipairs(button.dangerVisuals or {}) do
+        self:StyleDangerVisual(button, visual)
     end
     -- The protected engine draws its own copy of every label.
     for _, visuals in pairs(button.auraSlotVisuals or {}) do
@@ -855,6 +863,113 @@ function NS:AddAuraSlotForType(button, auraType)
     return addedForButton > 0
 end
 
+local DANGER_SLOT_KEY = "cleansive_danger"
+
+-- Which dangerous auras are worth flagging on this character: only those whose
+-- type the engine actually paints, and only those the player has not chosen to
+-- ignore. A ring drawn on an otherwise resting cell would point at nothing.
+-- An empty includeSpellIDs matches no aura, which is how the slot is
+-- neutralised -- UnregisterAuraSlot is private, so slots are never removed.
+function NS:BuildDangerCandidateFilters()
+    local included = {}
+    local active = self.engineAuraTypeSet
+    for spellID, auraType in pairs(self.DANGEROUS_DISPEL_AURAS or {}) do
+        if (not active or active[auraType]) and self.db.enabledTypes[auraType] ~= false then
+            included[spellID] = true
+        end
+    end
+    for id, enabled in pairs(self.db.ignoredAlways or {}) do
+        if enabled then included[tonumber(id) or id] = nil end
+    end
+    if InCombatLockdown and InCombatLockdown() then
+        for id, enabled in pairs(self.db.ignoredCombat or {}) do
+            if enabled then included[tonumber(id) or id] = nil end
+        end
+    end
+    return { includeSpellIDs = included }
+end
+
+function NS:StyleDangerVisual(button, visual)
+    if not visual then return false end
+    local size = tonumber(self.db and self.db.frameSize) or 22
+    local thickness = math.max(1, math.floor(size / 13 + 0.5))
+    local fontSize = self:CellFontSize("hint", size)
+    -- Below this a "!" lands on top of the click letter and neither can be
+    -- read. The ring carries the warning alone on the smallest cells.
+    local roomy = size >= NAME_MIN_CELL
+    return (pcall(function()
+        for index = 1, 4 do
+            local texture = visual.ring[index]
+            texture:SetColorTexture(DANGER_COLOR[1], DANGER_COLOR[2], DANGER_COLOR[3], 0.95)
+            if index <= 2 then texture:SetHeight(thickness) else texture:SetWidth(thickness) end
+        end
+        if self.GetUXFont then visual.mark:SetFont(self:GetUXFont(), fontSize, "OUTLINE") end
+        visual.mark:SetTextColor(DANGER_COLOR[1], DANGER_COLOR[2], DANGER_COLOR[3], 1)
+        visual.mark:SetShadowColor(0, 0, 0, 1)
+        visual.mark:SetShadowOffset(1, -1)
+        visual.mark:SetAlpha(roomy and 1 or 0)
+        visual.markPlate:SetSize(math.max(2, fontSize - 2), fontSize + 2)
+        visual.markPlate:SetColorTexture(0.015, 0.025, 0.030, roomy and 0.78 or 0)
+    end))
+end
+
+-- One extra protected slot per cell, filtered on spell IDs instead of a dispel
+-- type. It draws on top of whatever the type slot painted and stays inert:
+-- hover still belongs to the type slot below, clicks still reach the secure
+-- button. The point is only that a backlash aura cannot be dispelled by reflex.
+function NS:AddDangerSlot(button)
+    local container = button.auraContainer
+    if not container or not container.AddAuraSlot then return false end
+    button.dangerVisuals = button.dangerVisuals or {}
+    local added = pcall(container.AddAuraSlot, container, DANGER_SLOT_KEY, AURA_FILTER, {
+        candidateFilters = self:BuildDangerCandidateFilters(),
+        initializeFrame = function(auraButton)
+            auraButton:ClearAllPoints()
+            auraButton:SetAllPoints(button)
+            auraButton:SetFrameLevel(button:GetFrameLevel() + 190)
+            tryCall(auraButton.SetMouseClickEnabled, auraButton, false)
+            tryCall(auraButton.SetMouseMotionEnabled, auraButton, false)
+            tryCall(auraButton.SetPassThroughButtons, auraButton,
+                "LeftButton", "RightButton", "MiddleButton", "Button4", "Button5")
+
+            local layer = CreateFrame("Frame", nil, auraButton)
+            layer:SetAllPoints(auraButton)
+            layer:SetFrameLevel(auraButton:GetFrameLevel() + 1)
+            layer:EnableMouse(false)
+
+            local ring = {}
+            for index = 1, 4 do ring[index] = layer:CreateTexture(nil, "OVERLAY", nil, 5) end
+            ring[1]:SetPoint("TOPLEFT", button, "TOPLEFT")
+            ring[1]:SetPoint("TOPRIGHT", button, "TOPRIGHT")
+            ring[2]:SetPoint("BOTTOMLEFT", button, "BOTTOMLEFT")
+            ring[2]:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT")
+            ring[3]:SetPoint("TOPLEFT", button, "TOPLEFT")
+            ring[3]:SetPoint("BOTTOMLEFT", button, "BOTTOMLEFT")
+            ring[4]:SetPoint("TOPRIGHT", button, "TOPRIGHT")
+            ring[4]:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT")
+
+            local markPlate = layer:CreateTexture(nil, "OVERLAY", nil, 6)
+            local mark = layer:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+            mark:SetPoint("LEFT", button, "LEFT", 2, 0)
+            mark:SetText("!")
+            markPlate:SetPoint("CENTER", mark, "CENTER")
+
+            local visual = {
+                auraButton = auraButton,
+                ring = ring,
+                mark = mark,
+                markPlate = markPlate,
+                layer = layer,
+            }
+            local visuals = button.dangerVisuals
+            visuals[#visuals + 1] = visual
+            self:StyleDangerVisual(button, visual)
+        end,
+    })
+    button.dangerSlotKey = added and DANGER_SLOT_KEY or nil
+    return added and true or false
+end
+
 function NS:CreateAuraContainer(button)
     local diagnostics = self.auraContainerDiagnostics
     button.engineAuraReady = false
@@ -893,6 +1008,12 @@ function NS:CreateAuraContainer(button)
         end
     end
 
+    -- Deliberately not counted in addedForButton: the warning ring is a bonus
+    -- on top of the engine, and a cell without it still cleanses correctly.
+    -- Letting its failure mark the whole cell as not ready would turn a
+    -- cosmetic miss into an engine error message.
+    self:AddDangerSlot(button)
+
     button.engineAuraReady = addedForButton == #self.engineAuraTypes
     if button.engineAuraReady then
         if diagnostics then diagnostics.added = diagnostics.added + addedForButton end
@@ -927,6 +1048,17 @@ function NS:ConfigureButtonAuraContainer(button, restyle)
             local ok = pcall(container.SetAuraSlotCandidateFilters, container, slotKey, filters)
             if not ok then self:MarkPending("pendingAuraFilters") end
         end
+    end
+
+    -- A spec change rebuilds engineAuraTypeSet, so the dangerous list has to be
+    -- narrowed or widened with it. The slot itself is added here too when the
+    -- container predates this feature or its first attempt failed.
+    if not button.dangerSlotKey then
+        self:AddDangerSlot(button)
+    elseif container.SetAuraSlotCandidateFilters then
+        local ok = pcall(container.SetAuraSlotCandidateFilters, container,
+            button.dangerSlotKey, self:BuildDangerCandidateFilters())
+        if not ok then self:MarkPending("pendingAuraFilters") end
     end
 
     if button.unit then
@@ -2373,6 +2505,7 @@ function NS:RefreshAuraEngineTypes()
             if not complete then fullyConfigured = false end
         else
             button.auraSlotKeys, button.auraSlotVisuals = nil, nil
+            button.dangerSlotKey, button.dangerVisuals = nil, nil
             button.engineAuraReady = false
             self:CreateAuraContainer(button)
         end

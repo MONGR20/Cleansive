@@ -6,6 +6,13 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.5.31
+
+- Auras that punish the dispeller are flagged. Dispelling Unstable Affliction turns its damage on you and silences you; Cleansive painted it like any other magic debuff and invited the reflex. A cell carrying one now gets a warning ring and a `!` on top of its normal click colour. The click is still there -- eating the backlash is sometimes correct -- but it can no longer be made without seeing it.
+- The warning survives 12.1's protected auras because it never reads them: a dedicated aura slot is filtered engine-side on `includeSpellIDs`, the same mechanism the seasonal sound registrations already use. It carries the same weakness, and the list is marked with its season for that reason -- an unlisted aura is silently not flagged.
+- A dangerous aura of a type the character cannot clear, or one the player has ignored, is not flagged: the cell would not light up anyway, and a ring pointing at nothing is worse than no ring.
+- Tests: 591 to 609. The mock now runs `initializeFrame`, so every visual the protected engine draws -- rings, letters, timers -- is finally executed by the suite instead of being declared and never built. `SetHeight` and `SetWidth` are recorded too: a bar drawn at the wrong thickness, or not drawn at all, used to be invisible to a test.
+
 ## 1.5.30
 
 - The priority chevrons pointed the wrong way. The actions were always right -- "move up" moved up -- but the drawing was inverted: the left button showed a downward chevron. Only the sign of the rotation was wrong, and no test could see it because the mock did not record `SetRotation`. It does now.

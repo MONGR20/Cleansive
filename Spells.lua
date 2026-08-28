@@ -2,6 +2,28 @@ local _, NS = ...
 
 NS.DISPEL_TYPES = { "Magic", "Curse", "Poison", "Disease", "Bleed", "Charm" }
 
+-- Auras that punish the dispeller. Dissipating one of these turns the effect
+-- back on you or on the group, so the right move is to leave it alone and let
+-- it expire. A cell carrying one gets a warning ring and a "!" on top of its
+-- normal click colour: the click is still available, because sometimes eating
+-- the backlash is the correct call, but it can no longer be made by reflex.
+--
+-- Filtering happens engine-side through includeSpellIDs, which is why this
+-- works at all in 12.1: the addon never has to read the aura to know it is
+-- one of these.
+--
+-- Same weakness as KNOWN_DISPELLABLE_AURAS: this is a fixed list of public
+-- spell IDs. When Blizzard rotates the season, unlisted auras simply stop
+-- being flagged, silently. Bump the marker whenever the list is refreshed.
+NS.DANGEROUS_DISPEL_AURAS_SEASON = "2"
+
+NS.DANGEROUS_DISPEL_AURAS = {
+    -- Unstable Affliction (Affliction warlock). Dispelling deals damage to
+    -- the dispeller and silences them. Stable across expansions, which is why
+    -- it is the one entry verified rather than assumed.
+    [316099] = "Magic",
+}
+
 -- Single source for the translated type names. They used to live in two
 -- tables private to EllesmereUX.lua, out of reach of every other file and
 -- out of Locale.lua where the rest of the translations are kept.

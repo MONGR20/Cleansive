@@ -1,4 +1,4 @@
-# Cleansive 1.5.30
+# Cleansive 1.5.31
 
 Cleansive is a standalone one-click cleansing addon for **World of Warcraft Retail 12.1** (`120100`). It provides a compact Decursive-style workflow with a dark, class-colored interface inspired by the clarity of Ellesmere UI. The interface follows the language of your WoW client, English or French; either can be picked from the General page at any time.
 
@@ -30,6 +30,8 @@ Red, blue, and orange identify the click to use. The optional L/R/C corner lette
 - Blizzard-managed protected aura indicators for Retail 12.1 combat.
 - Secure click casting for solo play, parties, and raids.
 - Magic, Curse, Poison, Disease, Bleed, and Charm support.
+- A warning marker on auras whose dispel backfires on the dispeller, filtered
+  engine-side by spell ID so it works while the aura itself is protected.
 - Player, class, and raid-group priorities and exclusions.
 - Permanent and combat-only aura filters.
 - Class-colored interface, test mode, dual timers (numeric cleanse cooldown plus a clockwise affliction-duration fade), stacks, tooltips, color-independent click hints, sound-channel selection, and sound diagnostics.
@@ -93,6 +95,10 @@ remain active so a protected AuraSlot can pass cleansing clicks through during
 combat. Avoid clicking empty grid positions while this mode is enabled.
 
 The hover-cleanse key also respects these restrictions: it casts through a secure action button on your mouseover, target, or player. It never asks Lua to select an afflicted unit during combat, because the secure engine evaluates targeting conditions only and cannot read auras.
+
+## 1.5.31 changes
+
+- Auras that punish the dispeller carry a warning ring and a `!`. The click stays available; it just cannot be made by reflex any more.
 
 ## 1.5.30 changes
 
