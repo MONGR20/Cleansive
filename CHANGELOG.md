@@ -6,6 +6,17 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.5.29
+
+- The six sliders show their value again -- they never showed one. `SetPoint("TOPRIGHT", x, y)` is the three-argument form: it anchors to the parent's TOPRIGHT, so a positive x pushed the number 265 to 575 px past the right edge of the panel. Size, spacing, columns, opacity, blacklist duration and the sound limit were all mute.
+- Opacity reads `25 %` instead of `0.25`, and a slider's label now stops where its value begins instead of running underneath it.
+- "Cleanse cooldown" and "Native sound budget" describe what they do: "Cleanse spell cooldown" and "Sound alert limit". The option and the live preview use the same words.
+- The history page has a real empty state -- a centred title and an explanation -- and its pagination appears only from two pages. "Page 1 of 1" between two dead buttons is furniture, not navigation. Clearing an empty history is no longer offered as an action.
+- The priority arrows are drawn from two rotated bars instead of the characters `^` and `v`: readable at rest, class-coloured on hover, clearly dimmed when the move is impossible. They depend on neither a font glyph nor a Blizzard texture path.
+- "Hover cleanse key" no longer runs underneath its own button in French, and "Reset positions" has room for its French label.
+- A slider's frame was 30 px tall for a 4 px bar, which left 9 px before the next section title. It is 22 now, and the page keeps the 16 px minimum between a group and the heading that follows.
+- Tests: 512 to 570. `EllesmereUX.lua` had been excluded from the suite for years as "too frame-heavy for no added coverage"; the mock has since grown enough to run `CreateOptions` unchanged. That exclusion is why six blank sliders survived undetected -- the file was parsed, never executed.
+
 ## 1.5.28
 
 - A protected change asked for during combat says so. Blizzard locks layout, roster, bindings and profile work while you fight; Cleansive deferred them correctly and silently, so the option moved and the screen did not. A plate now appears beside the grid for as long as something is waiting, and it goes out when the change lands. It lives on the unprotected layer, which is the only reason it can appear during the fight it is describing.

@@ -218,12 +218,25 @@ function NS:RefreshAuraHistoryPage()
             row:Hide()
         end
     end
+    -- « Page 1 sur 1 » entre deux boutons eteints n'est pas une pagination,
+    -- c'est du mobilier. Elle n'apparait qu'a partir de deux pages.
+    local paged = pages > 1
     if page.page then
         local current = math.floor(offset / math.max(1, pageSize)) + 1
         page.page:SetText(string.format(self.L.PAGE, current, pages))
+        page.page:SetShown(paged)
     end
-    if page.prev then page.prev:SetEnabled(offset > 0) end
-    if page.next then page.next:SetEnabled(offset < maxOffset) end
+    if page.prev then
+        page.prev:SetShown(paged)
+        page.prev:SetEnabled(offset > 0)
+    end
+    if page.next then
+        page.next:SetShown(paged)
+        page.next:SetEnabled(offset < maxOffset)
+    end
+    -- Vider un historique vide ne fait rien : le bouton ne doit pas se
+    -- presenter comme actif.
+    if page.clearButton then page.clearButton:SetEnabled(#entries > 0) end
 end
 
 function NS:GetTargetDebuffID()

@@ -235,6 +235,47 @@ local function attachHelp(control, heading, body)
     return control
 end
 
+-- Les chevrons etaient les caracteres « ^ » et « v » : petits, peu contrastes,
+-- et lus comme du texte secondaire plutot que comme des commandes. Deux barres
+-- pivotees ne dependent ni de la police ni d'un chemin de texture Blizzard.
+local function chevron(control, up)
+    local ar, ag, ab = accent()
+    control.chevron = {}
+    for index = 1, 2 do
+        local bar = control:CreateTexture(nil, "OVERLAY")
+        bar:SetColorTexture(1, 1, 1, 1)
+        bar:SetSize(9, 2)
+        bar:SetPoint("CENTER", (index == 1 and -2.5 or 2.5), 0)
+        local angle = (index == 1 and 1 or -1) * (up and -0.6 or 0.6)
+        bar:SetRotation(angle)
+        control.chevron[index] = bar
+    end
+    control:HookScript("OnEnter", function(self)
+        self.hovered = true
+        self:PaintChevron()
+    end)
+    control:HookScript("OnLeave", function(self)
+        self.hovered = false
+        self:PaintChevron()
+    end)
+    -- Repos lisible, survol a la couleur de classe, desactive nettement attenue.
+    function control:PaintChevron()
+        local alpha = self.disabledDirection and 0.22 or (self.hovered and 1 or 0.85)
+        local r, g, b = 1, 1, 1
+        if self.hovered and not self.disabledDirection then r, g, b = ar, ag, ab end
+        for _, bar in ipairs(self.chevron) do bar:SetColorTexture(r, g, b, alpha) end
+    end
+    control:PaintChevron()
+end
+
+-- Une direction impossible ne doit pas se presenter comme cliquable.
+local function setDirectionEnabled(control, enabled)
+    if not control then return end
+    control.disabledDirection = not enabled
+    control:SetEnabled(enabled)
+    if control.PaintChevron then control:PaintChevron() end
+end
+
 local function section(parent, value, y)
     local label = text(parent, string.upper(value), 11, C.section)
     label:SetPoint("TOPLEFT", 0, y)
@@ -306,22 +347,37 @@ local function toggle(parent, value, x, y, width, key, callback, helpText)
 end
 
 local sliderCount = 0
-local function slider(parent, value, x, y, width, minValue, maxValue, step, key, format, callback, helpText)
+-- `format` s'applique a la valeur brute. `display` la transforme d'abord, pour
+-- les reglages dont l'unite affichee n'est pas celle stockee : une opacite de
+-- 0.25 se lit 25 %, pas 0.25.
+local function slider(parent, value, x, y, width, minValue, maxValue, step, key, format, callback, helpText, display)
     sliderCount = sliderCount + 1
     local control = CreateFrame("Slider", "CleansiveUXSlider" .. sliderCount, parent)
-    control:SetSize(width, 30)
-    control:SetPoint("TOPLEFT", x, y - 25)
+    -- 30 px de cadre pour une barre de 4 et un curseur de 18 : le bas du cadre
+    -- descendait sous le libelle du curseur suivant et ne laissait que 9 px
+    -- avant « Outils rapides ». 22 garde 2 px de marge autour du curseur et
+    -- rend 8 px par reglage a la page.
+    control:SetSize(width, 22)
+    control:SetPoint("TOPLEFT", x, y - 22)
     control:SetOrientation("HORIZONTAL")
     control:SetMinMaxValues(minValue, maxValue)
     control:SetValueStep(step)
     control:SetObeyStepOnDrag(true)
     control.key, control.format = key, format
 
+    local valueText = text(parent, "", 12, C.text)
+    -- La forme a trois arguments ancre TOPRIGHT sur le TOPRIGHT du parent : un
+    -- decalage x positif poussait donc la valeur de 265 a 575 px A DROITE du
+    -- bord du panneau, hors de l'ecran. Les six curseurs etaient muets.
+    valueText:SetPoint("TOPRIGHT", parent, "TOPLEFT", x + width, y)
+    valueText:SetJustifyH("RIGHT")
+    -- Le libelle s'arrete ou la valeur commence. Sans cette borne, un libelle
+    -- francais long passait simplement dessous.
     local label = text(parent, value, 12, C.dim)
     label:SetPoint("TOPLEFT", x, y)
-    local valueText = text(parent, "", 12, C.text)
-    valueText:SetPoint("TOPRIGHT", x + width, y)
-    valueText:SetJustifyH("RIGHT")
+    label:SetPoint("TOPRIGHT", valueText, "TOPLEFT", -8, 0)
+    label:SetJustifyH("LEFT")
+    label:SetWordWrap(false)
 
     local track = solid(control, "BACKGROUND", 1, 1, 1, 0.16)
     track:SetPoint("LEFT", 0, 0)
@@ -343,7 +399,7 @@ local function slider(parent, value, x, y, width, minValue, maxValue, step, key,
         local ratio = (current - minValue) / (maxValue - minValue)
         ratio = math.max(0, math.min(1, ratio))
         fill:SetWidth(math.max(1, width * ratio))
-        valueText:SetText(string.format(format, current))
+        valueText:SetText(string.format(format, display and display(current) or current))
     end
 
     control:SetScript("OnValueChanged", function(self, current)
@@ -371,6 +427,9 @@ local function slider(parent, value, x, y, width, minValue, maxValue, step, key,
         self.refreshing = false
     end
 
+    -- Exposes pour la suite de tests : la valeur etait invisible depuis un an
+    -- et rien ne pouvait le voir, faute d'y avoir acces.
+    control.valueText, control.labelText = valueText, label
     attachHelp(control, value, helpText)
     control:Refresh()
     return control
@@ -665,10 +724,14 @@ function NS:CreateOptions()
     macro:SetPoint("LEFT", filters, "RIGHT", 10, 0)
     macro:SetScript("OnClick", function() self:CreateMouseoverMacro() end)
 
+    -- « Touche de dissipation au survol » mesure environ 200 px : le bouton
+    -- pose a 150 lui passait dessus en francais.
     local priorityKeyLabel = text(general, self.L.PRIORITY_KEY, 12, C.dim)
     priorityKeyLabel:SetPoint("TOPLEFT", 0, -450)
-    local priorityKey = button(general, "", 170, 26)
-    priorityKey:SetPoint("TOPLEFT", 150, -442)
+    priorityKeyLabel:SetWidth(205)
+    priorityKeyLabel:SetJustifyH("LEFT")
+    local priorityKey = button(general, "", 158, 26)
+    priorityKey:SetPoint("TOPLEFT", 215, -442)
     priorityKey:RegisterForClicks("LeftButtonUp", "RightButtonUp")
     priorityKey:SetScript("OnClick", function(control, mouseButton)
         if mouseButton == "RightButton" then
@@ -774,7 +837,8 @@ function NS:CreateOptions()
     end, self.L.TIP_SIZE)
     self.optionSliders[#self.optionSliders + 1] = slider(appearance, self.L.SPACING, 310, -180, 265, 0, 12, 1, "spacing", "%d px", function() self:LayoutButtons() end, self.L.TIP_SPACING)
     self.optionSliders[#self.optionSliders + 1] = slider(appearance, self.L.COLUMNS, 0, -246, 265, 1, 20, 1, "columns", "%d", function() self:LayoutButtons() end, self.L.TIP_COLUMNS)
-    self.optionSliders[#self.optionSliders + 1] = slider(appearance, self.L.OPACITY, 310, -246, 265, 0.05, 0.80, 0.05, "inactiveAlpha", "%.2f", function() self:RefreshAll(true) end, self.L.TIP_OPACITY)
+    self.optionSliders[#self.optionSliders + 1] = slider(appearance, self.L.OPACITY, 310, -246, 265, 0.05, 0.80, 0.05, "inactiveAlpha", "%d %%", function() self:RefreshAll(true) end, self.L.TIP_OPACITY,
+        function(current) return math.floor(current * 100 + 0.5) end)
 
     local resizeNote = text(appearance, self.L.SIZE_COMBAT_NOTE, 10, C.dim)
     resizeNote:SetPoint("TOPLEFT", 0, -308)
@@ -866,14 +930,17 @@ function NS:CreateOptions()
         mapping:SetPoint("LEFT", 225, 0)
         mapping:SetWidth(245)
         mapping:SetJustifyH("LEFT")
-        -- No arrow glyphs in the UI font: these rendered as empty boxes.
-        local up = button(row, "^", 36, 28)
+        -- No arrow glyphs in the UI font: these rendered as empty boxes. Two
+        -- rotated bars need neither a font nor a Blizzard texture path.
+        local up = button(row, "", 36, 28)
         up:SetPoint("RIGHT", -48, 0)
         up:SetScript("OnClick", function() self:MoveType(auraType, -1) end)
+        chevron(up, true)
         attachHelp(up, self.L.MOVE_UP, self.L.MOVE_UP)
-        local down = button(row, "v", 36, 28)
+        local down = button(row, "", 36, 28)
         down:SetPoint("RIGHT", -8, 0)
         down:SetScript("OnClick", function() self:MoveType(auraType, 1) end)
+        chevron(down, false)
         attachHelp(down, self.L.MOVE_DOWN, self.L.MOVE_DOWN)
         self.typeRows[#self.typeRows + 1] = { frame = row, check = check, label = typeLabel, badge = clickBadge, mapping = mapping, up = up, down = down, type = auraType }
     end
@@ -909,8 +976,24 @@ function NS:CreateOptions()
         row.action:SetPoint("RIGHT", -6, 0)
         history.rows[index] = row
     end
-    history.empty = text(history, self.L.HISTORY_EMPTY, 13, C.dim)
-    history.empty:SetPoint("TOPLEFT", 10, -100)
+    -- Une seule phrase en haut d'une zone vide de 400 px se lisait comme une
+    -- page qui n'avait pas fini de charger. Un vrai etat vide, centre.
+    local emptyState = CreateFrame("Frame", nil, history)
+    emptyState:SetPoint("TOPLEFT", 0, -120)
+    emptyState:SetPoint("TOPRIGHT", 0, -120)
+    emptyState:SetHeight(120)
+    local ar, ag, ab = accent()
+    local emptyMark = solid(emptyState, "ARTWORK", ar, ag, ab, 1)
+    emptyMark:SetSize(7, 7)
+    emptyMark:SetPoint("TOP", 0, 0)
+    local emptyTitle = text(emptyState, self.L.HISTORY_EMPTY_TITLE, 15, C.text)
+    emptyTitle:SetPoint("TOP", emptyMark, "BOTTOM", 0, -14)
+    local emptyDesc = text(emptyState, self.L.HISTORY_EMPTY_DESC, 11, C.dim)
+    emptyDesc:SetPoint("TOP", emptyTitle, "BOTTOM", 0, -10)
+    emptyDesc:SetWidth(380)
+    emptyDesc:SetJustifyH("CENTER")
+    history.empty = emptyState
+    history.clearButton = clearHistory
     history.page = text(history, "", 10, C.dim)
     history.page:SetPoint("BOTTOM", 0, 12)
     history.prev = button(history, self.L.PREVIOUS, 92, 24)
@@ -938,10 +1021,11 @@ function NS:CreateOptions()
     local footerText = text(frame, localized("Modifications enregistrées instantanément", "Changes saved instantly"), 10, C.dim)
     footerText:SetPoint("BOTTOMLEFT", 205, 22)
     local test = button(frame, localized("Mode test", "Test mode"), 126, 28, false)
-    test:SetPoint("BOTTOMRIGHT", -168, 14)
+    -- 156 pour le bouton + 20 de marge droite + 12 d'ecart entre les deux.
+    test:SetPoint("BOTTOMRIGHT", -188, 14)
     test:SetScript("OnClick", function() self:ToggleTest() end)
     self.testModeButton = test
-    local reset = button(frame, self.L.RESET_POSITIONS, 138, 28)
+    local reset = button(frame, self.L.RESET_POSITIONS, 156, 28)
     reset:SetPoint("BOTTOMRIGHT", -20, 14)
     reset:SetScript("OnClick", function() self:ResetPositions() end)
 
@@ -1090,8 +1174,8 @@ function NS:RefreshOptions()
         row.mapping:SetText(def and (click .. "  -  " .. def.name)
             or (manual and string.format(self.L.MANUAL_ONLY, manual.name) or "—"))
         row.mapping:SetTextColor(1, 1, 1, (def or manual) and 0.72 or 0.34)
-        row.up:SetEnabled(position > 1)
-        row.down:SetEnabled(position < #self.typeRows)
+        setDirectionEnabled(row.up, position > 1)
+        setDirectionEnabled(row.down, position < #self.typeRows)
     end
 
     self:RefreshCellPreview()
@@ -1165,11 +1249,15 @@ function NS:CreateListWindow()
         bg:SetAllPoints()
         row.text = text(row, "", 12, C.text)
         row.text:SetPoint("LEFT", 10, 0)
-        row.up = button(row, "^", 32, 22)
-        row.up:SetPoint("RIGHT", -82, 0)
+        -- Les boutons sont passes de 32 a 36 de large : les decalages suivent,
+        -- sinon « monter » recouvrait « descendre ».
+        row.up = button(row, "", 36, 28)
+        row.up:SetPoint("RIGHT", -86, 0)
+        chevron(row.up, true)
         attachHelp(row.up, self.L.MOVE_UP, self.L.MOVE_UP)
-        row.down = button(row, "v", 32, 22)
-        row.down:SetPoint("RIGHT", -45, 0)
+        row.down = button(row, "", 36, 28)
+        row.down:SetPoint("RIGHT", -46, 0)
+        chevron(row.down, false)
         attachHelp(row.down, self.L.MOVE_DOWN, self.L.MOVE_DOWN)
         row.remove = button(row, "×", 32, 22)
         row.remove:SetPoint("RIGHT", -8, 0)
