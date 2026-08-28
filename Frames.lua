@@ -136,11 +136,21 @@ function NS:ApplyCellFonts(button)
     if not font then return end
     local size = self.db and self.db.frameSize
     local plate = self:CellFontSize("plate", size)
+    -- Half of these regions belong to the protected engine, and in 12.1 the
+    -- client can declare them forbidden to addon code: SetFont then raises.
+    -- Unguarded, that aborted the whole of LayoutButtons -- and pendingLayout
+    -- is cleared on its last line, so the flag stayed raised for the rest of
+    -- the session and the pending plate lit up on every subsequent fight.
+    -- A cosmetic font must never be able to take the layout down with it. When
+    -- the client refuses, the engine's copy simply keeps the size it was built
+    -- with; that is a smaller loss than a grid that never lays out again.
     local function setFont(region, role, flags)
-        if region and region.SetFont then region:SetFont(font, self:CellFontSize(role, size), flags or "") end
+        if region and region.SetFont then
+            tryCall(region.SetFont, region, font, self:CellFontSize(role, size), flags or "")
+        end
     end
     local function setPlate(region)
-        if region and region.SetSize then region:SetSize(plate, plate) end
+        if region and region.SetSize then tryCall(region.SetSize, region, plate, plate) end
     end
     setFont(button.nameText, "name")
     setFont(button.center, "stack")

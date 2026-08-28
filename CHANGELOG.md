@@ -6,6 +6,14 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.5.35
+
+- A font the client refuses can no longer take the whole grid down with it. `ApplyCellFonts` sets a font on the labels the protected engine owns, and in 12.1 the client can declare those forbidden to addon code: `SetFont` then raises. The error aborted `LayoutButtons`, whose *last* line is `pendingLayout = false` -- so the flag stayed raised for the rest of the session, the layout never completed again, and the pending plate lit up on every subsequent fight. Both symptoms, one cause.
+- The plate was not lying. It had been reporting a real stuck state correctly since 1.5.28; 1.5.34 silenced the background noise around it, and what remained underneath was this.
+- When the client refuses a label, the engine's copy keeps the size it was built with. That is a smaller loss than a grid that never lays out again.
+- Found by `!BugGrabber` in a real dungeon -- the first Lua error ever captured from Cleansive in game. Every check until now ran against a mock client, where a forbidden object does not exist.
+- Tests: 626 to 635. The new ones reproduce the exact stack, including the consequence the player sees: the plate still lit at the next fight.
+
 ## 1.5.34
 
 - The pending plate only speaks about changes you made. It watched every deferred write, including the ones the game raises on its own: `SPELLS_CHANGED` fires on a shapeshift, a mount or an item, `UNIT_PET` and `GROUP_ROSTER_UPDATE` fire unprompted. In a dungeon that lit the plate on nearly every pull, saying "something is waiting" about bookkeeping the player can neither act on nor understand. Reported from a real session, where it appeared with nothing having been changed.
