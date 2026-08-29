@@ -2690,48 +2690,60 @@ do
     NS.db.frameSize = 22
 end
 
--- 1.6.2 : la page d'Aide fait plus de deux ecrans et rien ne le disait. La
--- barre de Blizzard se confond avec le fond sombre du panneau : le joueur
--- arrivait au bas des « Commandes » et croyait la page finie.
+-- 1.6.7 : la zone de contenu de la fenetre defile, et l'annonce vit sur la
+-- FENETRE. La page d'Aide avait sa propre zone de defilement : imbriquee dans
+-- celle-ci, deux barres se seraient disputees la meme molette.
 do
-    local scroll, hint = NS.helpScroll, NS.helpScrollHint
-    truthy(scroll and hint, "aide : la zone de defilement et sa bande existent")
+    local scroll, hint = NS.optionsScroll, NS.optionsScrollHint
+    truthy(scroll and hint, "defilement : la zone et sa bande existent")
+    falsy(NS.helpScroll, "defilement : la page d'Aide n'a plus sa propre zone")
 
-    -- La bande occupe une bande reservee SOUS la zone de lecture : si la zone
-    -- descendait jusqu'au bas de la page, la bande couvrirait une ligne.
-    local point, _, _, _, y = scroll:GetPoint(1)
-    eq(point, "BOTTOMRIGHT", "aide : le dernier ancrage de la zone est son bas")
-    truthy((y or 0) >= 18,
-        "aide : la zone de lecture s'arrete au-dessus de la bande")
+    -- La bande est posee sur la fenetre, pas sur une page : posee sur la page,
+    -- elle defilerait avec elle et disparaitrait juste quand elle sert.
+    eq(hint.__parent, NS.optionsFrame,
+        "defilement : la bande appartient a la fenetre, pas a une page")
 
     -- Une page qui tient a l'ecran n'a rien a annoncer.
     scroll.__scrollRange = 0
-    NS:UpdateHelpScrollHint()
-    falsy(hint:IsShown(), "aide : une page qui tient en entier ne dit rien")
+    NS:UpdateOptionsScrollHint()
+    falsy(hint:IsShown(), "defilement : une page qui tient en entier ne dit rien")
 
     scroll.__scrollRange = 660
-    NS:UpdateHelpScrollHint()
-    truthy(hint:IsShown(), "aide : une page plus longue que l'ecran l'annonce")
+    NS:UpdateOptionsScrollHint()
+    truthy(hint:IsShown(), "defilement : une page plus longue que l'ecran l'annonce")
     eq(hint.label.__text, NS.L.HELP_SCROLL_HINT,
-        "aide : avec son libelle traduit")
+        "defilement : avec son libelle traduit")
 
     -- Descendre jusqu'en bas doit l'eteindre, et par le seul cablage de la
     -- molette : le test n'appelle pas la mise a jour lui-meme.
     scroll:SetVerticalScroll(660)
-    falsy(hint:IsShown(), "aide : arrive en bas, elle s'efface")
+    falsy(hint:IsShown(), "defilement : arrive en bas, elle s'efface")
     scroll:SetVerticalScroll(0)
-    truthy(hint:IsShown(), "aide : et revient des qu'on remonte")
+    truthy(hint:IsShown(), "defilement : et revient des qu'on remonte")
 
-    -- La longueur de la page depend du texte : la ligne de version, un libelle
-    -- traduit plus long, et la portee change sans que la molette bouge. Ouvrir
-    -- la page doit donc reposer la question, sinon la bande reste allumee sur
-    -- une page qui tient desormais a l'ecran.
-    truthy(hint:IsShown(), "aide : la bande est allumee avant le changement")
-    scroll.__scrollRange = 0
-    NS:ShowOptionsPage("general")
+    -- Changer de page remet la hauteur qui defile a celle de la page affichee,
+    -- et repart du haut. Sans cela une page courte heritait du defilement de la
+    -- precedente, et s'ouvrait a mi-hauteur.
+    scroll:SetVerticalScroll(400)
     NS:ShowOptionsPage("help")
-    falsy(hint:IsShown(), "aide : rouvrir la page eteint une bande devenue fausse")
-    scroll:SetVerticalScroll(0)
+    eq(NS.optionsContent.__height or NS.optionsContent.__lastSize.height,
+        NS.optionsPageHeights.help, "defilement : la page d'Aide impose sa hauteur")
+    eq(scroll:GetVerticalScroll(), 0, "defilement : et l'ouverture repart du haut")
+
+    scroll.__scrollRange = 0
+    NS:ShowOptionsPage("dispels")
+    eq(NS.optionsContent.__height or NS.optionsContent.__lastSize.height,
+        NS.optionsPageHeights.dispels,
+        "defilement : une page courte ne garde pas la hauteur de la longue")
+    truthy(NS.optionsPageHeights.dispels < NS.optionsPageHeights.help,
+        "defilement : et elle est bien plus courte, sinon la mesure ne prouve rien")
+    falsy(hint:IsShown(), "defilement : et n'annonce pas un defilement qui n'existe pas")
+
+    -- La page Historique capte la molette pour sa pagination : elle ne doit
+    -- donc JAMAIS avoir besoin de defiler, sans quoi les deux gestes se
+    -- disputeraient le meme geste.
+    eq(NS.optionsPageHeights.history, 550,
+        "defilement : la page Historique tient a l'ecran, sa molette reste a sa pagination")
 end
 
 --------------------------------------------------------------------------
@@ -5918,9 +5930,12 @@ do
     NS:UpdateSpells()
     NS:CreateOptions()
 
-    -- La fenetre fait 820 x 700 ; la zone de contenu des pages 560 x 550
-    -- (moins la barre laterale 178, l'en-tete 88 et le pied 62).
-    local PAGE_WIDTH, PAGE_HEIGHT = 560, 550
+    -- La fenetre fait 820 x 700 ; la zone visible des pages 560 x 550 (moins la
+    -- barre laterale 178, l'en-tete 88 et le pied 62). Depuis la 1.6.7 une page
+    -- peut etre PLUS HAUTE que cette zone et defiler : chaque page est donc
+    -- mesuree dans sa propre hauteur declaree, sans quoi un controle cale en bas
+    -- d'une page longue serait place au mauvais endroit.
+    local PAGE_WIDTH = 560
     local LINE_HEIGHT = 14
 
     -- La premiere version ne comprenait que TOPLEFT et BOTTOMLEFT, et ignorait
@@ -6050,11 +6065,31 @@ do
         return counted + #rects
     end
 
-    local pageRect = { left = 0, top = 0, right = PAGE_WIDTH, bottom = PAGE_HEIGHT }
     local measured = 0
+    local overflow = {}
+    local pageRect
     for _, pageKey in ipairs({ "general", "appearance", "dispels", "history", "help" }) do
+        local declared = NS.optionsPageHeights[pageKey]
+        truthy(declared, "mise en page : la page " .. pageKey .. " declare sa hauteur")
+        pageRect = { left = 0, top = 0, right = PAGE_WIDTH, bottom = declared }
+        local before = #collisions
         measured = measured + inspect(pageKey, NS.optionsPages[pageKey], pageRect)
+        -- Une hauteur declaree trop courte ne se voit pas a l'ecran : la page
+        -- defile simplement moins loin, et le dernier controle devient
+        -- inatteignable. C'est le nouveau piege apporte par le defilement.
+        for _, child in ipairs(childrenOf(NS.optionsPages[pageKey])) do
+            if rawget(child, "__type") ~= "Texture" and child:IsShown() then
+                local rect = resolveRect(child, NS.optionsPages[pageKey], pageRect)
+                if rect and rect.bottom > declared then
+                    overflow[#overflow + 1] = string.format("%s : « %s » descend a %.0f, hauteur declaree %d",
+                        pageKey, rect.label, rect.bottom, declared)
+                end
+            end
+        end
+        if #collisions > before then end
     end
+    eq(table.concat(overflow, " | "), "",
+        "mise en page : aucun controle ne depasse la hauteur declaree par sa page")
 
     -- Le pied de la fenetre n'appartient a aucune page : il n'etait compare a
     -- rien, et le texte d'etat passait sous les boutons sur trois pages sur

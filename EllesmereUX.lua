@@ -4,6 +4,10 @@ local _, NS = ...
 -- Ellesmere UI: a quiet dark canvas, one theme accent, compact typography,
 -- immediate feedback, and settings grouped into focused pages.
 
+-- Hauteur visible d'une page : fenetre 700, moins l'en-tete 88 et le pied 62.
+-- Une page plus courte ne defile pas ; une page plus haute defile.
+local VIEWPORT_HEIGHT = 550
+
 local C = {
     panel = { 0.05, 0.07, 0.09 },
     panelDeep = { 0.025, 0.035, 0.045 },
@@ -590,11 +594,13 @@ local function layoutModeLabel(mode)
     return NS.L.LAYOUT_GRID
 end
 
--- Une bande allumee au bas de la page serait un mensonge : elle ne parait que
--- tant qu'il reste de la matiere sous le pli. Les 2 px de marge absorbent
--- l'arrondi du client, qui ne rend jamais la portee au pixel pres.
-function NS:UpdateHelpScrollHint()
-    local scroll, hint = self.helpScroll, self.helpScrollHint
+-- Une bande allumee au bas d'une page qui ne defile pas serait un mensonge :
+-- elle ne parait que tant qu'il reste de la matiere sous le pli. Les 2 px de
+-- marge absorbent l'arrondi du client, qui ne rend jamais la portee au pixel
+-- pres. Elle vit sur la FENETRE, pas sur la page : posee sur la page, elle
+-- defilerait avec elle et disparaitrait juste quand elle sert.
+function NS:UpdateOptionsScrollHint()
+    local scroll, hint = self.optionsScroll, self.optionsScrollHint
     if not (scroll and hint) then return end
     local range = scroll:GetVerticalScrollRange() or 0
     local position = scroll:GetVerticalScroll() or 0
@@ -605,6 +611,14 @@ function NS:ShowOptionsPage(key)
     key = key or self.activeOptionsPage or "general"
     self.activeOptionsPage = key
     for name, page in pairs(self.optionsPages or {}) do page:SetShown(name == key) end
+    -- La hauteur de la zone qui defile est celle de la page affichee : une page
+    -- courte ne doit pas heriter du defilement d'une page longue.
+    if self.optionsContent and self.optionsScroll then
+        local height = (self.optionsPageHeights or {})[key] or VIEWPORT_HEIGHT
+        self.optionsContent:SetHeight(math.max(VIEWPORT_HEIGHT, height))
+        self.optionsScroll:SetVerticalScroll(0)
+        self:UpdateOptionsScrollHint()
+    end
     for name, nav in pairs(self.optionsNav or {}) do nav:SetActive(name == key) end
     local metadata = {
         general = { self.L.PAGE_GENERAL_TITLE, self.L.PAGE_GENERAL_DESC },
@@ -793,15 +807,32 @@ function NS:CreateOptions()
     close:SetPoint("TOPRIGHT", -14, -13)
     close:SetScript("OnClick", function() frame:Hide() end)
 
-    local content = CreateFrame("Frame", nil, frame)
-    content:SetPoint("TOPLEFT", 205, -88)
-    content:SetPoint("BOTTOMRIGHT", -24, 62)
+    -- Les pages etaient hautes de 550 px et pleines : ajouter un reglage de
+    -- plus demandait d'en tasser d'autres, et le choix du son de la 1.6.6 est
+    -- reste sans bouton pour cette seule raison. La zone de contenu devient une
+    -- zone de DEFILEMENT ; chaque page declare sa hauteur, et un test verifie
+    -- qu'aucun controle ne depasse la hauteur declaree par sa page.
+    local contentScroll = CreateFrame("ScrollFrame", nil, frame, "UIPanelScrollFrameTemplate")
+    contentScroll:SetPoint("TOPLEFT", 205, -88)
+    contentScroll:SetPoint("BOTTOMRIGHT", -24, 62)
+    self.optionsScroll = contentScroll
+    local content = CreateFrame("Frame", nil, contentScroll)
+    content:SetSize(560, VIEWPORT_HEIGHT)
+    contentScroll:SetScrollChild(content)
+    self.optionsContent = content
+    contentScroll:SetScript("OnVerticalScroll", function() self:UpdateOptionsScrollHint() end)
+    contentScroll:SetScript("OnScrollRangeChanged", function() self:UpdateOptionsScrollHint() end)
     self.optionsPages = {}
+    self.optionsPageHeights = {}
     self.optionSliders = {}
 
     local general = CreateFrame("Frame", nil, content)
     general:SetAllPoints()
     self.optionsPages.general = general
+    -- 596 et non 550 : la page defile depuis la 1.6.7, et c'est exactement ce
+    -- qui permet au reglage du son d'avoir enfin un bouton plutot qu'une seule
+    -- commande. Un test verifie qu'aucun controle ne depasse cette hauteur.
+    self.optionsPageHeights.general = 596
     self.optionChecks = {}
 
     -- Ces deux phrases etaient posees en bas de page, PAR-DESSUS la carte de
@@ -810,7 +841,7 @@ function NS:CreateOptions()
     -- autres sont maintenant posees au-dessus de la carte, et restent enfants
     -- DIRECTS de la page pour que le controle de recouvrement les voie.
     local overviewEngine = text(general, "", 10, C.dim)
-    overviewEngine:SetPoint("TOPLEFT", 0, -472)
+    overviewEngine:SetPoint("TOPLEFT", 0, -518)
     overviewEngine:SetWidth(560)
     -- Hauteur RESERVEE, pas subie : sans elle, une formulation plus longue
     -- reviendrait a la ligne et descendrait dans la carte de profil, et le
@@ -853,8 +884,20 @@ function NS:CreateOptions()
     self.soundDependentControls = {}
     -- Posee a -196, cette phrase de 560 px traversait « Afficher les infobulles »
     -- ET « Alerte sonore d'affliction ». Elle rejoint les lignes d'etat du bas.
+    local soundAlertLabel = text(general, self.L.ALERT_SOUND, 12, C.dim)
+    soundAlertLabel:SetPoint("TOPLEFT", 0, -478)
+    soundAlertLabel:SetWidth(150)
+    soundAlertLabel:SetJustifyH("LEFT")
+    local soundAlert = button(general, "", 200, 26)
+    soundAlert:SetPoint("TOPLEFT", 160, -470)
+    soundAlert:SetScript("OnClick", function() self:CycleAlertSound() end)
+    attachHelp(soundAlert, self.L.ALERT_SOUND, self.L.TIP_ALERT_SOUND)
+    self.alertSoundButton = soundAlert
+    self.soundDependentControls[#self.soundDependentControls + 1] = soundAlert
+    self.soundDependentControls[#self.soundDependentControls + 1] = soundAlertLabel
+
     local soundState = text(general, "", 10, C.dim)
-    soundState:SetPoint("TOPLEFT", 0, -490)
+    soundState:SetPoint("TOPLEFT", 0, -536)
     soundState:SetWidth(560)
     soundState:SetHeight(14)
     soundState:SetJustifyH("LEFT")
@@ -975,7 +1018,7 @@ function NS:CreateOptions()
 
     local info = CreateFrame("Frame", nil, general)
     info:SetSize(560, 40)
-    info:SetPoint("TOPLEFT", 0, -510)
+    info:SetPoint("TOPLEFT", 0, -556)
     local infoBg = solid(info, "BACKGROUND", C.control[1], C.control[2], C.control[3], 0.42)
     infoBg:SetAllPoints()
     border(info, 0.08)
@@ -996,6 +1039,7 @@ function NS:CreateOptions()
     local appearance = CreateFrame("Frame", nil, content)
     appearance:SetAllPoints()
     self.optionsPages.appearance = appearance
+    self.optionsPageHeights.appearance = 550
     section(appearance, localized("Informations sur les cases", "Cell information"), -2)
     self.optionChecks[#self.optionChecks + 1] = toggle(appearance, self.L.NAMES, 0, -28, 275, "showNames", function()
         self:UpdateAuraContainerConfiguration(true)
@@ -1105,6 +1149,7 @@ function NS:CreateOptions()
     local dispels = CreateFrame("Frame", nil, content)
     dispels:SetAllPoints()
     self.optionsPages.dispels = dispels
+    self.optionsPageHeights.dispels = 550
     self.optionChecks[#self.optionChecks + 1] = toggle(dispels, self.L.GROUP_MANUAL, 0, -430, 560,
         "groupManualTypes", function()
             self:UpdateSpells()
@@ -1207,6 +1252,10 @@ function NS:CreateOptions()
     history:SetAllPoints()
     history:EnableMouseWheel(true)
     self.optionsPages.history = history
+    -- La molette de cette page sert a sa pagination : elle ne doit donc JAMAIS
+    -- avoir besoin de defiler, sans quoi les deux gestes se disputeraient la
+    -- meme molette. Un test tient cette contrainte.
+    self.optionsPageHeights.history = 550
     self.auraHistoryPage = history
     section(history, self.L.HISTORY, -2)
     -- Posee a -28 sur 420 px de large, cette phrase passait sous le bouton
@@ -1279,6 +1328,16 @@ function NS:CreateOptions()
         self:RefreshAuraHistoryPage()
     end)
 
+    local scrollHint = CreateFrame("Frame", nil, frame)
+    scrollHint:SetPoint("BOTTOMLEFT", 205, 64)
+    scrollHint:SetPoint("BOTTOMRIGHT", -44, 64)
+    scrollHint:SetHeight(18)
+    solid(scrollHint, "BACKGROUND", C.panelDeep[1], C.panelDeep[2], C.panelDeep[3], 0.92)
+    scrollHint.label = text(scrollHint, self.L.HELP_SCROLL_HINT, 10, C.dim)
+    scrollHint.label:SetPoint("LEFT", 4, 0)
+    scrollHint:Hide()
+    self.optionsScrollHint = scrollHint
+
     local footerLine = solid(frame, "BORDER", 1, 1, 1, 0.06)
     footerLine:SetPoint("BOTTOMLEFT", 179, 62)
     footerLine:SetPoint("BOTTOMRIGHT", -1, 62)
@@ -1315,33 +1374,15 @@ function NS:CreateOptions()
     local help = CreateFrame("Frame", nil, content)
     help:SetAllPoints()
     self.optionsPages.help = help
+    self.optionsPageHeights.help = 1210
 
-    local helpScroll = CreateFrame("ScrollFrame", nil, help, "UIPanelScrollFrameTemplate")
-    helpScroll:SetPoint("TOPLEFT", 0, -2)
-    -- La zone s'arrete 20 px au-dessus du bas de la page : la bande d'indice
-    -- occupe cet espace et ne recouvre donc jamais une ligne de texte.
-    helpScroll:SetPoint("BOTTOMRIGHT", -26, 20)
-    local helpBody = CreateFrame("Frame", nil, helpScroll)
+    -- Cette page avait SA propre zone de defilement, imbriquee dans celle de
+    -- la fenetre depuis que le contenu defile : deux barres se disputaient la
+    -- meme molette. Elle n'en a plus. Le corps est un simple cadre, et c'est le
+    -- defilement de la fenetre qui s'en occupe.
+    local helpBody = CreateFrame("Frame", nil, help)
+    helpBody:SetPoint("TOPLEFT", 0, -2)
     helpBody:SetSize(540, 1180)
-    helpScroll:SetScrollChild(helpBody)
-    self.helpScroll = helpScroll
-
-    -- La page fait plus de deux ecrans, et rien ne le disait : la barre de
-    -- Blizzard se confond avec le fond sombre du panneau. La bande ne parait
-    -- que tant qu'il reste quelque chose a lire, et s'efface au bas de la page.
-    local scrollHint = CreateFrame("Frame", nil, help)
-    scrollHint:SetPoint("BOTTOMLEFT", 0, 0)
-    scrollHint:SetPoint("BOTTOMRIGHT", -26, 0)
-    scrollHint:SetHeight(18)
-    solid(scrollHint, "BACKGROUND", C.panelDeep[1], C.panelDeep[2], C.panelDeep[3], 0.92)
-    scrollHint.label = text(scrollHint, self.L.HELP_SCROLL_HINT, 10, C.dim)
-    scrollHint.label:SetPoint("LEFT", 4, 0)
-    scrollHint:Hide()
-    self.helpScrollHint = scrollHint
-
-    helpScroll:SetScript("OnVerticalScroll", function() self:UpdateHelpScrollHint() end)
-    helpScroll:SetScript("OnScrollRangeChanged", function() self:UpdateHelpScrollHint() end)
-    help:SetScript("OnShow", function() self:UpdateHelpScrollHint() end)
 
     local function helpBlock(heading, body, y)
         local title = text(helpBody, heading, 12, C.section)
@@ -1576,6 +1617,10 @@ function NS:RefreshOptions()
     local soundOn = self.db and self.db.sound and true or false
     for _, control in ipairs(self.soundDependentControls or {}) do
         control:SetShown(soundOn)
+    end
+    if self.alertSoundButton then
+        local chosen = self.db and self.db.alertSound or "DEFAULT"
+        self.alertSoundButton:SetText(self.L["ALERT_SOUND_" .. chosen] or chosen)
     end
     if self.previewStateButton then
         self.previewStateButton:SetText(self:TestStateLabel())

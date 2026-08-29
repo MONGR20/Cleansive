@@ -1,4 +1,4 @@
-# Cleansive 1.6.6
+# Cleansive 1.6.7
 
 Cleansive is a standalone one-click cleansing addon for **World of Warcraft Retail 12.1** (`120100`). It provides a compact Decursive-style workflow with a dark, class-colored interface inspired by the clarity of Ellesmere UI. The interface follows the language of your WoW client, English or French; either can be picked from the General page at any time.
 
@@ -175,6 +175,7 @@ the reason on its own.
 
 ## Recent changes
 
+- **1.6.7** - the settings pages scroll. Each page declares its height, and a check refuses any control that runs past it. The Help page loses its own nested scroll.
 - **1.6.6** - the alert sound can be picked from the game's own sounds with `/cleansive sound`; ids are read from SOUNDKIT at call time, never copied in.
 - **1.6.5** - optional class color on resting cells, so you can tell who is who without reading a name. An afflicted cell always keeps its dispel color.
 - **1.6.4** - the addon no longer plays alerts for cells it has decided not to show: turning off a visibility context now removes the native sound registrations the client was playing on its own. The overlap check descends into controls and covers the sidebar.

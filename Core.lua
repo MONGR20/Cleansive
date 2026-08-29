@@ -531,6 +531,18 @@ function NS:SetAlertSound(key)
     return false
 end
 
+-- Le bouton fait tourner la liste. Une liste deroulante pour quatre entrees
+-- serait un menu de plus a ouvrir pour un choix qui se fait a l'oreille.
+function NS:CycleAlertSound()
+    local list = self:AvailableAlertSounds()
+    local current, index = self.db and self.db.alertSound or "DEFAULT", 1
+    for position, entry in ipairs(list) do
+        if entry.key == current then index = position end
+    end
+    local nextEntry = list[(index % #list) + 1]
+    if nextEntry then self:SetAlertSound(nextEntry.key) end
+end
+
 function NS:PrintAlertSounds()
     local current = self.db and self.db.alertSound or "DEFAULT"
     for _, entry in ipairs(self:AvailableAlertSounds()) do

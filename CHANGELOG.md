@@ -6,6 +6,17 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.6.7
+
+**Les pages de reglages defilent.** Ce n'est pas un confort : c'etait le blocage.
+
+- La page General n'avait plus une seule rangee libre, et la page Apparence n'a accueilli sa quatrieme qu'en rendant huit pixels sur le cadre d'apercu. Le choix du son de la 1.6.6 est reste sans bouton pour cette seule raison. La zone de contenu de la fenetre est desormais une zone de defilement, **chaque page declare sa hauteur**, et changer de page remet cette hauteur et repart du haut — sans quoi une page courte heritait du defilement de la longue et s'ouvrait a mi-hauteur.
+- **Le choix du son a son bouton**, page General. Il fait tourner la liste : une liste deroulante pour quatre entrees serait un menu de plus a ouvrir pour un choix qui se fait a l'oreille. La page General est passee de 550 a 596 px de haut, ce qui n'aurait tout simplement pas ete possible avant.
+- **La page d'Aide n'a plus sa propre zone de defilement.** Imbriquee dans celle de la fenetre, deux barres se seraient disputees la meme molette. L'annonce « la page continue plus bas » vit maintenant sur la FENETRE : posee sur la page, elle defilait avec elle et disparaissait juste au moment ou elle sert.
+- **La page Historique reste volontairement a 550 px.** Sa molette sert a sa pagination : si elle avait besoin de defiler, les deux gestes se disputeraient le meme geste. Un test tient cette contrainte.
+- **Un nouveau piege, et son garde-fou.** Une hauteur declaree trop courte ne se voit pas a l'ecran : la page defile simplement moins loin, et le dernier controle devient inatteignable. Le controle de recouvrement mesure desormais chaque page dans SA hauteur declaree, et refuse tout controle qui la depasse.
+- Tests : 1 255 a 1 265.
+
 ## 1.6.6
 
 - **Le son d'alerte se choisit parmi les sons du jeu**, par `/cleansive sound`. Les identifiants sont LUS dans `SOUNDKIT` au moment ou on en a besoin, jamais recopies : un identifiant invente ne leve pas, il ne joue rien — et une alerte silencieuse serait pire que le son juge trop aigu, qui etait la demande d'origine. Un son que votre client ne connait pas disparait donc de la liste, et un choix devenu introuvable retombe sur le fichier livre.
