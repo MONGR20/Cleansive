@@ -895,11 +895,13 @@ events:SetScript("OnEvent", function(_, event, ...)
     elseif event == "PLAYER_REGEN_DISABLED" then
         NS:EndTestModeForCombat()
         NS:UpdateCooldownOverlayVisibility(true)
+        if NS.RefreshOptionsStatus then NS:RefreshOptionsStatus() end
         NS:RefreshAuraCandidateFilters()
         NS:RequestAuraSoundRefresh("combat started")
     elseif event == "PLAYER_REGEN_ENABLED" then
         NS:UpdateCooldownOverlayVisibility(false)
         NS:OnCombatEnded()
+        if NS.RefreshOptionsStatus then NS:RefreshOptionsStatus() end
     elseif event == "ADDON_RESTRICTION_STATE_CHANGED" then
         -- Replay the deferred work only once something is actually released.
         -- Activating and Active mean the door is closing or shut.
@@ -1018,4 +1020,54 @@ function NS:PrintProcessingOrder()
         self:Print(string.format(self.L.ORDER_LINE, index,
             tostring(descriptor.displayName or descriptor.unit), reason))
     end
+end
+
+local WINDOW_ANCHORS = { CENTER = true, TOPLEFT = true, TOPRIGHT = true,
+    BOTTOMLEFT = true, BOTTOMRIGHT = true, TOP = true, BOTTOM = true,
+    LEFT = true, RIGHT = true }
+
+function NS:SaveWindowPosition(frame, key)
+    local global = self.dbRoot and self.dbRoot.global
+    if not global or not frame then return end
+    global.windows = type(global.windows) == "table" and global.windows or {}
+    local point, _, relativePoint, x, y = frame:GetPoint()
+    if not WINDOW_ANCHORS[point] or not WINDOW_ANCHORS[relativePoint] then return end
+    global.windows[key] = {
+        point = point, relativePoint = relativePoint,
+        x = math.floor(tonumber(x) or 0), y = math.floor(tonumber(y) or 0),
+    }
+end
+
+function NS:RestoreWindowPosition(frame, key)
+    local global = self.dbRoot and self.dbRoot.global
+    local saved = global and type(global.windows) == "table" and global.windows[key]
+    -- A saved anchor is read back from disk and SetPoint raises on a bad one.
+    -- A window that cannot be placed must not stop the addon.
+    if type(saved) ~= "table" or not WINDOW_ANCHORS[saved.point]
+        or not WINDOW_ANCHORS[saved.relativePoint]
+        or type(saved.x) ~= "number" or type(saved.y) ~= "number" then
+        return false
+    end
+    frame:ClearAllPoints()
+    frame:SetPoint(saved.point, UIParent, saved.relativePoint, saved.x, saved.y)
+    return true
+end
+
+-- #213/#214 : le pied de la fenetre disait toujours la meme chose. En combat
+-- c'etait faux, et le joueur n'avait aucune explication au reglage qui ne
+-- bougeait pas.
+function NS:OptionsStatusText()
+    if InCombatLockdown and InCombatLockdown() then
+        local waiting = 0
+        local announced = self.pendingAnnounced or {}
+        for _, flag in ipairs(self.PENDING_FLAGS or {}) do
+            if self[flag] and announced[flag] then waiting = waiting + 1 end
+        end
+        if waiting > 0 then
+            return string.format(self.L.STATUS_COMBAT_WAITING, waiting)
+        end
+        return self.L.STATUS_COMBAT
+    end
+    if not self.enabled then return self.L.STATUS_PAUSED end
+    return self.L.STATUS_READY
 end

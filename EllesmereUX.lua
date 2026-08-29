@@ -603,9 +603,13 @@ function NS:CreateOptions()
     addPanelBackground(frame)
     frame:Hide()
     self.optionsFrame = frame
+    self:RestoreWindowPosition(frame, "options")
 
     frame:SetScript("OnDragStart", function(f) f:StartMoving() end)
-    frame:SetScript("OnDragStop", function(f) f:StopMovingOrSizing() end)
+    frame:SetScript("OnDragStop", function(f)
+        f:StopMovingOrSizing()
+        self:SaveWindowPosition(f, "options")
+    end)
     frame:SetScript("OnShow", function()
         self:RefreshOptions()
         self:ShowOptionsPage(self.activeOptionsPage or "general")
@@ -695,18 +699,24 @@ function NS:CreateOptions()
         if value then self:PlayAfflictionAlert(true) end
     end, self.L.TIP_SOUND)
     self.optionChecks[#self.optionChecks + 1] = toggle(general, self.L.FAIL_SOUND, 0, -224, 275, "failureSound", nil, self.L.TIP_FAILURE_SOUND)
+    self.soundDependentControls = {}
     local soundTest = button(general, self.L.TEST_SOUND, 115, 26)
     soundTest:SetPoint("TOPLEFT", 300, -220)
     soundTest:SetScript("OnClick", function() self:PlayAfflictionAlert(true) end)
+    self.soundDependentControls[#self.soundDependentControls + 1] = soundTest
     local soundStatus = button(general, self.L.SOUND_STATUS_BUTTON, 115, 26)
     soundStatus:SetPoint("LEFT", soundTest, "RIGHT", 10, 0)
     soundStatus:SetScript("OnClick", function() self:PrintAuraSoundStatus() end)
+    self.soundDependentControls[#self.soundDependentControls + 1] = soundStatus
 
     self.optionSliders[#self.optionSliders + 1] = slider(general, self.L.BLACKLIST, 0, -266, 265, 0, 15, 1, "blacklistTime", "%d s", nil, self.L.TIP_BLACKLIST)
-    self.optionSliders[#self.optionSliders + 1] = slider(general, self.L.SOUND_BUDGET, 0, -318, 265, 500, 8000, 250, "soundMaxRegistrations", "%d",
+    local budgetSlider = slider(general, self.L.SOUND_BUDGET, 0, -318, 265, 500, 8000, 250, "soundMaxRegistrations", "%d",
         function() self:RequestAuraSoundRefresh("sound budget") end, self.L.TIP_SOUND_BUDGET)
+    self.optionSliders[#self.optionSliders + 1] = budgetSlider
+    self.soundDependentControls[#self.soundDependentControls + 1] = budgetSlider
     local soundChannelLabel = text(general, self.L.SOUND_CHANNEL, 12, C.dim)
     soundChannelLabel:SetPoint("TOPLEFT", 310, -266)
+    self.soundDependentControls[#self.soundDependentControls + 1] = soundChannelLabel
     local soundChannel = button(general, "", 135, 26)
     soundChannel:SetPoint("TOPLEFT", 420, -258)
     soundChannel:SetScript("OnClick", function()
@@ -722,6 +732,7 @@ function NS:CreateOptions()
     end)
     attachHelp(soundChannel, self.L.SOUND_CHANNEL, self.L.TIP_SOUND_CHANNEL)
     self.soundChannelButton = soundChannel
+    self.soundDependentControls[#self.soundDependentControls + 1] = soundChannel
 
     section(general, localized("Outils rapides", "Quick tools"), -382)
     local priorities = button(general, self.L.PRIORITY, 130, 28)
@@ -1051,8 +1062,11 @@ function NS:CreateOptions()
     footerLine:SetPoint("BOTTOMLEFT", 179, 54)
     footerLine:SetPoint("BOTTOMRIGHT", -1, 54)
     footerLine:SetHeight(1)
-    local footerText = text(frame, localized("Modifications enregistrées instantanément", "Changes saved instantly"), 10, C.dim)
+    local footerText = text(frame, self.L.STATUS_READY, 10, C.dim)
     footerText:SetPoint("BOTTOMLEFT", 205, 22)
+    footerText:SetWidth(420)
+    footerText:SetJustifyH("LEFT")
+    self.optionsStatusText = footerText
     local test = button(frame, localized("Mode test", "Test mode"), 126, 28, false)
     -- 156 pour le bouton + 20 de marge droite + 12 d'ecart entre les deux.
     test:SetPoint("BOTTOMRIGHT", -188, 14)
@@ -1261,6 +1275,15 @@ function NS:RefreshOptions()
     if self.priorityKeyButton and not self.priorityKeyButton.capturing then
         self.priorityKeyButton:SetText(self.db.priorityKey ~= "" and self.db.priorityKey or self.L.NOT_BOUND)
     end
+    if self.optionsStatusText then
+        self.optionsStatusText:SetText(self:OptionsStatusText())
+    end
+    -- Un reglage qui ne s'applique pas ne doit pas rester la a suggerer qu'il
+    -- s'applique. Le son coupe, tout ce qui le regle disparait.
+    local soundOn = self.db and self.db.sound and true or false
+    for _, control in ipairs(self.soundDependentControls or {}) do
+        control:SetShown(soundOn)
+    end
     if self.previewStateButton then
         self.previewStateButton:SetText(self:TestStateLabel())
     end
@@ -1321,6 +1344,7 @@ function NS:CreateListWindow()
     frame:SetSize(660, 590)
     fitToScreen(frame, 660, 590)
     frame:SetPoint("CENTER", 30, 0)
+    self:RestoreWindowPosition(frame, "list")
     frame:SetFrameStrata("DIALOG")
     frame:SetClampedToScreen(true)
     frame:SetMovable(true)
@@ -1329,7 +1353,10 @@ function NS:CreateListWindow()
     frame:EnableMouseWheel(true)
     addPanelBackground(frame)
     frame:SetScript("OnDragStart", function(f) f:StartMoving() end)
-    frame:SetScript("OnDragStop", function(f) f:StopMovingOrSizing() end)
+    frame:SetScript("OnDragStop", function(f)
+        f:StopMovingOrSizing()
+        self:SaveWindowPosition(f, "list")
+    end)
     frame:SetScript("OnMouseWheel", function(f, delta)
         local pageSize = #(f.rows or {})
         f.listOffset = math.max(0, (f.listOffset or 0) + (delta < 0 and pageSize or -pageSize))
@@ -1422,6 +1449,7 @@ function NS:CreateFilterWindow()
     frame:SetSize(560, 560)
     fitToScreen(frame, 560, 560)
     frame:SetPoint("CENTER", 60, 0)
+    self:RestoreWindowPosition(frame, "filter")
     frame:SetFrameStrata("DIALOG")
     frame:SetClampedToScreen(true)
     frame:SetMovable(true)
@@ -1430,7 +1458,10 @@ function NS:CreateFilterWindow()
     frame:EnableMouseWheel(true)
     addPanelBackground(frame)
     frame:SetScript("OnDragStart", function(f) f:StartMoving() end)
-    frame:SetScript("OnDragStop", function(f) f:StopMovingOrSizing() end)
+    frame:SetScript("OnDragStop", function(f)
+        f:StopMovingOrSizing()
+        self:SaveWindowPosition(f, "filter")
+    end)
     frame:SetScript("OnMouseWheel", function(f, delta)
         local pageSize = #(f.rows or {})
         f.listOffset = math.max(0, (f.listOffset or 0) + (delta < 0 and pageSize or -pageSize))
@@ -1523,13 +1554,17 @@ function NS:ShowProfileTransfer()
         frame = CreateFrame("Frame", "CleansiveProfileTransferFrame", UIParent)
         frame:SetSize(700, 520)
         frame:SetPoint("CENTER")
+        self:RestoreWindowPosition(frame, "transfer")
         frame:SetFrameStrata("DIALOG")
         frame:SetClampedToScreen(true)
         frame:EnableMouse(true)
         frame:SetMovable(true)
         frame:RegisterForDrag("LeftButton")
         frame:SetScript("OnDragStart", frame.StartMoving)
-        frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
+        frame:SetScript("OnDragStop", function(moved)
+            moved:StopMovingOrSizing()
+            self:SaveWindowPosition(moved, "transfer")
+        end)
         addPanelBackground(frame)
 
         local accentBar = solid(frame, "BORDER", accent())
@@ -1634,4 +1669,9 @@ function NS:ShowProfileTransfer()
     frame.apply:Hide()
     frame:Show()
     frame.exportBox:HighlightText()
+end
+
+function NS:RefreshOptionsStatus()
+    if not self.optionsStatusText then return end
+    self.optionsStatusText:SetText(self:OptionsStatusText())
 end

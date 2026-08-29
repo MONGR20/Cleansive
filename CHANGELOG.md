@@ -6,6 +6,13 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.5.51
+
+- **Le pied de la fenêtre de réglages dit enfin la vérité.** Il affichait « Modifications enregistrées instantanément » en toutes circonstances, y compris en plein combat où c’est faux. Il annonce maintenant le combat, le nombre exact de changements qui attendent la fin du combat, ou le fait que Cleansive est désactivé — et il compte **les mêmes** reports que la plaque à côté de la grille : deux réponses différentes à « est-ce que quelque chose attend ? » seraient pires qu’aucune.
+- **Un réglage qui ne s’applique pas ne reste plus affiché.** Le son coupé, tout ce qui le règle — canal, budget, test, état — disparaît au lieu de rester là à suggérer qu’il sert à quelque chose.
+- **Les quatre fenêtres déplaçables retiennent leur place** : réglages, listes, filtres, partage de profil et diagnostic. La position est enregistrée dans la section globale et non dans un profil : la fenêtre est unique, les profils sont nombreux. Un ancrage inconnu ou une coordonnée illisible est refusé plutôt que passé à `SetPoint`, qui lève.
+- Tests : 870 à 889, vérifiés par réinjection de six défauts.
+
 ## 1.5.50
 
 - **Un profil s’exporte et s’importe en texte**, depuis **Aide → Partager ce profil**. C’est la fonction que les concurrents mettent en avant et que Cleansive n’avait pas.

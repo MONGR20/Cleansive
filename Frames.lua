@@ -2358,6 +2358,9 @@ local PENDING_FLAGS = {
     "pendingAuraEngineRebuild", "pendingPriorityBinding",
     "pendingEnabled", "pendingGridVisibility",
 }
+-- The options footer counts the same flags as the plate next to the grid. Two
+-- different answers to "is something waiting?" would be worse than none.
+NS.PENDING_FLAGS = PENDING_FLAGS
 
 function NS:UpdatePendingIndicator()
     local frame = self.pendingIndicator
