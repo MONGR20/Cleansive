@@ -64,6 +64,18 @@ function NS:NoteRefusedEvent(name)
     record.refusedEvents[name] = true
 end
 
+-- Keep only the refusals that still mean something. A name the addon no longer
+-- registers cannot be refused again, and printing it reads as a live problem.
+function NS:ForgetRefusalsOutside(names)
+    local record = self:GetDiagnostics()
+    if not record or type(record.refusedEvents) ~= "table" then return end
+    local current = {}
+    for _, name in ipairs(names or {}) do current[name] = true end
+    for name in pairs(record.refusedEvents) do
+        if not current[name] then record.refusedEvents[name] = nil end
+    end
+end
+
 function NS:IsEventRefused(name)
     local record = self:GetDiagnostics()
     return record and record.refusedEvents and record.refusedEvents[name] or false
@@ -93,15 +105,25 @@ function NS:SnapshotDiagnostics()
             registered = sound.registered,
             skippedUnits = sound.skippedUnits,
             season = self.KNOWN_DISPELLABLE_AURAS_SEASON,
+            -- soundstatus shows the live error; the point of the record is to
+            -- still have it after the client has thrown the table away.
+            error = sound.error,
+            pending = sound.pending,
+            retries = sound.retries,
         }
     end
 end
 
+-- The refusals survive: they are not part of the report, they are why the addon
+-- does not ask again. Clearing them would send it back for the same dialog at
+-- the next login.
 function NS:ResetDiagnostics()
     local global = self.dbRoot and self.dbRoot.global
     if not global then return end
+    local refused = type(global.diagnostics) == "table" and global.diagnostics.refusedEvents or nil
     global.diagnostics = nil
-    self:GetDiagnostics()
+    local record = self:GetDiagnostics()
+    if record and refused then record.refusedEvents = refused end
     self:Print(self.L.DIAG_CLEARED)
 end
 
@@ -110,11 +132,24 @@ function NS:PrintDiagnostics()
     local record = self:GetDiagnostics()
     if not record then return end
 
+    local problems = 0
+
     local engine = record.engine
     if engine then
         self:Print(self.L.DIAG_ENGINE, tostring(engine.readyButtons or 0),
             tostring(engine.added or 0), tostring(engine.expected or 0),
             tostring(engine.firstError or "-"))
+        -- A live type that failed and an old type that would not go quiet are
+        -- different faults with different answers; firstError alone conflated
+        -- them into one line.
+        if engine.activeError then
+            problems = problems + 1
+            self:Print(self.L.DIAG_ENGINE_ACTIVE, tostring(engine.activeError))
+        end
+        if engine.retiredError then
+            problems = problems + 1
+            self:Print(self.L.DIAG_ENGINE_RETIRED, tostring(engine.retiredError))
+        end
     end
 
     local sound = record.sound
@@ -122,12 +157,19 @@ function NS:PrintDiagnostics()
         self:Print(self.L.DIAG_SOUND, tostring(sound.registered or 0),
             tostring(sound.attempted or 0), tostring(sound.skippedUnits or 0),
             tostring(sound.season or "?"))
+        if sound.error then
+            problems = problems + 1
+            self:Print(self.L.DIAG_SOUND_ERROR, tostring(sound.error),
+                tostring(sound.retries or 0))
+        end
     end
 
     for name in pairs(record.refusedEvents or {}) do
+        problems = problems + 1
         self:Print(self.L.DIAG_REFUSED, name)
     end
     if record.styleFailures then
+        problems = problems + 1
         self:Print(self.L.DIAG_STYLE, tostring(record.styleFailures),
             tostring(record.styleError or "-"))
     end
@@ -140,4 +182,11 @@ function NS:PrintDiagnostics()
     end
     if not any then self:Print(self.L.DIAG_PENDING_NONE) end
 
+    -- A deferral is not a fault: the plate is the addon working as designed.
+    -- Only the client's refusals and the engine's failures count here.
+    if problems == 0 then
+        self:Print(self.L.DIAG_HEALTHY)
+    else
+        self:Print(self.L.DIAG_PROBLEMS, tostring(problems))
+    end
 end

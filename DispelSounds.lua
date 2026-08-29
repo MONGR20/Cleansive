@@ -221,6 +221,28 @@ function NS:GetKnownDispelType(spellID)
     return self.knownDispelTypeBySpellID[spellID]
 end
 
+-- A registration can fail transiently -- a protected handle, a refusal during a
+-- loading screen. In combat the end of the fight already requests a refresh, so
+-- a timer here would only race it. Out of combat nothing was asking, so ask:
+-- twice, spaced, and no more, because a permanent refusal must not loop.
+local MAX_SOUND_RETRIES = 2
+
+function NS:ScheduleAuraSoundRetry()
+    if InCombatLockdown and InCombatLockdown() then return end
+    local attempts = self.auraSoundRetries or 0
+    if attempts >= MAX_SOUND_RETRIES then return end
+    self.auraSoundRetries = attempts + 1
+    local diagnostics = self.auraSoundDiagnostics
+    if diagnostics then diagnostics.retries = self.auraSoundRetries end
+    if not (C_Timer and C_Timer.After) then return end
+    local generation = self.auraSoundGeneration
+    C_Timer.After(attempts == 0 and 1 or 3, function()
+        -- Another refresh has already happened; it owns the outcome now.
+        if self.auraSoundGeneration ~= generation then return end
+        self:RequestAuraSoundRefresh("registration retry")
+    end)
+end
+
 function NS:RefreshAuraSoundRegistrations(reason)
 
     local startedAt = nowMilliseconds()
@@ -332,13 +354,15 @@ function NS:RefreshAuraSoundRegistrations(reason)
         if diagnostics.registered == diagnostics.attempted and staleHandles == 0 then
             self.auraSoundFingerprint = fingerprint
             self.auraSoundChannel = currentChannel
+            self.auraSoundRetries = 0
         else
-            -- Clearing the fingerprint is what schedules the retry: the next
-            -- RequestAuraSoundRefresh sees a mismatch and rebuilds. A
-            -- pendingSoundRefresh flag used to be raised here as well and was
-            -- never read by anything -- the end of combat calls
-            -- RequestAuraSoundRefresh("combat ended") regardless.
+            -- Clearing the fingerprint lets the next request rebuild instead of
+            -- short-circuiting on a match. It does not, on its own, ask for
+            -- one: a partial pass out of combat used to have no follow-up at
+            -- all, and the missing sounds stayed missing until some unrelated
+            -- event happened to request a refresh. Ask here instead.
             self.auraSoundFingerprint = nil
+            self:ScheduleAuraSoundRetry()
         end
         if diagnostics.attempted >= SOUND_WARNING_THRESHOLD and not self.soundLoadWarningShown then
             self.soundLoadWarningShown = true

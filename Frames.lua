@@ -2163,9 +2163,11 @@ function NS:LayoutManualIndicator()
     frame:SetPoint(corner, self.cooldownBody, anchor, 0, up and -4 or 4)
 end
 
--- The two notices share the manual badge's corner. They can never both be
--- needed at once -- a character with no cleanse has no area-only type either --
--- but the pending plate can, so it steps aside by the badge's width.
+-- The plates share the manual badge's corner. The previous version asserted the
+-- two could never be needed at once and drew both at the same point; a
+-- character with no cleanse can still resize the grid mid-fight, which defers a
+-- protected change and lights the pending plate on top of the other one.
+-- Whatever is actually visible is stacked instead, in a fixed order.
 function NS:LayoutStatusNotices()
     if not self.cooldownBody then return end
     local size = self.db.frameSize
@@ -2179,19 +2181,24 @@ function NS:LayoutStatusNotices()
     local height = math.max(16, math.floor(size * 0.7))
     local manualShown = self.manualIndicator and self.manualIndicator:IsShown()
 
+    local offset = manualShown and (size + 4) or 0
+
     for _, entry in ipairs({
-        { frame = self.pendingIndicator, text = self.L.PENDING_BADGE, shift = manualShown },
-        { frame = self.noCureNotice, text = self.L.NO_CURE_BADGE, shift = false },
+        { frame = self.pendingIndicator, text = self.L.PENDING_BADGE },
+        { frame = self.noCureNotice, text = self.L.NO_CURE_BADGE },
     }) do
         local frame = entry.frame
         if frame then
             if font then frame.label:SetFont(font, labelSize, "") end
             frame.label:SetText(entry.text)
-            frame:SetSize(math.max(24, math.ceil(frame.label:GetStringWidth()) + 10), height)
+            local width = math.max(24, math.ceil(frame.label:GetStringWidth()) + 10)
+            frame:SetSize(width, height)
             frame:ClearAllPoints()
-            local offset = entry.shift and (size + 4) or 0
             frame:SetPoint(corner, self.cooldownBody, anchorPoint,
                 left and offset or -offset, up and -4 or 4)
+            -- Measured here rather than read back: the width was just set, and
+            -- a hidden plate must not reserve a place in the row.
+            if frame:IsShown() then offset = offset + width + 4 end
         end
     end
 end
@@ -2241,10 +2248,11 @@ function NS:UpdatePendingIndicator()
     local inCombat = InCombatLockdown and InCombatLockdown()
     if not (waiting and inCombat and self.enabled and not self.gridManuallyHidden) then
         frame:Hide()
+        self:LayoutStatusNotices()
         return
     end
-    self:LayoutStatusNotices()
     frame:Show()
+    self:LayoutStatusNotices()
 end
 
 function NS:UpdateNoCureNotice()
@@ -2257,10 +2265,11 @@ function NS:UpdateNoCureNotice()
         and #(self.engineAuraTypes or {}) == 0
     if not (none and self.enabled and not self.gridManuallyHidden) then
         frame:Hide()
+        self:LayoutStatusNotices()
         return
     end
-    self:LayoutStatusNotices()
     frame:Show()
+    self:LayoutStatusNotices()
 end
 
 -- engineAuraTypes is decided once, when the grid is built. A specialization

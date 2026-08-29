@@ -6,6 +6,16 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.5.39
+
+- **Un enregistrement sonore rate est desormais repris.** Effacer l'empreinte laissait la porte ouverte a une reprise mais ne la demandait a personne : hors combat, sans autre evenement, les sons concernes restaient absents pour le reste de la session. La reprise est bornee a deux tentatives espacees, protegee par le compteur de generation, et se tait en combat, ou la fin du combat demande deja un rafraichissement. Le commentaire qui affirmait le contraire disait faux.
+- **Les deux plaques d'etat ne se superposent plus.** Le code affirmait qu'« En attente » et « Sans dissipation » ne pouvaient pas etre necessaires en meme temps, et les posait au meme point. C'est faux : une specialisation sans dissipation peut redimensionner la grille en plein combat, ce qui differe un changement protege et allume les deux. Ce qui est visible est maintenant empile, dans un ordre fixe, et la plaque restante reprend la place liberee.
+- **Un refus perime ne se lit plus comme un probleme actuel.** Toute base issue de la 1.5.37 portait encore `refusedEvents.COMBAT_LOG_EVENT_UNFILTERED`, un evenement que la 1.5.38 ne demande plus, et le releve l'imprimait comme si le client venait de le refuser. Les refus qui ne correspondent a aucun evenement demande sont oublies au chargement. En revanche `diag reset` les conserve : ce n'est pas une ligne de rapport, c'est la raison pour laquelle l'addon ne redemande pas -- l'effacer ramenait la fenetre qui propose de le desactiver.
+- Priorites, Exclusions et Filtres finissent comme l'Historique : pagination masquee tant qu'il n'y a qu'une page, vidage eteint sur une liste vide, et chevrons repeints quand ils sont desactives. L'action etait deja bloquee ; c'est l'apparence qui mentait.
+- `/cleansive diag` figure dans l'aide, distingue l'echec d'un type actif de celui d'un type retire, conserve l'erreur sonore pour apres la deconnexion, et conclut : « Diagnostic sain » ou le nombre de problemes releves. Un report differe n'en est pas un.
+- Les accents manquants des chaines de diagnostic francaises sont corriges.
+- Tests : 646 a 668. Les quatre correctifs ont ete verifies par reinjection du defaut : chacun rougit la suite avant d'etre corrige.
+
 ## 1.5.38
 
 - **The backlash warning added in 1.5.31 is removed.** It was not merely inert -- it was inverted. `AuraContainerUtil.CanApplyIdentityCandidateFilters` refuses `includeSpellIDs` on a harmful aura carried by a unit the player can assist, unless the spell is `NeverSecret`. The warning slot had no other filter, so the yellow ring was drawn on *every* dispellable affliction rather than on the dangerous ones: it told the player not to cleanse, on everything. A safety feature cannot rest on a filter the client is free to ignore.

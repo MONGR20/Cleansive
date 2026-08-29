@@ -279,6 +279,12 @@ local function setDirectionEnabled(control, enabled)
     if control.PaintChevron then control:PaintChevron() end
 end
 
+-- The list windows live in Lists.lua and were calling SetEnabled directly, which
+-- blocks the click but leaves the chevron painted like a live control.
+NS.SetDirectionEnabled = function(_, control, enabled)
+    setDirectionEnabled(control, enabled)
+end
+
 local function section(parent, value, y)
     local label = text(parent, string.upper(value), 11, C.section)
     label:SetPoint("TOPLEFT", 0, y)
@@ -1233,6 +1239,7 @@ function NS:CreateListWindow()
     local clear = button(frame, self.L.CLEAR, 90, 28)
     clear:SetPoint("LEFT", addTarget, "RIGHT", 10, 0)
     clear:SetScript("OnClick", function() self:ConfirmClearList(self.currentListKind) end)
+    frame.clearButton = clear
 
     frame.help = text(frame, "", 11, C.dim)
     frame.help:SetPoint("TOPLEFT", 22, -103)

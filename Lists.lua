@@ -91,19 +91,30 @@ function NS:RefreshListWindow()
             row.up:SetScript("OnClick", function() self:MoveListEntry(self.currentListKind, rowIndex, -1) end)
             row.down:SetScript("OnClick", function() self:MoveListEntry(self.currentListKind, rowIndex, 1) end)
             row.remove:SetScript("OnClick", function() self:RemoveListEntry(self.currentListKind, rowIndex) end)
-            row.up:SetEnabled(rowIndex > 1)
-            row.down:SetEnabled(rowIndex < #list)
+            self:SetDirectionEnabled(row.up, rowIndex > 1)
+            self:SetDirectionEnabled(row.down, rowIndex < #list)
             row:Show()
         else
             row:Hide()
         end
     end
+    -- Meme regle que l'historique : une pagination d'une seule page est du
+    -- mobilier, et vider une liste vide ne fait rien.
+    local paged = pages > 1
     if self.listFrame.page then
         local page = math.floor(offset / pageSize) + 1
         self.listFrame.page:SetText(string.format(self.L.PAGE, page, pages))
+        self.listFrame.page:SetShown(paged)
     end
-    if self.listFrame.prev then self.listFrame.prev:SetEnabled(offset > 0) end
-    if self.listFrame.next then self.listFrame.next:SetEnabled(offset < maxOffset) end
+    if self.listFrame.prev then
+        self.listFrame.prev:SetShown(paged)
+        self.listFrame.prev:SetEnabled(offset > 0)
+    end
+    if self.listFrame.next then
+        self.listFrame.next:SetShown(paged)
+        self.listFrame.next:SetEnabled(offset < maxOffset)
+    end
+    if self.listFrame.clearButton then self.listFrame.clearButton:SetEnabled(#list > 0) end
 end
 
 function NS:AddFilter(spellID, combatOnly)
@@ -291,11 +302,19 @@ function NS:RefreshFilterWindow()
             row:Hide()
         end
     end
+    local paged = pages > 1
     if self.filterFrame.page then
         local page = math.floor(offset / pageSize) + 1
         self.filterFrame.page:SetText(string.format(self.L.PAGE, page, pages))
+        self.filterFrame.page:SetShown(paged)
     end
     if self.filterFrame.empty then self.filterFrame.empty:SetShown(#filters == 0) end
-    if self.filterFrame.prev then self.filterFrame.prev:SetEnabled(offset > 0) end
-    if self.filterFrame.next then self.filterFrame.next:SetEnabled(offset < maxOffset) end
+    if self.filterFrame.prev then
+        self.filterFrame.prev:SetShown(paged)
+        self.filterFrame.prev:SetEnabled(offset > 0)
+    end
+    if self.filterFrame.next then
+        self.filterFrame.next:SetShown(paged)
+        self.filterFrame.next:SetEnabled(offset < maxOffset)
+    end
 end

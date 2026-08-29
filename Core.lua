@@ -712,6 +712,13 @@ local GAME_DRIVEN_EVENTS = {
     UNIT_AURA = true, UNIT_FLAGS = true, UNIT_FACTION = true, UNIT_CONNECTION = true,
 }
 
+local EVENT_NAMES = {
+    "PLAYER_ENTERING_WORLD", "GROUP_ROSTER_UPDATE", "UNIT_AURA", "UNIT_FLAGS", "UNIT_FACTION", "UNIT_PET",
+    "UNIT_CONNECTION", "UNIT_ENTERED_VEHICLE", "UNIT_EXITED_VEHICLE", "PLAYER_FOCUS_CHANGED", "SPELLS_CHANGED", "SPELL_UPDATE_COOLDOWN", "SPELL_UPDATE_CHARGES",
+    "PLAYER_SPECIALIZATION_CHANGED", "TRAIT_CONFIG_UPDATED", "PLAYER_REGEN_DISABLED",
+    "PLAYER_REGEN_ENABLED", "UI_ERROR_MESSAGE", "PLAYER_LOGOUT",
+}
+
 local events = CreateFrame("Frame")
 NS.eventFrame = events
 events:RegisterEvent("ADDON_LOADED")
@@ -721,12 +728,12 @@ events:SetScript("OnEvent", function(_, event, ...)
         if loaded ~= addonName then return end
         events:UnregisterEvent("ADDON_LOADED")
         NS:Initialize()
-        for _, name in ipairs({
-            "PLAYER_ENTERING_WORLD", "GROUP_ROSTER_UPDATE", "UNIT_AURA", "UNIT_FLAGS", "UNIT_FACTION", "UNIT_PET",
-            "UNIT_CONNECTION", "UNIT_ENTERED_VEHICLE", "UNIT_EXITED_VEHICLE", "PLAYER_FOCUS_CHANGED", "SPELLS_CHANGED", "SPELL_UPDATE_COOLDOWN", "SPELL_UPDATE_CHARGES",
-            "PLAYER_SPECIALIZATION_CHANGED", "TRAIT_CONFIG_UPDATED", "PLAYER_REGEN_DISABLED",
-            "PLAYER_REGEN_ENABLED", "UI_ERROR_MESSAGE", "PLAYER_LOGOUT",
-        }) do
+        -- A refusal recorded for an event this version no longer asks for is
+        -- history, not a fact about the client: 1.5.37 asked for the combat
+        -- log, 1.5.38 does not, and the refusal outlived it in every saved
+        -- database. Drop what is no longer on the list before printing it.
+        NS:ForgetRefusalsOutside(EVENT_NAMES)
+        for _, name in ipairs(EVENT_NAMES) do
             -- A refusal does not raise: it shows the player a dialog whose
             -- first button disables this addon. Nothing can be done in advance
             -- to know, so the attempt is made once, the frame is asked whether
