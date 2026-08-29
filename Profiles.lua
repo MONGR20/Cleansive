@@ -643,3 +643,74 @@ function NS:CopyProfileToSpec(specKey)
     self:Print(string.format(self.L.PROFILE_COPIED, specKey))
     return true
 end
+
+--------------------------------------------------------------------------
+-- Presets and per-page reset
+--------------------------------------------------------------------------
+
+-- Four starting points, not four modes: a preset writes ordinary settings the
+-- player can then change one by one. Nothing here is remembered as "the preset
+-- you are on", because the moment you move a slider you would no longer be on
+-- it and the label would lie.
+NS.VISUAL_PRESETS = {
+    { key = "COMPACT", values = {
+        frameSize = 18, spacing = 2, columns = 10, inactiveAlpha = 0.15,
+        showNames = false, showClickHints = false, showStacks = false, showCooldown = true } },
+    { key = "READABLE", values = {
+        frameSize = 34, spacing = 6, columns = 8, inactiveAlpha = 0.30,
+        showNames = true, showClickHints = true, showStacks = true, showCooldown = true } },
+    { key = "RAID", values = {
+        frameSize = 20, spacing = 1, columns = 8, inactiveAlpha = 0.15,
+        showNames = false, showClickHints = true, showStacks = false, showCooldown = true } },
+    { key = "MINIMAL", values = {
+        frameSize = 16, spacing = 1, columns = 12, inactiveAlpha = 0.05,
+        showNames = false, showClickHints = false, showStacks = false, showCooldown = false } },
+}
+
+function NS:ApplyVisualPreset(key)
+    local preset
+    for _, candidate in ipairs(self.VISUAL_PRESETS) do
+        if candidate.key == key then preset = candidate end
+    end
+    if not preset or not self.db then return false end
+    for setting, value in pairs(preset.values) do self.db[setting] = value end
+    self:LayoutButtons()
+    self:RefreshAll(true)
+    if self.RefreshOptions then self:RefreshOptions() end
+    self:Print(string.format(self.L.PRESET_APPLIED, self.L["PRESET_" .. key]))
+    return true
+end
+
+-- One reset per page rather than one for everything. A player who wants his
+-- grid back should not have to lose his lists and his filters to get it.
+NS.PAGE_RESET_KEYS = {
+    general = { "enabled", "locked", "showPets", "showFocus", "showTooltips",
+        "sound", "failureSound", "soundChannel", "soundMaxRegistrations",
+        "blacklistTime", "autoHide" },
+    appearance = { "frameSize", "spacing", "columns", "inactiveAlpha", "grow",
+        "layoutMode", "showNames", "showCooldown", "showStacks", "showClickHints",
+        "afflictedOnly", "testUnits", "testState", "positions" },
+    dispels = { "typeOrder", "enabledTypes", "groupManualTypes", "priority", "skip" },
+}
+
+function NS:ResetOptionsPage(page)
+    local keys = self.PAGE_RESET_KEYS[page or ""]
+    if not keys or not self.db then return false end
+    for _, key in ipairs(keys) do
+        self.db[key] = deepCopy(self.profileDefaults[key])
+    end
+    self.enabled = self.db.enabled and true or false
+    self.deferRefreshes = true
+    self:UpdateSpells()
+    self:RebuildRoster()
+    self.deferRefreshes = false
+    self:ApplySecureBindings()
+    self:RestorePosition(self.gridAnchor, "grid")
+    self:LayoutButtons()
+    self:RefreshAll(true)
+    self:UpdateGridVisibilityDriver()
+    if self.RequestAuraSoundRefresh then self:RequestAuraSoundRefresh("page reset") end
+    if self.RefreshOptions then self:RefreshOptions() end
+    self:Print(string.format(self.L.PAGE_RESET_DONE, #keys))
+    return true
+end

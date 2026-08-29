@@ -6,6 +6,13 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.5.52
+
+- **Quatre points de départ pour l’allure de la grille** : Compact, Lisible, Raid, Minimal. Ce sont des points de départ, pas des modes : chacun écrit des réglages ordinaires que vous modifiez ensuite un par un. Rien ne mémorise « le préréglage sur lequel vous êtes » — dès que vous bougez un curseur ce serait faux, et un libellé qui ment est pire que pas de libellé.
+- **La remise à zéro ne concerne plus que la page affichée.** Vouloir retrouver sa grille ne devrait pas coûter ses listes et ses filtres. Le bouton disparaît sur les pages qui n’ont rien à remettre à zéro, plutôt que de promettre une action vide.
+- **Deux clics avant de détruire**, et pas une fenêtre de confirmation : une popup coupe le geste et se valide sans être lue. Le bouton annonce qu’il attend, se désarme tout seul au bout de quelques secondes, et se désarme aussi quand vous changez de page — il parle de la page affichée.
+- Tests : 889 à 924, vérifiés par réinjection de cinq défauts.
+
 ## 1.5.51
 
 - **Le pied de la fenêtre de réglages dit enfin la vérité.** Il affichait « Modifications enregistrées instantanément » en toutes circonstances, y compris en plein combat où c’est faux. Il annonce maintenant le combat, le nombre exact de changements qui attendent la fin du combat, ou le fait que Cleansive est désactivé — et il compte **les mêmes** reports que la plaque à côté de la grille : deux réponses différentes à « est-ce que quelque chose attend ? » seraient pires qu’aucune.

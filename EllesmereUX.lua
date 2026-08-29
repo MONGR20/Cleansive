@@ -480,6 +480,34 @@ local function navButton(parent, value, key, y)
     return control
 end
 
+-- Two clicks rather than a popup: a popup interrupts the gesture and gets
+-- confirmed without being read. The second click must land within the delay,
+-- otherwise the button goes back to what it said.
+local function armConfirm(control, restingLabel, armedLabel, action)
+    control.confirmArmed = false
+    control:SetText(restingLabel)
+    control:SetScript("OnClick", function()
+        if control.confirmArmed then
+            control.confirmArmed = false
+            control:SetText(restingLabel)
+            action()
+            return
+        end
+        control.confirmArmed = true
+        control:SetText(armedLabel)
+        control.confirmGeneration = (control.confirmGeneration or 0) + 1
+        local generation = control.confirmGeneration
+        if C_Timer and C_Timer.After then
+            C_Timer.After(4, function()
+                if control.confirmGeneration ~= generation then return end
+                control.confirmArmed = false
+                control:SetText(restingLabel)
+            end)
+        end
+    end)
+    return control
+end
+
 local REPORT_URL = "https://github.com/MONGR20/Cleansive/issues"
 
 local CLICK_BADGE_COLORS = {
@@ -540,6 +568,12 @@ function NS:ShowOptionsPage(key)
     local pageInfo = metadata[key] or metadata.general
     if self.optionsHeading then self.optionsHeading:SetText(pageInfo[1]) end
     if self.optionsSubheading then self.optionsSubheading:SetText(pageInfo[2]) end
+    if self.pageResetButton then
+        self.pageResetButton:SetShown(self.PAGE_RESET_KEYS[key] ~= nil)
+        self.pageResetButton.confirmArmed = false
+        self.pageResetButton.confirmGeneration = (self.pageResetButton.confirmGeneration or 0) + 1
+        self.pageResetButton:SetText(self.L.PAGE_RESET)
+    end
     if key == "history" and self.RefreshAuraHistoryPage then self:RefreshAuraHistoryPage() end
 end
 
@@ -854,6 +888,15 @@ function NS:CreateOptions()
         self:RefreshAll(true)
     end, self.L.TIP_GROUP_MANUAL)
 
+    local presetLabel = text(appearance, self.L.PRESETS, 12, C.dim)
+    presetLabel:SetPoint("TOPLEFT", 0, -118)
+    for index, preset in ipairs(self.VISUAL_PRESETS) do
+        local presetButton = button(appearance, self.L["PRESET_" .. preset.key], 110, 26)
+        presetButton:SetPoint("TOPLEFT", 120 + ((index - 1) * 114), -112)
+        presetButton:SetScript("OnClick", function() self:ApplyVisualPreset(preset.key) end)
+        attachHelp(presetButton, self.L.PRESETS, self.L.TIP_PRESETS)
+    end
+
     section(appearance, localized("Dimensions", "Dimensions"), -148)
     self.optionSliders[#self.optionSliders + 1] = slider(appearance, self.L.SIZE, 0, -180, 265, 12, 40, 1, "frameSize", "%d px", function()
         self:LayoutButtons()
@@ -1075,6 +1118,13 @@ function NS:CreateOptions()
     local reset = button(frame, self.L.RESET_POSITIONS, 156, 28)
     reset:SetPoint("BOTTOMRIGHT", -20, 14)
     reset:SetScript("OnClick", function() self:ResetPositions() end)
+    local pageReset = button(frame, self.L.PAGE_RESET, 176, 28)
+    pageReset:SetPoint("BOTTOMRIGHT", -350, 14)
+    armConfirm(pageReset, self.L.PAGE_RESET, self.L.PAGE_RESET_ARMED, function()
+        self:ResetOptionsPage(self.activeOptionsPage)
+    end)
+    attachHelp(pageReset, self.L.PAGE_RESET, self.L.TIP_PAGE_RESET)
+    self.pageResetButton = pageReset
 
     -- Une seule zone de defilement pleine hauteur : deux barres sur la meme
     -- page se disputent la molette et on ne sait jamais laquelle repond.
