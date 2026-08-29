@@ -6,6 +6,14 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.5.66
+
+- **** sort le catalogue des pertes de contrôle observées en un bloc, avec le lieu et ce que vous surveillez. Copier ne vide rien : on copie avant de vider, jamais l’inverse.
+- **Un profil partagé ne peut plus emporter une clé non déclarée.** Le test précédent affirmait que le catalogue observé ne partait pas — c’était vrai par construction, donc aucun défaut ne pouvait le rendre faux : il rejouait la conception au lieu de l’éprouver. Il vérifie désormais que **chaque clé sortante est reconnue**, ce qui casse le jour où quelqu’un en ajoute une qui porte du personnel.
+- Deux comportements déjà présents sont désormais verrouillés par un test plutôt que réécrits : un bouton grisé se repeint immédiatement au lieu d’attendre que la souris sorte, et une remise à zéro des réglages n’efface pas ce que Cleansive a observé.
+- Tests : 1127 à 1139.
+
+
 ## 1.5.65
 
 - **Le harnais de tests vit désormais dans le dépôt.** Il vivait à côté, ce qui voulait dire deux copies possibles d’une même suite — et la correction finit toujours par atterrir sur celle que personne ne lance. La CI GitHub exécute maintenant exactement la même suite que moi, sur exactement les mêmes fichiers.

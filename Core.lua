@@ -789,7 +789,10 @@ function NS:HandleSlash(message)
     elseif command == "macro" then
         self:CreateMouseoverMacro()
     elseif command == "control" then
-        if rest == "clear" then
+        if rest == "copy" then
+            self:ShowCopyWindow(self.L.CONTROL_SEEN_TITLE, self.L.HISTORY_COPY_HINT,
+                self:BuildControlReport())
+        elseif rest == "clear" then
             local global = self.dbRoot and self.dbRoot.global
             if global then global.controlSeen = {} end
             self:Print(self.L.CONTROL_CLEARED)

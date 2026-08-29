@@ -2791,3 +2791,24 @@ function NS:ToggleControlType(locType)
     if self.RefreshOptions then self:RefreshOptions() end
     return true
 end
+
+-- #246 : ce que Cleansive a observe doit pouvoir quitter le jeu sans etre
+-- recopie a la main ligne par ligne. Separe du diagnostic : ce sont des
+-- observations de terrain, pas un etat de session.
+function NS:BuildControlReport()
+    local global = self.dbRoot and self.dbRoot.global
+    local seen = global and global.controlSeen
+    local lines = { "Cleansive loss-of-control catalogue" }
+    if type(seen) ~= "table" then return table.concat(lines, "\n") end
+    local names = {}
+    for locType in pairs(seen) do names[#names + 1] = locType end
+    table.sort(names)
+    for _, locType in ipairs(names) do
+        local record = seen[locType]
+        lines[#lines + 1] = string.format("%s | seen=%s | %s | %s | %s",
+            locType, tostring(record.count or 0), tostring(record.example or "-"),
+            tostring(record.place or "-"),
+            self.db.controlTypes[locType] and "watched" or "ignored")
+    end
+    return table.concat(lines, "\n")
+end

@@ -5307,6 +5307,86 @@ do
 end
 
 --------------------------------------------------------------------------
+-- 1.5.66 : ce qui est appris, ce qui est choisi, ce qui est grise
+--------------------------------------------------------------------------
+do
+    freshProfile("PALADIN")
+    knowSpells(4987)
+    NS:UpdateSpells()
+    NS:CreateOptions()
+
+    ----------------------------------------------------------------------
+    -- #261 : un bouton grise doit se VOIR grise, tout de suite
+    ----------------------------------------------------------------------
+    local probe = NS:CreateUXButton(NS.optionsFrame, "Essai", 100, 26)
+    local enabledColor = probe.uxBackground.__color
+    truthy(enabledColor, "grise : la couleur active est posee des la creation")
+    probe:SetEnabled(false)
+    local disabledColor = probe.uxBackground.__color
+    truthy(disabledColor and enabledColor[4] ~= disabledColor[4],
+        "grise : desactiver repeint immediatement, sans attendre que la souris sorte")
+    truthy(probe.uxLabel.__textColor and probe.uxLabel.__textColor[4] < 0.4,
+        "grise : et le libelle s'eteint aussi")
+    probe:SetEnabled(true)
+    eq(probe.uxBackground.__color[4], enabledColor[4],
+        "grise : reactiver rend exactement la couleur d'origine")
+
+    ----------------------------------------------------------------------
+    -- #190 : ce que Cleansive a appris ne vit pas dans les reglages
+    ----------------------------------------------------------------------
+    NS.dbRoot.global.controlSeen = { ROOT = { count = 2, example = "Racines" } }
+    NS.db.controlTypes = { ROOT = true }
+
+    -- L'export n'emet qu'une liste declaree, donc « le catalogue ne part pas »
+    -- est vrai par construction et aucun defaut ne peut le rendre faux. Ce qui
+    -- se verifie vraiment, c'est que cette liste ne s'elargit pas en douce :
+    -- chaque cle sortante doit etre reconnue, et le jour ou quelqu'un en ajoute
+    -- une qui porte du personnel, c'est ici que ca casse.
+    local allowed = {}
+    for _, key in ipairs({
+        "enabled", "locked", "showPets", "showFocus", "showNames", "showTooltips",
+        "sound", "failureSound", "showCooldown", "showDuration", "showStacks",
+        "showClickHints", "autoHide", "afflictedOnly", "groupManualTypes",
+        "showSolo", "showParty", "showRaid", "controlWarning",
+        "frameSize", "spacing", "columns", "blacklistTime", "soundMaxRegistrations",
+        "testUnits", "inactiveAlpha", "grow", "layoutMode", "soundChannel",
+        "testState", "sortMode", "typeOrder", "enabledTypes",
+        "ignoredAlways", "ignoredCombat",
+    }) do allowed[key] = true end
+
+    local unexpected = {}
+    for key in string.gmatch(NS:ExportProfile(), "([%a]+)=") do
+        if not allowed[key] then unexpected[#unexpected + 1] = key end
+    end
+    eq(table.concat(unexpected, ", "), "",
+        "appris : un profil exporte n'emporte que des cles connues et sans donnee personnelle")
+
+    -- Et il survit a une remise a zero de page, qui ne touche qu'aux reglages.
+    NS:ResetOptionsPage("general")
+    truthy(NS.dbRoot.global.controlSeen.ROOT,
+        "appris : une remise a zero des reglages n'efface pas les observations")
+
+    ----------------------------------------------------------------------
+    -- #246 : le catalogue peut quitter le jeu en un bloc
+    ----------------------------------------------------------------------
+    NS.db.controlTypes = { ROOT = true }
+    local report = NS:BuildControlReport()
+    truthy(report:find("ROOT", 1, true), "copie : le catalogue nomme les types vus")
+    truthy(report:find("Racines", 1, true), "copie : avec le libelle du jeu")
+    truthy(report:find("watched", 1, true),
+        "copie : et dit lesquels vous surveillez, pour que le lecteur sache")
+
+    NS:HandleSlash("control copy")
+    truthy(NS.diagnosticsCopyFrame and NS.diagnosticsCopyFrame:IsShown(),
+        "copie : la commande ouvre la fenetre de copie")
+    truthy(NS.diagnosticsCopyFrame.edit:GetText():find("ROOT", 1, true),
+        "copie : avec le catalogue dedans, pas le diagnostic")
+
+    -- La copie ne doit rien vider : on copie AVANT de vider, jamais l'inverse.
+    truthy(NS.dbRoot.global.controlSeen.ROOT, "copie : copier ne vide pas le catalogue")
+end
+
+--------------------------------------------------------------------------
 -- report
 --------------------------------------------------------------------------
 local lines = {}
