@@ -6,6 +6,15 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.5.42
+
+Cette version ne change aucun comportement. Elle ajoute deux relevés destinés à trancher une hypothèse sur le refus de mise en forme, ouverte depuis la 1.5.40.
+
+- **L'etat reel des restrictions est releve.** La 12.1 connait six types de restriction -- `Combat`, `Encounter`, `ChallengeMode`, `PvPMatch`, `Map`, `Chat` -- exposes par `C_RestrictedActions`. Cleansive n'utilisait que `InCombatLockdown()`, qui ne repond que pour le premier. Or une cle mythique garde `ChallengeMode` actif pendant toute la course, y compris entre les packs, la ou le code se croit libre d'agir. Chaque refus de mise en forme est desormais compte avec l'etat qui avait cours : `/cleansive diag` dira si les 315 refus du 29/08 arrivaient tous avec le verrou de combat baisse et une restriction toujours active.
+- **Le client nomme lui-meme ce qu'il refuse.** `ADDON_ACTION_FORBIDDEN` et `ADDON_ACTION_BLOCKED` sont enregistres : ils donnent le nom de la fonction refusee. Jusqu'ici Cleansive devinait ses refus apres coup, en demandant au cadre si l'inscription avait pris. Les deux evenements ne portent aucune restriction, ce que le controle statique verifie contre les definitions de Blizzard. L'evenement concerne tous les addons ; seuls les refus de Cleansive sont enregistres.
+- Ces deux relevés suivent la version, comme les autres compteurs.
+- Tests : 691 a 702, verifies par reinjection.
+
 ## 1.5.41
 
 - **La plaque de la lettre de clic nait cachee.** C'est `StyleAuraVisual` qui decidait de la montrer ou non, et ce stylage peut etre refuse par le client : le releve du 29/08/2026 en compte 690 refus en une session. De toutes les regions du visuel, la plaque est la seule a naitre avec une couleur -- les autres n'ont ni teinte ni texte et ne se voient pas. Un refus au tout premier passage laissait donc un petit carre sombre dans le coin d'une cellule, alors meme que le joueur avait desactive les lettres de clic. La cellule de repli cachait deja la sienne des la creation ; celle du moteur avait ete oubliee.

@@ -34,6 +34,7 @@ function NS:GetDiagnostics()
     if record.version and record.version ~= self.version then
         record.pending = {}
         record.styleFailures, record.styleError, record.styleSteps = nil, nil, nil
+        record.styleContext, record.forbidden = nil, nil
         record.soundPeak = nil
     end
     record.version = self.version
@@ -57,6 +58,52 @@ function NS:NotePendingFlag(flag, event)
     entry.lastCause = event or "player"
 end
 
+-- 12.1 knows six kinds of addon restriction, not one. InCombatLockdown()
+-- answers only for Combat -- and a mythic keystone keeps ChallengeMode active
+-- for the whole run, including between packs, exactly where this addon believes
+-- itself free to act. Nothing here changes behaviour: it writes down what was
+-- true at the instant of a refusal, so a real key can confirm or kill that
+-- hypothesis instead of us reasoning about it.
+local RESTRICTION_TYPES = {
+    "Combat", "Encounter", "ChallengeMode", "PvPMatch", "Map", "Chat",
+}
+
+function NS:RestrictionSnapshot()
+    local api = C_RestrictedActions
+    local types = Enum and Enum.AddOnRestrictionType
+    if not (api and api.IsAddOnRestrictionActive and types) then return nil end
+    local active = {}
+    for _, name in ipairs(RESTRICTION_TYPES) do
+        local value = types[name]
+        if value ~= nil then
+            local ok, isActive = pcall(api.IsAddOnRestrictionActive, value)
+            if ok and isActive then active[#active + 1] = name end
+        end
+    end
+    -- The lock flag is the whole point of the comparison: a refusal recorded
+    -- with lock=0 and a restriction active is the case the code does not model.
+    return "lock=" .. ((InCombatLockdown and InCombatLockdown()) and "1" or "0")
+        .. "|" .. (active[1] and table.concat(active, ",") or "none")
+end
+
+-- The client tells an addon when it forbids one of its calls, with the name of
+-- the function. Cleansive used to infer its refusals after the fact by asking
+-- the frame whether a registration had taken; this is the first-hand account.
+function NS:NoteForbiddenAction(addon, func)
+    if addon ~= self.addonName then return end
+    local record = self:GetDiagnostics()
+    if not record then return end
+    record.forbidden = type(record.forbidden) == "table" and record.forbidden or {}
+    local key = tostring(func or "?")
+    local entry = record.forbidden[key]
+    if type(entry) ~= "table" then
+        entry = { count = 0 }
+        record.forbidden[key] = entry
+    end
+    entry.count = entry.count + 1
+    entry.context = self:RestrictionSnapshot() or entry.context
+end
+
 -- The engine can refuse to let its own labels be restyled. The call is already
 -- guarded, but the reason used to be discarded: only the count survived, and a
 -- count cannot tell a forbidden object from a nil field.
@@ -69,6 +116,14 @@ function NS:NoteStyleFailure(err, steps)
     record.styleFailures = (record.styleFailures or 0) + 1
     record.styleSteps = (record.styleSteps or 0) + (tonumber(steps) or 1)
     if not record.styleError then record.styleError = tostring(err) end
+    -- Grouped by context rather than kept as a single sample: the question is
+    -- not what the last refusal looked like, it is whether they all happen
+    -- while the addon thinks it is unlocked.
+    local context = self:RestrictionSnapshot()
+    if context then
+        record.styleContext = type(record.styleContext) == "table" and record.styleContext or {}
+        record.styleContext[context] = (record.styleContext[context] or 0) + 1
+    end
 end
 
 -- The snapshot is taken at logout, so it describes the player standing alone in
@@ -229,6 +284,17 @@ function NS:PrintDiagnostics()
 
     -- A deferral is not a fault: the plate is the addon working as designed.
     -- Only the client's refusals and the engine's failures count here.
+    for context, count in pairs(record.styleContext or {}) do
+        self:Print(self.L.DIAG_STYLE_CONTEXT, context, tostring(count))
+    end
+    for func, entry in pairs(record.forbidden or {}) do
+        problems = problems + 1
+        self:Print(self.L.DIAG_FORBIDDEN, func, tostring(entry.count),
+            tostring(entry.context or "-"))
+    end
+    local now = self:RestrictionSnapshot()
+    if now then self:Print(self.L.DIAG_RESTRICTIONS, now) end
+
     self:Print(self.L.DIAG_SCOPE, tostring(record.version or "?"))
     if problems == 0 then
         self:Print(self.L.DIAG_HEALTHY)

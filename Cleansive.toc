@@ -3,7 +3,7 @@
 ## Notes: Afflictions display and one-click cleansing for solo, groups and raids.
 ## Notes-frFR: Affichage des afflictions et dissipation en un clic en solo, groupe et raid.
 ## Author: Ro
-## Version: 1.5.41
+## Version: 1.5.42
 ## X-Website: https://addons.wago.io/addons/cleansive
 ## X-Wago-ID: v6330o6b
 ## X-Curse-Project-ID: 1666419

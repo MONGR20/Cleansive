@@ -717,6 +717,11 @@ local EVENT_NAMES = {
     "UNIT_CONNECTION", "UNIT_ENTERED_VEHICLE", "UNIT_EXITED_VEHICLE", "PLAYER_FOCUS_CHANGED", "SPELLS_CHANGED", "SPELL_UPDATE_COOLDOWN", "SPELL_UPDATE_CHARGES",
     "PLAYER_SPECIALIZATION_CHANGED", "TRAIT_CONFIG_UPDATED", "PLAYER_REGEN_DISABLED",
     "PLAYER_REGEN_ENABLED", "UI_ERROR_MESSAGE", "PLAYER_LOGOUT",
+    -- Purely observational. The client names the function it refused; until
+    -- now Cleansive had to infer its refusals afterwards. Neither event is
+    -- marked HasRestrictions, and the static check verifies that against
+    -- Blizzard's own definitions rather than against this comment.
+    "ADDON_ACTION_FORBIDDEN", "ADDON_ACTION_BLOCKED",
 }
 
 local events = CreateFrame("Frame")
@@ -751,6 +756,14 @@ events:SetScript("OnEvent", function(_, event, ...)
 
     NS.pendingNoticeSuppressed = GAME_DRIVEN_EVENTS[event] or nil
     NS.currentEvent = event
+
+    -- These fire for every addon, so the name is checked before recording.
+    if event == "ADDON_ACTION_FORBIDDEN" or event == "ADDON_ACTION_BLOCKED" then
+        local culprit, func = ...
+        if NS.NoteForbiddenAction then NS:NoteForbiddenAction(culprit, func) end
+        NS.pendingNoticeSuppressed, NS.currentEvent = nil, nil
+        return
+    end
 
     if event == "UNIT_AURA" or event == "UNIT_FLAGS" or event == "UNIT_FACTION" or event == "UNIT_CONNECTION" then
         local unit = ...
