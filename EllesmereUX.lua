@@ -809,6 +809,10 @@ function NS:CreateOptions()
     local overviewEngine = text(general, "", 10, C.dim)
     overviewEngine:SetPoint("TOPLEFT", 0, -472)
     overviewEngine:SetWidth(560)
+    -- Hauteur RESERVEE, pas subie : sans elle, une formulation plus longue
+    -- reviendrait a la ligne et descendrait dans la carte de profil, et le
+    -- controle de recouvrement ne verrait rien -- il mesure le texte du moment.
+    overviewEngine:SetHeight(14)
     overviewEngine:SetJustifyH("LEFT")
     self.overviewEngineText = overviewEngine
 
@@ -849,6 +853,7 @@ function NS:CreateOptions()
     local soundState = text(general, "", 10, C.dim)
     soundState:SetPoint("TOPLEFT", 0, -490)
     soundState:SetWidth(560)
+    soundState:SetHeight(14)
     soundState:SetJustifyH("LEFT")
     self.soundStateText = soundState
     local soundTest = button(general, self.L.TEST_SOUND, 115, 26)

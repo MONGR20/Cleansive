@@ -519,6 +519,22 @@ function M.childrenOf(parent)
     return list
 end
 
+-- childrenOf reparcourt TOUS les cadres crees. Un appel isole ne coute rien ;
+-- un parcours recursif d'une fenetre entiere en fait un cout quadratique, et le
+-- test a fini par depasser deux minutes. L'index se construit en une passe.
+function M.childIndex()
+    local index = {}
+    for _, frame in ipairs(created) do
+        local parent = rawget(frame, "__parent")
+        if parent ~= nil then
+            local list = index[parent]
+            if not list then list = {} index[parent] = list end
+            list[#list + 1] = frame
+        end
+    end
+    return index
+end
+
 function M.reset()
     state.inCombat = false
     state.secretMode = false

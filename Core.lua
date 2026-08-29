@@ -273,6 +273,7 @@ function NS:SetGridVisible(visible, silent)
     self.gridManuallyHidden = not visible
     self.pendingGridVisibility = nil
     self:UpdateGridVisibilityDriver()
+    self:RequestAuraSoundRefresh("grid visibility")
     if not silent then
         if visible and not self.enabled then
             self:Print(self.L.DISABLED)
@@ -371,7 +372,13 @@ end
 function NS:VisibilityDriverMacro()
     local contexts = {}
     if self.db.showSolo ~= false then contexts[#contexts + 1] = "nogroup" end
-    if self.db.showParty ~= false then contexts[#contexts + 1] = "group:party" end
+    -- « nogroup:raid » n'est pas une precaution decorative. Selon la lecture que
+    -- le client fait de « group:party », un raid est OU N'EST PAS un groupe :
+    -- dans la premiere, « Afficher en raid » eteint ne servait a rien -- la
+    -- clause de groupe rallumait la grille en raid, et le son avec elle.
+    -- Impossible de trancher hors du client : la macro est donc ecrite pour
+    -- dire la meme chose dans les deux lectures.
+    if self.db.showParty ~= false then contexts[#contexts + 1] = "group:party,nogroup:raid" end
     if self.db.showRaid ~= false then contexts[#contexts + 1] = "group:raid" end
     if #contexts == 0 then return "hide" end
     local prefix = self.db.autoHide and "combat," or ""
@@ -380,6 +387,30 @@ function NS:VisibilityDriverMacro()
         parts[index] = "[" .. prefix .. context .. "]"
     end
     return table.concat(parts) .. " show; hide"
+end
+
+-- Le pilote de visibilite est SECURISE : il decide seul, et ne rend jamais son
+-- verdict a Lua. Le son, lui, est pose depuis Lua. Les deux ne se parlaient pas :
+-- « Afficher en raid » eteint, la grille disparaissait et l'alerte continuait de
+-- sonner. Retour joueur du 30/08/2026 : en raid, l'addon « sonne en boucle »
+-- alors qu'il n'affiche rien, et la seule sortie etait de couper le son a la main.
+-- Ceci rejoue la meme regle en Lua. Un test compare les deux verdicts sur toutes
+-- les combinaisons : le jour ou la macro change, le miroir doit changer avec elle.
+function NS:GridWouldBeVisible()
+    if not self.enabled then return false end
+    -- L'apercu et la fenetre de reglages forcent l'affichage : ce que le joueur
+    -- regarde doit s'entendre.
+    if self.testMode then return true end
+    if self.optionsFrame and self.optionsFrame:IsShown() then return true end
+    if self.gridManuallyHidden then return false end
+    if not self:NeedsVisibilityDriver() then return true end
+    local allowed
+    if IsInRaid and IsInRaid() then allowed = self.db.showRaid ~= false
+    elseif IsInGroup and IsInGroup() then allowed = self.db.showParty ~= false
+    else allowed = self.db.showSolo ~= false end
+    if not allowed then return false end
+    if self.db.autoHide and not (InCombatLockdown and InCombatLockdown()) then return false end
+    return true
 end
 
 -- Every context allowed and no combat rule means "always": registering a
@@ -394,6 +425,9 @@ end
 function NS:UpdateGridVisibilityDriver()
     if not self.gridAnchor then return end
     if self.UpdateCooldownOverlayVisibility then self:UpdateCooldownOverlayVisibility() end
+    -- Un seul endroit : toute bascule de visibilite passe par ici, donc le
+    -- registre sonore est reevalue quel que soit l'appelant.
+    if self.RequestAuraSoundRefresh then self:RequestAuraSoundRefresh("visibility rules") end
     if InCombatLockdown and InCombatLockdown() then
         self:MarkPending("pendingVisibilityDriver")
         return
@@ -441,6 +475,9 @@ end
 
 function NS:PlayAfflictionAlert(preview)
     if not self.db or not self.db.sound or not self.enabled then return false end
+    -- Une alerte d'essai est un geste du joueur : elle se joue toujours. Une
+    -- vraie alerte parle d'une case, et se tait si cette case n'est pas la.
+    if not preview and not self:GridWouldBeVisible() then return false end
 
     -- Several party members can receive the same effect in one combat event.
     -- Merge those near-simultaneous notifications into one clear alert.

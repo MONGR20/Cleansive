@@ -179,6 +179,9 @@ function NS:BuildAuraSoundPlan()
     local fingerprint = table.concat({
         self.db.sound and "1" or "0",
         self.enabled and "1" or "0",
+        -- Sans cette empreinte, entrer en raid ne rejouait rien : le registre
+        -- restait celui du groupe precedent, et continuait de sonner.
+        self:GridWouldBeVisible() and "1" or "0",
         self.db.soundChannel or "Master",
         table.concat(spellParts, ","),
         table.concat(unitParts, ","),
@@ -321,8 +324,11 @@ function NS:RefreshAuraSoundRegistrations(reason)
         return 0
     end
 
+    -- Le registre natif est joue par le CLIENT, pas par l'addon : une fois pose,
+    -- il sonne meme si la grille est eteinte par une regle de visibilite. Il
+    -- faut donc le retirer, pas seulement se taire cote Lua.
     local desired = {}
-    if self.db and self.db.sound and self.enabled then
+    if self.db and self.db.sound and self.enabled and self:GridWouldBeVisible() then
         for _, entry in ipairs(registrations) do
             desired[entry.key] = entry
         end

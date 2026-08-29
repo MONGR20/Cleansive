@@ -6,6 +6,16 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.6.4
+
+Retour d'un joueur sur le forum, et le controle de mise en page pousse au bout.
+
+- **L'addon ne sonne plus pour des cases qu'il a decide de ne pas afficher.** « Afficher en raid » eteint, la grille disparaissait — et l'alerte continuait. Le pilote de visibilite est SECURISE : il decide seul et ne rend jamais son verdict a Lua, donc le son ne le consultait pas. Pire, le registre sonore natif est joue par le CLIENT : une fois pose, il sonnait tout seul, grille eteinte ou non. Se taire cote Lua n'aurait donc rien change ; les enregistrements sont maintenant RETIRES a l'entree dans un contexte masque, et reposes a la sortie. La regle est desormais celle-ci : on entend exactement ce qu'on voit. L'essai demande depuis les reglages, lui, se joue toujours.
+- **La macro de visibilite est desambiguisee.** Selon la lecture que le client fait de « group:party », un raid est OU N'EST PAS un groupe. Dans la premiere, « Afficher en raid » eteint ne servait a rien : la clause de groupe rallumait la grille en raid, et le son avec elle. Impossible de trancher hors du client : la macro est ecrite pour dire la meme chose dans les deux lectures. Un test evalue la macro et compare son verdict au miroir Lua sur les 96 combinaisons.
+- **Le controle de recouvrement descend maintenant dans les controles, et couvre la barre laterale.** Il avait ete arrete a mi-chemin en 1.6.3 parce que la descente accusait huit controles parfaitement lisibles. La cause n'etait pas la descente mais le modele de largeur : il ESTIMAIT la largeur d'un texte sans taille posee, et l'estimation etait trop large. Un texte sans largeur posee est desormais declare non mesurable. Un modele qui surestime accuse ; un modele qui se tait laisse passer — et entre les deux il n'y a pas de symetrie, une fausse accusation apprend a ignorer le test. Les neuf recouvrements du 30/08 venaient tous d'elements a taille posee : rien n'est perdu, et un onglet pose sur un autre dans la barre laterale est maintenant vu.
+- Les deux lignes d'etat de la page General ont une hauteur RESERVEE : une formulation plus longue ne peut plus descendre en silence dans la carte de profil.
+- Tests : 1 219 a 1 228. Le parcours recursif rendait le controle quadratique — l'index des enfants se construit desormais en une passe.
+
 ## 1.6.3
 
 Correctifs de mise en page releves sur captures en jeu, et reparation de

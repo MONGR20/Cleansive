@@ -4692,7 +4692,7 @@ do
 
     NS.db.showSolo = false
     truthy(NS:NeedsVisibilityDriver(), "visibilite : une exception demande un pilote")
-    eq(NS:VisibilityDriverMacro(), "[group:party][group:raid] show; hide",
+    eq(NS:VisibilityDriverMacro(), "[group:party,nogroup:raid][group:raid] show; hide",
         "visibilite : le solo retire disparait de la chaine")
 
     NS.db.showSolo, NS.db.showParty = true, false
@@ -4701,7 +4701,7 @@ do
 
     NS.db.showParty = true
     NS.db.autoHide = true
-    eq(NS:VisibilityDriverMacro(), "[combat,nogroup][combat,group:party][combat,group:raid] show; hide",
+    eq(NS:VisibilityDriverMacro(), "[combat,nogroup][combat,group:party,nogroup:raid][combat,group:raid] show; hide",
         "visibilite : la regle de combat se combine avec chaque contexte")
 
     NS.db.autoHide = false
@@ -4709,6 +4709,133 @@ do
     eq(NS:VisibilityDriverMacro(), "hide",
         "visibilite : tout coupe, la grille est masquee partout")
     NS.db.showSolo, NS.db.showParty, NS.db.showRaid = true, true, true
+
+    ----------------------------------------------------------------------
+    -- 1.6.4 : le son doit dire la MEME chose que le pilote securise
+    --
+    -- Retour joueur du 30/08/2026 : en raid, l'addon « sonne en boucle » alors
+    -- qu'il n'affiche rien. Le pilote de visibilite est securise : il decide
+    -- seul et ne rend jamais son verdict a Lua, donc le son ne le consultait
+    -- pas. Ici la macro est EVALUEE et son verdict compare a celui du miroir
+    -- Lua, sur les 96 combinaisons. Le jour ou la macro change, le miroir doit
+    -- changer avec elle, sinon ce test tombe.
+    ----------------------------------------------------------------------
+    local function macroSays(macro, inRaid, inGroup, inCombat)
+        if macro == "hide" then return false end
+        for clause in macro:gmatch("%[(.-)%]") do
+            local satisfied = true
+            for condition in clause:gmatch("[^,]+") do
+                local negated = condition:sub(1, 2) == "no"
+                local name = negated and condition:sub(3) or condition
+                local value
+                if name == "combat" then value = inCombat and true or false
+                elseif name == "group" then value = inGroup and true or false
+                elseif name == "group:party" then value = inGroup and true or false
+                elseif name == "group:raid" then value = inRaid and true or false
+                else error("condition inconnue dans la macro : " .. tostring(name)) end
+                if negated then value = not value end
+                if not value then satisfied = false end
+            end
+            if satisfied then return true end
+        end
+        return false
+    end
+
+    do
+        local savedCombat, savedRaid, savedGroup = mock.state.inCombat, mock.state.inRaid, mock.state.inGroup
+        local savedAuto = NS.db.autoHide
+        NS.testMode = false
+        NS.gridManuallyHidden = false
+        NS.enabled = true
+        local disagreements, checked = {}, 0
+        for _, solo in ipairs({ true, false }) do
+        for _, party in ipairs({ true, false }) do
+        for _, raid in ipairs({ true, false }) do
+        for _, auto in ipairs({ true, false }) do
+            NS.db.showSolo, NS.db.showParty, NS.db.showRaid, NS.db.autoHide = solo, party, raid, auto
+            local macro = NS:VisibilityDriverMacro()
+            for _, context in ipairs({ "solo", "party", "raid" }) do
+            for _, combat in ipairs({ true, false }) do
+                mock.state.inRaid = context == "raid"
+                mock.state.inGroup = context ~= "solo"
+                mock.state.inCombat = combat
+                local fromMacro = macroSays(macro, mock.state.inRaid, mock.state.inGroup, combat)
+                local fromLua = NS:GridWouldBeVisible()
+                checked = checked + 1
+                if fromMacro ~= fromLua and #disagreements < 4 then
+                    disagreements[#disagreements + 1] = string.format(
+                        "solo=%s groupe=%s raid=%s combat-seul=%s / %s %s : macro dit %s, Lua dit %s",
+                        tostring(solo), tostring(party), tostring(raid), tostring(auto),
+                        context, tostring(combat), tostring(fromMacro), tostring(fromLua))
+                end
+            end
+            end
+        end end end end
+        eq(checked, 96, "son : les 96 combinaisons sont bien parcourues")
+        eq(table.concat(disagreements, " | "), "",
+            "son : le miroir Lua dit exactement ce que dit la macro securisee")
+        mock.state.inCombat, mock.state.inRaid, mock.state.inGroup = savedCombat, savedRaid, savedGroup
+        NS.db.showSolo, NS.db.showParty, NS.db.showRaid, NS.db.autoHide = true, true, true, savedAuto
+    end
+
+    -- Et le son suit ce verdict, dans les deux sens.
+    do
+        NS.db.sound = true
+        NS.db.showRaid = false
+        mock.state.inRaid, mock.state.inGroup = true, true
+        falsy(NS:PlayAfflictionAlert(), "son : rien ne sonne la ou la grille ne s'affiche pas")
+        truthy(NS:PlayAfflictionAlert(true), "son : l'essai demande par le joueur se joue quand meme")
+        mock.state.inRaid, mock.state.inGroup = false, false
+        truthy(NS:PlayAfflictionAlert(), "son : et il revient la ou la grille s'affiche")
+        NS.db.showRaid = true
+    end
+
+    -- Se taire cote Lua ne suffit PAS. Le registre natif est joue par le
+    -- CLIENT : une fois pose, il sonne tout seul, grille eteinte ou non. C'est
+    -- exactement ce que le joueur decrit -- « l'addon sonne en boucle » -- et
+    -- c'est la moitie du correctif qu'aucun test ne couvrait.
+    do
+        freshProfile("PALADIN")
+        knowSpells(4987)
+        NS:UpdateSpells()
+        NS:RebuildRoster()
+        NS.auraSoundHandles, NS.auraSoundRegistered = {}, {}
+        NS.auraSoundHandleChannels, NS.auraSoundOrphanHandles = {}, {}
+        NS.auraSoundFingerprint, NS.auraSoundChannel = nil, nil
+        NS.auraSoundRefreshScheduled = false
+
+        local realAdd, realRemove = C_UnitAuras.AddAuraSound, C_UnitAuras.RemoveAuraSound
+        local nextHandle, removals = 5000, 0
+        C_UnitAuras.AddAuraSound = function() nextHandle = nextHandle + 1 return nextHandle end
+        C_UnitAuras.RemoveAuraSound = function() removals = removals + 1 return true end
+
+        NS.db.sound = true
+        NS.db.showRaid = true
+        mock.state.inRaid, mock.state.inGroup = false, false
+        NS:RefreshAuraSoundRegistrations("depart en solo")
+        local posees = 0
+        for _ in pairs(NS.auraSoundHandles) do posees = posees + 1 end
+        truthy(posees > 0, "registre : des alertes sont bien posees quand la grille s'affiche")
+
+        -- Le joueur rejoint un raid, « Afficher en raid » est eteint.
+        NS.db.showRaid = false
+        mock.state.inRaid, mock.state.inGroup = true, true
+        NS:RefreshAuraSoundRegistrations("entree en raid, raid masque")
+        local restantes = 0
+        for _ in pairs(NS.auraSoundHandles) do restantes = restantes + 1 end
+        eq(restantes, 0, "registre : entrer en raid retire les alertes que le client jouait seul")
+        truthy(removals > 0, "registre : elles sont retirees, pas seulement oubliees")
+
+        -- Et elles reviennent en sortant.
+        NS.db.showRaid = true
+        NS:RefreshAuraSoundRegistrations("raid de nouveau affiche")
+        local revenues = 0
+        for _ in pairs(NS.auraSoundHandles) do revenues = revenues + 1 end
+        eq(revenues, posees, "registre : et elles reviennent toutes quand la grille revient")
+
+        C_UnitAuras.AddAuraSound, C_UnitAuras.RemoveAuraSound = realAdd, realRemove
+        mock.state.inRaid, mock.state.inGroup = false, false
+    end
 
     ----------------------------------------------------------------------
     -- la chaine arrive vraiment au pilote
@@ -5648,23 +5775,30 @@ do
     -- Un texte a qui on a donne une largeur revient a la ligne. Le compter sur
     -- une seule ligne est ce qui a laisse passer la phrase de la page General :
     -- 501 px de texte dans une boite de 560, mais posee sur deux interrupteurs.
+    --
+    -- Un texte SANS largeur posee, en revanche, est declare non mesurable. La
+    -- version precedente en estimait la largeur (caracteres x taille de police)
+    -- et cette estimation, trop large, accusait huit controles que les captures
+    -- montrent lisibles. Un modele qui surestime ACCUSE ; un modele qui se tait
+    -- laisse passer. Entre les deux il n'y a pas de symetrie : une fausse
+    -- accusation apprend a ignorer le test. Les neuf recouvrements du 30/08
+    -- venaient tous d'elements a taille posee, aucun d'une estimation.
     local function sizeOf(frame)
         local size = rawget(frame, "__lastSize")
         local width = (size and size.width) or rawget(frame, "__width")
         local height = (size and size.height) or rawget(frame, "__height")
         local text = rawget(frame, "__text")
-        if not height and text and text ~= "" and frame.GetStringWidth then
+        if width and not height and text and text ~= "" and frame.GetStringWidth then
             local stringWidth = frame:GetStringWidth()
             if type(stringWidth) == "number" and stringWidth > 0 then
-                if width then
-                    height = math.ceil(stringWidth / width) * LINE_HEIGHT
-                else
-                    width, height = stringWidth, LINE_HEIGHT
-                end
+                height = math.ceil(stringWidth / width) * LINE_HEIGHT
             end
         end
         return width, height
     end
+
+    local children = mock.childIndex()
+    local function childrenOf(frame) return children[frame] or {} end
 
     local resolving, resolved = {}, {}
     local function resolveRect(frame, root, rootRect)
@@ -5702,7 +5836,7 @@ do
         if left and right and top and bottom and right > left and bottom > top then
             local label = rawget(frame, "__text")
             if not label or label == "" then
-                for _, child in ipairs(mock.childrenOf(frame)) do
+                for _, child in ipairs(childrenOf(frame)) do
                     local childText = rawget(child, "__text")
                     if childText and childText ~= "" then label = childText break end
                 end
@@ -5724,21 +5858,22 @@ do
     end
 
     local collisions = {}
-    -- La comparaison se fait entre freres de meme niveau, sans descendre dans
-    -- les controles. La descente a ete essayee : la largeur d'un texte est ici
-    -- ESTIMEE (nombre de caracteres x taille de police), ce qui suffit a placer
-    -- des blocs mais pas a juger l'interieur d'un interrupteur -- elle accusait
-    -- huit controles que les captures montrent parfaitement lisibles. Un
-    -- controle mesure faux qui accuse est pire qu'un controle non mesure : c'est
-    -- pourquoi tout ce qui doit etre surveille reste enfant DIRECT de sa page.
-    local function inspect(name, root, rootRect, skip)
-        local rects = {}
-        for _, child in ipairs(mock.childrenOf(root)) do
+    -- La comparaison descend dans chaque conteneur, entre freres de meme niveau.
+    -- Un conteneur recouvre toujours ses propres enfants : ce n'est pas un
+    -- defaut, c'est pourquoi on ne compare jamais un parent a son enfant.
+    local function inspect(name, root, rootRect, skip, depth)
+        local rects, counted = {}, 0
+        for _, child in ipairs(childrenOf(root)) do
             -- Les fonds et les traits sont poses SOUS les controles a dessein.
             local kind = rawget(child, "__type")
             if kind ~= "Texture" and child:IsShown() and not (skip and skip[child]) then
                 local rect = resolveRect(child, root, rootRect)
-                if rect then rects[#rects + 1] = rect end
+                if rect then
+                    rects[#rects + 1] = rect
+                    if (depth or 0) < 4 and #childrenOf(child) > 0 then
+                        counted = counted + inspect(name, child, rect, skip, (depth or 0) + 1)
+                    end
+                end
             end
         end
         for i = 1, #rects do
@@ -5749,7 +5884,7 @@ do
                 end
             end
         end
-        return #rects
+        return counted + #rects
     end
 
     local pageRect = { left = 0, top = 0, right = PAGE_WIDTH, bottom = PAGE_HEIGHT }
@@ -5758,19 +5893,15 @@ do
         measured = measured + inspect(pageKey, NS.optionsPages[pageKey], pageRect)
     end
 
-    -- Le pied de la fenetre n'appartient a aucune page : il n'etait donc
-    -- compare a rien, et le texte d'etat passait sous les boutons sur trois
-    -- pages sur cinq. La barre laterale et la zone de contenu sont ecartees :
-    -- ce sont les grandes zones qui contiennent tout le reste.
+    -- Le pied de la fenetre n'appartient a aucune page : il n'etait compare a
+    -- rien, et le texte d'etat passait sous les boutons sur trois pages sur
+    -- cinq. La fenetre entiere est donc parcourue -- en-tete, barre laterale,
+    -- pied -- et la descente s'occupe du reste. Seules les pages sont ecartees :
+    -- elles occupent toute la zone de contenu et sont deja parcourues, chacune
+    -- dans son propre repere.
     local windowRect = { left = 0, top = 0, right = 820, bottom = 700 }
     local zones = {}
-    for _, child in ipairs(mock.childrenOf(NS.optionsFrame)) do
-        local _, height = sizeOf(child)
-        if (height or 0) > 300 then zones[child] = true end
-        for _, page in pairs(NS.optionsPages) do
-            if child == page then zones[child] = true end
-        end
-    end
+    for _, page in pairs(NS.optionsPages) do zones[page] = true end
     measured = measured + inspect("fenetre", NS.optionsFrame, windowRect, zones)
 
     truthy(measured > 100,
