@@ -6,6 +6,13 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.5.63
+
+- **« Pourquoi ça n’a pas sonné » a enfin une réponse.** La décision était prise à chaque affliction et ne laissait aucune trace. `/cleansive alerts` montre les douze dernières : jouée, même affliction qu’avant, aucune affliction, son coupé, addon coupé, ou le client n’a rien joué. **Le son coupé et un fichier qui n’a pas pu être lu ne se confondent plus** : ce sont deux problèmes différents et deux corrections différentes.
+- **Le test de portée dit avec quel sort il a jugé.** Il répondait oui ou non sans jamais nommer la capacité qui avait servi ; quand la réponse surprend, c’est la première chose à savoir. La source entre dans le rapport copiable.
+- **`/cleansive coverage`** dit ce que la liste de saison couvre type par type. Un total de 46 ne disait pas si les malédictions étaient servies ou oubliées. Un type désactivé y est distingué d’un type que rien ne peut retirer.
+- Tests : 1092 à 1108.
+
 ## 1.5.62
 
 - **Trois appels protégés jetaient leur résultat.** `pcall` empêche l’erreur Lua, il ne dit pas que l’opération a eu lieu : un retour ignoré transforme un refus du client en silence, ce qui est exactement ce qui avait masqué les 480 refus de mise en forme jusqu’à ce qu’on les compte. Un balayage qui refuse de s’effacer se cache désormais au lieu d’afficher un compte à rebours faux ; un pilote d’attribut qui survit est signalé, parce qu’il garde le clic pointé sur l’ancien véhicule. **Un onzième contrôle statique** interdit qu’un `pcall` reparte aveugle.

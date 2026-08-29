@@ -837,6 +837,10 @@ function NS:HandleSlash(message)
         self:SetEnabled(false)
     elseif command == "soundtest" then
         self:PlayAfflictionAlert(true)
+    elseif command == "alerts" then
+        if rest == "clear" then self:ClearAlertDecisions() else self:PrintAlertDecisions() end
+    elseif command == "coverage" then
+        for _, line in ipairs(self:SoundCoverageByType()) do self:Print(line) end
     elseif command == "soundstatus" then
         if rest ~= "" then
             self:Print(self:DescribeSpellSound(rest))

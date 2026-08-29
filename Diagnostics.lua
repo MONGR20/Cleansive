@@ -306,6 +306,18 @@ function NS:BuildDiagnosticsReport()
         lines[#lines + 1] = "cooldown=not inspected"
     end
 
+    local range = self.rangeDiagnostics
+    if type(range) == "table" then
+        lines[#lines + 1] = string.format("range source=%s spell=%s unit=%s",
+            tostring(range.source), tostring(range.spellID), tostring(range.unit))
+    end
+
+    local alert = self.lastAlertDecision
+    if type(alert) == "table" then
+        lines[#lines + 1] = string.format("lastAlert unit=%s key=%s decision=%s",
+            tostring(alert.unit), tostring(alert.key), tostring(alert.decision))
+    end
+
     for _, flag in ipairs(sortedKeys(record.pending)) do
         local entry = record.pending[flag]
         lines[#lines + 1] = string.format("pending %s count=%s lastCause=%s",
@@ -508,4 +520,67 @@ function NS:PrintDiagnostics()
     else
         self:Print(self.L.DIAG_PROBLEMS, tostring(problems))
     end
+end
+
+local ALERT_LOG_SIZE = 12
+
+-- « Pourquoi ca n'a pas sonne » etait la question sans reponse : la decision
+-- etait prise et ne laissait aucune trace. Une file courte suffit -- ce qui
+-- interesse le joueur vient de se produire, pas de la derniere heure.
+function NS:NoteAlertDecision(unit, alertKey, decision)
+    self.alertDecisions = self.alertDecisions or {}
+    local entry = {
+        unit = tostring(unit or "?"),
+        key = tostring(alertKey or "-"),
+        decision = tostring(decision or "?"),
+    }
+    self.lastAlertDecision = entry
+    local log = self.alertDecisions
+    log[#log + 1] = entry
+    while #log > ALERT_LOG_SIZE do table.remove(log, 1) end
+end
+
+function NS:PrintAlertDecisions()
+    local log = self.alertDecisions
+    if type(log) ~= "table" or #log == 0 then
+        self:Print(self.L.ALERT_LOG_EMPTY)
+        return
+    end
+    self:Print(self.L.ALERT_LOG_TITLE)
+    for index = #log, 1, -1 do
+        local entry = log[index]
+        self:Print(string.format(self.L.ALERT_LOG_LINE,
+            entry.unit, entry.key, entry.decision))
+    end
+end
+
+function NS:ClearAlertDecisions()
+    self.alertDecisions = {}
+    self.lastAlertDecision = nil
+    self:Print(self.L.ALERT_LOG_CLEARED)
+end
+
+-- #200 : ce que la liste de saison couvre reellement, type par type. Un total
+-- de 46 ne dit pas si les maledictions sont servies ou oubliees.
+function NS:SoundCoverageByType()
+    local lines = {}
+    local names = {}
+    for auraType in pairs(self.KNOWN_DISPELLABLE_AURAS or {}) do names[#names + 1] = auraType end
+    table.sort(names)
+    for _, auraType in ipairs(names) do
+        local ids = self.KNOWN_DISPELLABLE_AURAS[auraType]
+        local reachable = self.typeToSlot and self.typeToSlot[auraType]
+        local manual = not reachable and self.manualTypeSpell and self.manualTypeSpell[auraType]
+        local status = self.L.COVERAGE_NONE
+        if self.db and self.db.enabledTypes and self.db.enabledTypes[auraType] == false then
+            status = self.L.COVERAGE_OFF
+        elseif reachable then
+            status = self.L.COVERAGE_CLICK
+        elseif manual then
+            status = self.L.COVERAGE_MANUAL
+        end
+        lines[#lines + 1] = string.format(self.L.COVERAGE_LINE,
+            self:GetTypeLabel(auraType), tostring(#ids), status)
+    end
+    return lines
 end

@@ -270,13 +270,16 @@ function NS:IsSpellInRange(def, unit)
     if C_Spell and C_Spell.IsSpellInRange then
         local ok, value = pcall(C_Spell.IsSpellInRange, def.id, unit)
         if ok and self:CanAccess(value) and value ~= nil then
+            self.rangeDiagnostics = { source = "spell", spellID = def.id, unit = unit }
             return value == true or value == 1
         end
     end
     local inRange, checked = UnitInRange(unit)
     if self:CanAccess(checked) and checked == true and self:CanAccess(inRange) then
+        self.rangeDiagnostics = { source = "unit", spellID = def.id, unit = unit }
         return inRange == true
     end
+    self.rangeDiagnostics = { source = "assumed", spellID = def.id, unit = unit }
     return true
 end
 

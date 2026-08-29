@@ -788,8 +788,26 @@ function NS:UpdateButtonAfflictionAlert(button, aura, slot, silent)
             alertKey = true
         end
     end
-    if alertKey and alertKey ~= button.alertAuraKey and not silent then
-        self:PlayAfflictionAlert()
+    local decision
+    if not afflicted then
+        decision = "no affliction"
+    elseif silent then
+        decision = "silent pass"
+    elseif alertKey == button.alertAuraKey then
+        decision = "same affliction as before"
+    else
+        if self:PlayAfflictionAlert() then
+            decision = "played"
+        elseif not (self.db and self.db.sound) then
+            decision = "sound switched off"
+        elseif not self.enabled then
+            decision = "addon switched off"
+        else
+            decision = "the client played nothing"
+        end
+    end
+    if self.NoteAlertDecision then
+        self:NoteAlertDecision(button.unit, alertKey, decision)
     end
     button.alertAuraKey = alertKey
 end
