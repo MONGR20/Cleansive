@@ -437,6 +437,7 @@ local TRANSFER_FIELDS = {
     { key = "sound", kind = "boolean" },
     { key = "failureSound", kind = "boolean" },
     { key = "showCooldown", kind = "boolean" },
+    { key = "showDuration", kind = "boolean" },
     { key = "showStacks", kind = "boolean" },
     { key = "showClickHints", kind = "boolean" },
     { key = "autoHide", kind = "boolean" },
@@ -693,7 +694,7 @@ NS.PAGE_RESET_KEYS = {
         "sound", "failureSound", "soundChannel", "soundMaxRegistrations",
         "blacklistTime", "autoHide" },
     appearance = { "frameSize", "spacing", "columns", "inactiveAlpha", "grow",
-        "layoutMode", "showNames", "showCooldown", "showStacks", "showClickHints",
+        "layoutMode", "showNames", "showCooldown", "showDuration", "showStacks", "showClickHints",
         "afflictedOnly", "testUnits", "testState", "positions" },
     dispels = { "typeOrder", "enabledTypes", "groupManualTypes", "priority", "skip", "sortMode" },
 }

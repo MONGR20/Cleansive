@@ -104,6 +104,7 @@ local defaults = {
     soundMaxRegistrations = 4500,
     failureSound = true,
     showCooldown = true,
+    showDuration = true,
     showStacks = false,
     showClickHints = false,
     autoHide = false,
@@ -768,6 +769,21 @@ function NS:HandleSlash(message)
         end
     elseif command == "macro" then
         self:CreateMouseoverMacro()
+    elseif command == "size" or command == "spacing" then
+        local value = tonumber(rest)
+        if not value then
+            self:Print(self.L.HELP)
+        elseif command == "size" then
+            self.db.frameSize = math.max(12, math.min(40, math.floor(value)))
+            self:LayoutButtons()
+            if self.RefreshOptions then self:RefreshOptions() end
+            self:Print(string.format(self.L.SIZE_SET, self.db.frameSize))
+        else
+            self.db.spacing = math.max(0, math.min(12, math.floor(value)))
+            self:LayoutButtons()
+            if self.RefreshOptions then self:RefreshOptions() end
+            self:Print(string.format(self.L.SPACING_SET, self.db.spacing))
+        end
     elseif command == "spells" then
         self:PrintSpellReport()
     elseif command == "version" then

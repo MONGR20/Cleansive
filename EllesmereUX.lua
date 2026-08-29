@@ -796,6 +796,11 @@ function NS:CreateOptions()
     end, self.L.TIP_SOUND)
     self.optionChecks[#self.optionChecks + 1] = toggle(general, self.L.FAIL_SOUND, 0, -224, 275, "failureSound", nil, self.L.TIP_FAILURE_SOUND)
     self.soundDependentControls = {}
+    local soundState = text(general, "", 10, C.dim)
+    soundState:SetPoint("TOPLEFT", 0, -196)
+    soundState:SetWidth(560)
+    soundState:SetJustifyH("LEFT")
+    self.soundStateText = soundState
     local soundTest = button(general, self.L.TEST_SOUND, 115, 26)
     soundTest:SetPoint("TOPLEFT", 300, -220)
     soundTest:SetScript("OnClick", function() self:PlayAfflictionAlert(true) end)
@@ -926,6 +931,8 @@ function NS:CreateOptions()
         self:UpdateAuraContainerConfiguration(true)
         self:RefreshAll(true)
     end, self.L.TIP_NAMES)
+    self.optionChecks[#self.optionChecks + 1] = toggle(appearance, self.L.DURATION_SWEEP, 300, -100, 275,
+        "showDuration", function() self:RefreshAll(true) end, self.L.TIP_DURATION_SWEEP)
     self.optionChecks[#self.optionChecks + 1] = toggle(appearance, self.L.COOLDOWN, 300, -28, 275, "showCooldown", function()
         self:UpdateAuraContainerConfiguration(true)
         self:RefreshAll(true)
@@ -1416,6 +1423,9 @@ function NS:RefreshOptions()
     if self.sortModeButton then
         self.sortModeButton:SetText(self.L["SORT_" .. tostring(self.db.sortMode or "GROUP")]
             or self.L.SORT_GROUP)
+    end
+    if self.soundStateText then
+        self.soundStateText:SetText(self:AuraSoundStateSentence())
     end
     if self.optionsStatusText then
         self.optionsStatusText:SetText(self:OptionsStatusText())

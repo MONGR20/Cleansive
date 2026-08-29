@@ -1,4 +1,4 @@
-# Cleansive 1.5.56
+# Cleansive 1.5.57
 
 Cleansive is a standalone one-click cleansing addon for **World of Warcraft Retail 12.1** (`120100`). It provides a compact Decursive-style workflow with a dark, class-colored interface inspired by the clarity of Ellesmere UI. The interface follows the language of your WoW client, English or French; either can be picked from the General page at any time.
 
@@ -79,6 +79,7 @@ Red, blue, and orange identify the click to use. The optional L/R/C corner lette
 - `/cleansive hide`: hide the grid for the current session without disabling Cleansive.
 - `/cleansive enable`, `/cleansive disable`: persistently enable or disable Cleansive.
 - `/cleansive reset`: reset frame positions.
+- `/cleansive size <12-40>`, `/cleansive spacing <0-12>`: set an exact value.
 - `/cleansive test`: toggle the preview.
 - `/cleansive test <1-40>`: pad the preview to that many cells.
 - `/cleansive test mixed|all|healthy`: choose how many preview cells light up.
@@ -153,6 +154,7 @@ the reason on its own.
 
 ## Recent changes
 
+- **1.5.57** - the sound registry states its condition in a sentence, the affliction fade can be switched off on its own, and sizes can be set by command.
 - **1.5.56** - the cell order can follow role or class instead of raid group, and the release archive is checked before it ships.
 - **1.5.55** - three combinable rules for where the grid appears (alone, party, raid), and the grid stays visible while you are configuring it.
 - **1.5.54** - a search box in the settings window finds a setting and says which page it is on.

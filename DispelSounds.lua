@@ -512,6 +512,7 @@ end
 
 function NS:PrintAuraSoundStatus()
     local diagnostics = self.auraSoundDiagnostics or {}
+    self:Print(self:AuraSoundStateSentence())
     local activeHandles = tableCount(self.auraSoundHandles)
         + tableCount(self.auraSoundOrphanHandles)
     self:Print(self.L.SOUND_STATUS,
@@ -593,4 +594,23 @@ function NS:DescribeSpellSound(spellID)
     table.sort(units)
     return string.format(self.L.SOUND_QUERY_REGISTERED, spellID, typeLabel,
         #units, table.concat(units, ", "))
+end
+
+function NS:AuraSoundState()
+    if not self.db or not self.db.sound then return "OFF" end
+    if not self:IsNativeAuraSoundAvailable() then return "UNAVAILABLE" end
+    local diagnostics = self.auraSoundDiagnostics
+    if not diagnostics then return "IDLE" end
+    if diagnostics.pending then return "PENDING" end
+    if diagnostics.error
+        or (tonumber(diagnostics.preserved) or 0) > 0
+        or (tonumber(diagnostics.registered) or 0) < (tonumber(diagnostics.attempted) or 0)
+        or (tonumber(self.auraSoundSkippedUnits) or 0) > 0 then
+        return "DEGRADED"
+    end
+    return "ACTIVE"
+end
+
+function NS:AuraSoundStateSentence()
+    return self.L["SOUND_STATE_" .. self:AuraSoundState()] or self.L.SOUND_STATE_IDLE
 end

@@ -6,6 +6,14 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.5.57
+
+- **Le registre sonore dit son état en une phrase** au lieu d’une suite de nombres : coupé, indisponible, pas encore mis en place, en cours, dégradé, ou actif. Un joueur qui lit « 46/46, 0 en attente, 0 erreur » doit encore conclure lui-même ; conclure est le travail de l’addon. Un remplacement préservé et des unités écartées par le budget comptent comme **dégradé**, pas comme un succès.
+- **Le balayage du temps d’affliction se coupe séparément du chiffre de recharge.** Ce sont deux informations différentes : l’une compte l’affliction, l’autre compte votre sort.
+- **`/cleansive size 33` et `/cleansive spacing 4`** pour qui veut une valeur exacte plutôt qu’un curseur.
+- La première version de l’interrupteur de balayage n’était pas vérifiée : l’injection est restée verte. Le test observe désormais l’appel réel au moteur, pas la valeur du réglage.
+- Tests : 985 à 1018.
+
 ## 1.5.56
 
 - **L’ordre des cases se choisit** : par groupe de raid (inchangé, et toujours le défaut parce qu’il répartit le travail entre plusieurs dissipeurs), par rôle, ou par classe. Le tri par rôle place les tanks puis les soigneurs devant. **Votre liste de priorité passe avant tous les modes** — elle décide, ils arrangent le reste.

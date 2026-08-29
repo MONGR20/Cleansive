@@ -751,7 +751,7 @@ function NS:StyleAuraVisual(button, auraType, visual)
     if visual.durationCooldown then
         step(function()
             visual.durationCooldown:SetFrameLevel(level + 1)
-            visual.durationCooldown:SetDrawSwipe(enabled and true or false)
+            visual.durationCooldown:SetDrawSwipe(enabled and self.db.showDuration ~= false)
         end)
     end
     if visual.labelLayer then
