@@ -6,6 +6,13 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.5.59
+
+- **L’infobulle ne promet plus un bouton qui ne fait rien.** Elle annonçait « Souris 4 : troisième dissipation » à toutes les spécialisations, y compris à celles qui n’ont qu’un seul sort. Elle n’annonce désormais que ce qui existe vraiment.
+- **Cleansive crédite ce dont il a appris** : Decursive, qui a défini ce genre d’addon, puis Salve, le Decursive de Zhaou, Simple Decursive, ClickCleanse, K Decurse et LFDecurse. Leurs comportements ont servi de leçon et ont été réécrits depuis l’API de Blizzard. Aucune ligne de leur code n’est ici, et leurs licences ne l’auraient pas permis.
+- **Avertissement d’installation** : l’archive « Source code » générée automatiquement par GitHub n’est pas un addon utilisable.
+- Tests : 1036 à 1044.
+
 ## 1.5.58
 
 - **Cleansive peut signaler racines, étourdissements et autres pertes de contrôle** sur les membres du groupe. Vérification faite dans les définitions d’API avant d’écrire une ligne : `C_LossOfControl.GetActiveLossOfControlDataByUnit` accepte bien un jeton d’unité, et pas seulement `player`.

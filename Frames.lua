@@ -2047,7 +2047,8 @@ function NS:ShowButtonTooltip(button)
     end
     GameTooltip:AddLine(self.L.TARGET, 0.65, 0.65, 0.65)
     GameTooltip:AddLine(self.L.FOCUS_BIND, 0.65, 0.65, 0.65)
-    GameTooltip:AddLine(self.L.THUMB_BIND, 0.65, 0.65, 0.65)
+    GameTooltip:AddLine(self.clickSpells and self.clickSpells[3]
+        and self.L.THUMB_BIND or self.L.THUMB_BIND_FOCUS_ONLY, 0.65, 0.65, 0.65)
     GameTooltip:Show()
 end
 

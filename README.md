@@ -1,11 +1,13 @@
-# Cleansive 1.5.58
+# Cleansive 1.5.59
 
 Cleansive is a standalone one-click cleansing addon for **World of Warcraft Retail 12.1** (`120100`). It provides a compact Decursive-style workflow with a dark, class-colored interface inspired by the clarity of Ellesmere UI. The interface follows the language of your WoW client, English or French; either can be picked from the General page at any time.
 
 ## Installation
 
 1. Exit World of Warcraft completely.
-2. **Replace** the `Cleansive` folder in `_retail_/Interface/AddOns/`. Delete the
+2. **Replace** the `Cleansive` folder in `_retail_/Interface/AddOns/`. Use the
+   file named `Cleansive-<version>.zip`; GitHub's automatic "Source code"
+   archive is not a working addon. Delete the
    old folder first rather than merging: a merge leaves behind files a newer
    version no longer loads, and they can still be read.
 3. Enable Cleansive, log in, and type `/cleansive`.
@@ -171,6 +173,7 @@ the reason on its own.
 
 ## Recent changes
 
+- **1.5.59** - the tooltip stops promising a mouse button that does nothing, and the addon credits what it learned from.
 - **1.5.58** - Cleansive can watch roots, stuns and other loss-of-control effects on your group, but only the ones you picked from what it has actually seen.
 - **1.5.57** - the sound registry states its condition in a sentence, the affliction fade can be switched off on its own, and sizes can be set by command.
 - **1.5.56** - the cell order can follow role or class instead of raid group, and the release archive is checked before it ships.
@@ -198,6 +201,14 @@ Cleansive est un addon autonome de dissipation en un clic pour WoW Retail 12.1. 
 Cleansive peut rester actif en même temps que Decursive : utilisez `/cleansive` ou `/cls`. Les alias `/dcr` et `/decursive` ne sont ajoutés que si Decursive est désactivé.
 
 Les restrictions d’auras de WoW 12.1 peuvent masquer le nom exact d’un effet en combat. Dans ce cas, l’indicateur visuel et le clic sécurisé restent gérés par Blizzard. L’alerte sonore native couvre les afflictions connues ; une aura inconnue dont l’identifiant est protégé peut rester silencieuse.
+
+## Credits
+
+Cleansive owes its shape to Decursive, which defined this kind of addon. It was
+measured against Salve, Zhaou's Decursive, Simple Decursive, ClickCleanse,
+K Decurse and LFDecurse: their behaviour taught it a great deal and was written
+again from Blizzard's own API. None of their code is in here, and the licenses
+would not have allowed it.
 
 ## License
 
