@@ -6,6 +6,19 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.6.1
+
+Corrections issues d’un audit externe de la 1.6 et de captures d’écran en jeu.
+
+- **Trois pages avaient des libellés empilés les uns sur les autres.** J’avais ajouté des contrôles à des positions déjà occupées, sans aucun moyen de le voir. Le harnais mesure désormais la géométrie de chaque contrôle et **refuse tout recouvrement** : quinze collisions ont été trouvées et corrigées. Au passage, les règles de visibilité forment un groupe nommé, et le regroupement des dissipations manuelles a rejoint la page Dissipations — où sa remise à zéro était déjà rangée.
+- **L’aperçu ne peut plus être ouvert en plein combat.** Il ne pouvait alors pas reconstruire la liste des unités : de vraies unités recevaient de fausses afflictions, avec fausses cases rouges et fausse alerte, au moment où l’addon doit être le plus fiable. La commande entière est refusée et le dit — en garder l’effet caché aurait été une commande à moitié appliquée.
+- **Une base abîmée est de nouveau entièrement réparée.** Les bornes vivaient dans une seconde liste écrite à la main, qui avait pris huit réglages de retard : `testUnits = « beaucoup »` repartait tel quel. Il n’y a plus de seconde liste — elle se déduit de la déclaration des réglages, et un test vérifie qu’aucun n’y échappe.
+- **L’archive 1.6 contenait trois dossiers vides** venus d’une réécriture d’historique. Un dossier vide ne contient aucun fichier : il échappait entièrement au contrôle. Ce qui commence par un point est désormais refusé, vide ou non.
+- **Le cumul réel d’alertes sonores est mesuré.** Pendant un changement de canal, le nouvel enregistrement existe un instant à côté de l’ancien, et la table ne le voyait pas. `/cleansive soundstatus` annonce maintenant les enregistrements vivants et le maximum atteint. Mesurer avant de décider.
+- Le collage d’un texte démesuré dans l’import est refusé plutôt que traité. Le tri par rôle annonce l’ordre qu’il produit vraiment. Trois lignes du changelog embarqué avaient été mangées par mon propre outillage et sont réparées.
+- Tests : 1 146 à 1 180, plus un contrôle de mise en page.
+
+
 ## 1.6
 
 Cette version rassemble le travail mené à partir de l’étude des addons
@@ -45,14 +58,14 @@ code.
 ## 1.5.67
 
 - **L’aperçu des réglages mentait sur deux points.** Il affichait la lettre de clic et le chiffre de recharge même quand vous les aviez coupés : il promettait une case que la vraie grille ne dessine pas. Un aperçu qui ne suit pas les réglages est pire qu’aucun aperçu, parce qu’il fait douter de la grille.
-- **Le dépannage dit de capturer le diagnostic AVANT un .** Un rechargement remet tout en place et efface justement l’état qu’on voulait montrer.
+- **Le dépannage dit de capturer le diagnostic AVANT un `/reload`.** Un rechargement remet tout en place et efface justement l’état qu’on voulait montrer.
 - Un test écrit dans ce lot a été **retiré** : il vérifiait que le coin choisi de la grille ne bouge pas quand le groupe grandit, mais le harnais ne donne aucune géométrie aux cadres — rien ne pouvait déplacer l’ancre et le test passait quoi qu’on injecte. Un test qui ne peut pas rougir vaut moins que pas de test : il occupe la place de celui qui manque. Ce point rejoint les vérifications à faire en jeu.
 - Tests : 1139 à 1146.
 
 
 ## 1.5.66
 
-- **** sort le catalogue des pertes de contrôle observées en un bloc, avec le lieu et ce que vous surveillez. Copier ne vide rien : on copie avant de vider, jamais l’inverse.
+- **`/cleansive control copy`** sort le catalogue des pertes de contrôle observées en un bloc, avec le lieu et ce que vous surveillez. Copier ne vide rien : on copie avant de vider, jamais l’inverse.
 - **Un profil partagé ne peut plus emporter une clé non déclarée.** Le test précédent affirmait que le catalogue observé ne partait pas — c’était vrai par construction, donc aucun défaut ne pouvait le rendre faux : il rejouait la conception au lieu de l’éprouver. Il vérifie désormais que **chaque clé sortante est reconnue**, ce qui casse le jour où quelqu’un en ajoute une qui porte du personnel.
 - Deux comportements déjà présents sont désormais verrouillés par un test plutôt que réécrits : un bouton grisé se repeint immédiatement au lieu d’attendre que la souris sorte, et une remise à zéro des réglages n’efface pas ce que Cleansive a observé.
 - Tests : 1127 à 1139.
@@ -63,7 +76,7 @@ code.
 - **Le harnais de tests vit désormais dans le dépôt.** Il vivait à côté, ce qui voulait dire deux copies possibles d’une même suite — et la correction finit toujours par atterrir sur celle que personne ne lance. La CI GitHub exécute maintenant exactement la même suite que moi, sur exactement les mêmes fichiers.
 - **La chaîne de publication est coupée en deux.** Le travail de vérification ne tient **aucun** secret de publication : un test capable d’atteindre la clé CurseForge serait un test capable de la divulguer. Et rien ne peut publier sans être passé par lui — une suite rouge ne doit jamais atteindre une page de téléchargement.
 - **Un treizième contrôle statique lit le workflow lui-même** et vérifie ces deux règles. Elles sont faciles à défaire d’une ligne distraite, et invisibles une fois défaites.
-- Le contrôle d’archive lit désormais les exclusions de  au lieu d’en tenir une seconde liste à côté, qui aurait divergé au premier ajout.
+- Le contrôle d’archive lit désormais les exclusions de `.pkgmeta` au lieu d’en tenir une seconde liste à côté, qui aurait divergé au premier ajout.
 - Tests : 1127, plus un contrôle statique.
 
 

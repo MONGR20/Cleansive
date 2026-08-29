@@ -23,20 +23,69 @@ end
 -- an opacity outside its slider, a layout mode that no longer exists. Bounds
 -- are the ones the option sliders enforce, so a repaired profile always lands
 -- somewhere the interface can actually represent.
-local NUMERIC_BOUNDS = {
-    frameSize = { 12, 40 },
-    spacing = { 0, 12 },
-    columns = { 1, 20 },
-    inactiveAlpha = { 0.05, 0.80 },
-    blacklistTime = { 0, 15 },
-    soundMaxRegistrations = { 500, 8000 },
+local TRANSFER_FIELDS = {
+    { key = "enabled", kind = "boolean" },
+    { key = "locked", kind = "boolean" },
+    { key = "showPets", kind = "boolean" },
+    { key = "showFocus", kind = "boolean" },
+    { key = "showNames", kind = "boolean" },
+    { key = "showTooltips", kind = "boolean" },
+    { key = "sound", kind = "boolean" },
+    { key = "failureSound", kind = "boolean" },
+    { key = "showCooldown", kind = "boolean" },
+    { key = "showDuration", kind = "boolean" },
+    { key = "controlWarning", kind = "boolean" },
+    { key = "showStacks", kind = "boolean" },
+    { key = "showClickHints", kind = "boolean" },
+    { key = "autoHide", kind = "boolean" },
+    { key = "showSolo", kind = "boolean" },
+    { key = "showParty", kind = "boolean" },
+    { key = "showRaid", kind = "boolean" },
+    { key = "afflictedOnly", kind = "boolean" },
+    { key = "groupManualTypes", kind = "boolean" },
+    { key = "frameSize", kind = "number", min = 12, max = 40, step = 1 },
+    { key = "spacing", kind = "number", min = 0, max = 12, step = 1 },
+    { key = "columns", kind = "number", min = 1, max = 20, step = 1 },
+    { key = "blacklistTime", kind = "number", min = 0, max = 15, step = 1 },
+    { key = "soundMaxRegistrations", kind = "number", min = 500, max = 8000, step = 1 },
+    { key = "testUnits", kind = "number", min = 1, max = 40, step = 1 },
+    { key = "inactiveAlpha", kind = "number", min = 0.05, max = 0.80 },
+    { key = "grow", kind = "enum", values = { "RIGHT_DOWN", "RIGHT_UP", "LEFT_DOWN", "LEFT_UP" } },
+    { key = "layoutMode", kind = "enum", values = { "GRID", "HORIZONTAL", "VERTICAL" } },
+    { key = "sortMode", kind = "enum", values = { "GROUP", "ROLE", "CLASS" } },
+    { key = "soundChannel", kind = "enum", values = { "Master", "SFX", "Dialog" } },
+    { key = "testState", kind = "enum", values = { "MIXED", "ALL", "HEALTHY" } },
+    { key = "typeOrder", kind = "typelist" },
+    { key = "enabledTypes", kind = "typemap" },
+    { key = "ignoredAlways", kind = "idset" },
+    { key = "ignoredCombat", kind = "idset" },
 }
 
-local ALLOWED_VALUES = {
-    grow = { RIGHT_DOWN = true, RIGHT_UP = true, LEFT_DOWN = true, LEFT_UP = true },
-    layoutMode = { GRID = true, HORIZONTAL = true, VERTICAL = true },
-    soundChannel = { Master = true, SFX = true, Dialog = true },
-}
+local TRANSFER_PREFIX = "CLEANSIVE1"
+
+-- Declarees ici et non pres de leur usage : une locale definie plus bas est
+-- invisible au-dessus, et decodeValue lisait une globale nil.
+local MAX_IMPORT_LENGTH = 8000
+local MAX_IDS_PER_SET = 500
+
+-- Les bornes, les valeurs permises et la liste des booleens ne sont plus
+-- ecrites une seconde fois : elles se lisent dans la declaration ci-dessus.
+-- Ajouter un reglage transferable suffit desormais a le faire reparer au
+-- chargement -- l'oubli inverse a laisse passer testUnits, sortMode, testState
+-- et cinq booleens de la 1.6.
+local NUMERIC_BOUNDS, ALLOWED_VALUES, BOOLEAN_SETTINGS, INTEGER_SETTINGS = {}, {}, {}, {}
+for _, field in ipairs(TRANSFER_FIELDS) do
+    if field.kind == "number" then
+        NUMERIC_BOUNDS[field.key] = { field.min, field.max }
+        if field.step == 1 then INTEGER_SETTINGS[field.key] = true end
+    elseif field.kind == "enum" then
+        local allowed = {}
+        for _, value in ipairs(field.values) do allowed[value] = true end
+        ALLOWED_VALUES[field.key] = allowed
+    elseif field.kind == "boolean" then
+        BOOLEAN_SETTINGS[#BOOLEAN_SETTINGS + 1] = field.key
+    end
+end
 
 -- The nine anchor points SetPoint accepts. Anything else raises, and a saved
 -- position goes straight there at load: a hand-edited or truncated database
@@ -45,19 +94,6 @@ local ANCHOR_POINTS = {
     TOPLEFT = true, TOP = true, TOPRIGHT = true,
     LEFT = true, CENTER = true, RIGHT = true,
     BOTTOMLEFT = true, BOTTOM = true, BOTTOMRIGHT = true,
-}
-
--- The sliders all represent whole steps, so a fractional value that survived
--- clamping produced fractional layout arithmetic.
-local INTEGER_SETTINGS = {
-    frameSize = true, spacing = true, columns = true,
-    blacklistTime = true, soundMaxRegistrations = true,
-}
-
-local BOOLEAN_SETTINGS = {
-    "enabled", "locked", "showPets", "showFocus", "showNames", "showTooltips",
-    "sound", "failureSound", "showCooldown", "showStacks", "showClickHints",
-    "autoHide", "afflictedOnly", "groupManualTypes",
 }
 
 local function normalizePositions(profile, fallback)
@@ -108,6 +144,19 @@ local function normalizeDispelTypes(profile, fallback)
     for auraType in pairs(profile.enabledTypes) do
         if not known[auraType] then profile.enabledTypes[auraType] = nil end
     end
+end
+
+-- Exposes pour que la suite puisse verifier qu'aucun reglage transferable
+-- n'echappe a la reparation. Une liste tenue a la main se verifie mal ; une
+-- liste derivee se verifie en la parcourant.
+NS.TRANSFER_FIELDS = TRANSFER_FIELDS
+
+function NS:IsRepairableSetting(key)
+    if NUMERIC_BOUNDS[key] or ALLOWED_VALUES[key] then return true end
+    for _, name in ipairs(BOOLEAN_SETTINGS) do
+        if name == key then return true end
+    end
+    return false
 end
 
 local function normalizeProfile(profile, fallback)
@@ -427,45 +476,7 @@ end
 -- Deliberately absent: positions (a screen the sender had, not the one you
 -- have), language (it is global, not per profile), and the priority and skip
 -- lists (they name the sender's guildmates, not yours).
-local TRANSFER_FIELDS = {
-    { key = "enabled", kind = "boolean" },
-    { key = "locked", kind = "boolean" },
-    { key = "showPets", kind = "boolean" },
-    { key = "showFocus", kind = "boolean" },
-    { key = "showNames", kind = "boolean" },
-    { key = "showTooltips", kind = "boolean" },
-    { key = "sound", kind = "boolean" },
-    { key = "failureSound", kind = "boolean" },
-    { key = "showCooldown", kind = "boolean" },
-    { key = "showDuration", kind = "boolean" },
-    { key = "controlWarning", kind = "boolean" },
-    { key = "showStacks", kind = "boolean" },
-    { key = "showClickHints", kind = "boolean" },
-    { key = "autoHide", kind = "boolean" },
-    { key = "showSolo", kind = "boolean" },
-    { key = "showParty", kind = "boolean" },
-    { key = "showRaid", kind = "boolean" },
-    { key = "afflictedOnly", kind = "boolean" },
-    { key = "groupManualTypes", kind = "boolean" },
-    { key = "frameSize", kind = "number", min = 12, max = 40, step = 1 },
-    { key = "spacing", kind = "number", min = 0, max = 12, step = 1 },
-    { key = "columns", kind = "number", min = 1, max = 20, step = 1 },
-    { key = "blacklistTime", kind = "number", min = 0, max = 15, step = 1 },
-    { key = "soundMaxRegistrations", kind = "number", min = 500, max = 8000, step = 1 },
-    { key = "testUnits", kind = "number", min = 1, max = 40, step = 1 },
-    { key = "inactiveAlpha", kind = "number", min = 0.05, max = 0.80 },
-    { key = "grow", kind = "enum", values = { "RIGHT_DOWN", "RIGHT_UP", "LEFT_DOWN", "LEFT_UP" } },
-    { key = "layoutMode", kind = "enum", values = { "GRID", "HORIZONTAL", "VERTICAL" } },
-    { key = "sortMode", kind = "enum", values = { "GROUP", "ROLE", "CLASS" } },
-    { key = "soundChannel", kind = "enum", values = { "Master", "SFX", "Dialog" } },
-    { key = "testState", kind = "enum", values = { "MIXED", "ALL", "HEALTHY" } },
-    { key = "typeOrder", kind = "typelist" },
-    { key = "enabledTypes", kind = "typemap" },
-    { key = "ignoredAlways", kind = "idset" },
-    { key = "ignoredCombat", kind = "idset" },
-}
 
-local TRANSFER_PREFIX = "CLEANSIVE1"
 local VALID_TYPES = { Magic = true, Curse = true, Poison = true, Disease = true, Bleed = true, Charm = true }
 
 local function encodeValue(field, value)
@@ -549,11 +560,13 @@ local function decodeValue(field, text)
         return map
     end
     if field.kind == "idset" then
-        local set = {}
+        local set, count = {}, 0
         if text ~= "" then
             for part in string.gmatch(text, "[^,]+") do
                 local id = tonumber(part)
                 if not id or id <= 0 or id ~= math.floor(id) then return nil end
+                count = count + 1
+                if count > MAX_IDS_PER_SET then return nil end
                 set[id] = true
             end
         end
@@ -577,6 +590,9 @@ end
 function NS:AnalyzeProfileImport(text)
     text = type(text) == "string" and string.gsub(text, "%s", "") or ""
     if text == "" then return nil, self.L.IMPORT_EMPTY end
+    if #text > MAX_IMPORT_LENGTH then
+        return nil, string.format(self.L.IMPORT_TOO_LONG, MAX_IMPORT_LENGTH)
+    end
     local prefix = string.match(text, "^([^;]+);")
     if prefix ~= TRANSFER_PREFIX then return nil, self.L.IMPORT_BAD_PREFIX end
 
@@ -691,13 +707,14 @@ end
 -- grid back should not have to lose his lists and his filters to get it.
 NS.PAGE_RESET_KEYS = {
     general = { "enabled", "locked", "showPets", "showFocus", "showTooltips",
-        "showSolo", "showParty", "showRaid", "controlWarning", "controlTypes",
+        "showSolo", "showParty", "showRaid", "priorityKey",
         "sound", "failureSound", "soundChannel", "soundMaxRegistrations",
         "blacklistTime", "autoHide" },
     appearance = { "frameSize", "spacing", "columns", "inactiveAlpha", "grow",
         "layoutMode", "showNames", "showCooldown", "showDuration", "showStacks", "showClickHints",
         "afflictedOnly", "testUnits", "testState", "positions" },
-    dispels = { "typeOrder", "enabledTypes", "groupManualTypes", "priority", "skip", "sortMode" },
+    dispels = { "typeOrder", "enabledTypes", "groupManualTypes", "controlWarning", "controlTypes",
+        "priority", "skip", "sortMode" },
 }
 
 function NS:ResetOptionsPage(page)

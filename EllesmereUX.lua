@@ -796,14 +796,6 @@ function NS:CreateOptions()
     attachHelp(language, self.L.LANGUAGE, self.L.TIP_LANGUAGE)
     self.languageButton = language
 
-    self.optionChecks[#self.optionChecks + 1] = toggle(general, self.L.CONTROL_WARNING, 0, -430, 560,
-        "controlWarning", function() self:RefreshAll(true) end, self.L.TIP_CONTROL_WARNING)
-    self.optionChecks[#self.optionChecks + 1] = toggle(general, self.L.SHOW_SOLO, 310, -28, 275,
-        "showSolo", function() self:UpdateGridVisibilityDriver() end, self.L.TIP_SHOW_CONTEXT)
-    self.optionChecks[#self.optionChecks + 1] = toggle(general, self.L.SHOW_PARTY, 310, -64, 275,
-        "showParty", function() self:UpdateGridVisibilityDriver() end, self.L.TIP_SHOW_CONTEXT)
-    self.optionChecks[#self.optionChecks + 1] = toggle(general, self.L.SHOW_RAID, 310, -100, 275,
-        "showRaid", function() self:UpdateGridVisibilityDriver() end, self.L.TIP_SHOW_CONTEXT)
 
     section(general, localized("Retour d’information", "Feedback"), -158)
     self.optionChecks[#self.optionChecks + 1] = toggle(general, self.L.TOOLTIPS, 0, -184, 275, "showTooltips", function()
@@ -828,6 +820,15 @@ function NS:CreateOptions()
     soundStatus:SetPoint("LEFT", soundTest, "RIGHT", 10, 0)
     soundStatus:SetScript("OnClick", function() self:PrintAuraSoundStatus() end)
     self.soundDependentControls[#self.soundDependentControls + 1] = soundStatus
+
+    local visibilityLabel = text(general, self.L.SHOW_WHERE, 12, C.dim)
+    visibilityLabel:SetPoint("TOPLEFT", 300, -300)
+    self.optionChecks[#self.optionChecks + 1] = toggle(general, self.L.SHOW_SOLO, 300, -318, 265,
+        "showSolo", function() self:UpdateGridVisibilityDriver() end, self.L.TIP_SHOW_CONTEXT)
+    self.optionChecks[#self.optionChecks + 1] = toggle(general, self.L.SHOW_PARTY, 300, -352, 265,
+        "showParty", function() self:UpdateGridVisibilityDriver() end, self.L.TIP_SHOW_CONTEXT)
+    self.optionChecks[#self.optionChecks + 1] = toggle(general, self.L.SHOW_RAID, 300, -386, 265,
+        "showRaid", function() self:UpdateGridVisibilityDriver() end, self.L.TIP_SHOW_CONTEXT)
 
     self.optionSliders[#self.optionSliders + 1] = slider(general, self.L.BLACKLIST, 0, -266, 265, 0, 15, 1, "blacklistTime", "%d s", nil, self.L.TIP_BLACKLIST)
     local budgetSlider = slider(general, self.L.SOUND_BUDGET, 0, -318, 265, 500, 8000, 250, "soundMaxRegistrations", "%d",
@@ -950,7 +951,7 @@ function NS:CreateOptions()
         self:UpdateAuraContainerConfiguration(true)
         self:RefreshAll(true)
     end, self.L.TIP_NAMES)
-    self.optionChecks[#self.optionChecks + 1] = toggle(appearance, self.L.DURATION_SWEEP, 300, -100, 275,
+    self.optionChecks[#self.optionChecks + 1] = toggle(appearance, self.L.DURATION_SWEEP, 300, -108, 275,
         "showDuration", function() self:RefreshAll(true) end, self.L.TIP_DURATION_SWEEP)
     self.optionChecks[#self.optionChecks + 1] = toggle(appearance, self.L.COOLDOWN, 300, -28, 275, "showCooldown", function()
         self:UpdateAuraContainerConfiguration(true)
@@ -969,18 +970,9 @@ function NS:CreateOptions()
         self:UpdateAuraContainerConfiguration(true)
         self:RefreshAll(true)
     end, self.L.TIP_AFFLICTED_ONLY)
-    -- Right column of the same row: x=0 holds "afflicted only", x=310 is free
-    -- at this height, and 310+250 stays inside the 591 px content area.
-    self.optionChecks[#self.optionChecks + 1] = toggle(appearance, self.L.GROUP_MANUAL, 310, -108, 250, "groupManualTypes", function()
-        self:UpdateSpells()
-        self:RefreshAll(true)
-    end, self.L.TIP_GROUP_MANUAL)
-
-    local presetLabel = text(appearance, self.L.PRESETS, 12, C.dim)
-    presetLabel:SetPoint("TOPLEFT", 0, -118)
     for index, preset in ipairs(self.VISUAL_PRESETS) do
-        local presetButton = button(appearance, self.L["PRESET_" .. preset.key], 110, 26)
-        presetButton:SetPoint("TOPLEFT", 120 + ((index - 1) * 114), -112)
+        local presetButton = button(appearance, self.L["PRESET_" .. preset.key], 108, 24)
+        presetButton:SetPoint("TOPLEFT", 132 + ((index - 1) * 112), -144)
         presetButton:SetScript("OnClick", function() self:ApplyVisualPreset(preset.key) end)
         attachHelp(presetButton, self.L.PRESETS, self.L.TIP_PRESETS)
     end
@@ -1052,6 +1044,14 @@ function NS:CreateOptions()
     local dispels = CreateFrame("Frame", nil, content)
     dispels:SetAllPoints()
     self.optionsPages.dispels = dispels
+    self.optionChecks[#self.optionChecks + 1] = toggle(dispels, self.L.GROUP_MANUAL, 0, -430, 560,
+        "groupManualTypes", function()
+            self:UpdateSpells()
+            self:RefreshAll(true)
+        end, self.L.TIP_GROUP_MANUAL)
+    self.optionChecks[#self.optionChecks + 1] = toggle(dispels, self.L.CONTROL_WARNING, 0, -466, 560,
+        "controlWarning", function() self:RefreshAll(true) end, self.L.TIP_CONTROL_WARNING)
+
     local sortLabel = text(dispels, self.L.SORT_MODE, 13, C.text)
     sortLabel:SetPoint("BOTTOMLEFT", 0, 14)
     local sortButton = button(dispels, "", 190, 28)

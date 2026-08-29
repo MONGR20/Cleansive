@@ -3,9 +3,10 @@ local _, NS = ...
 local RAID_GROUPS = 8
 local PREVIEW_MAX = 40
 
--- Un dissipeur regarde d'abord les soigneurs et les tanks : ils meurent en
--- premier et ils sont irremplacables. L'ordre par groupe reste le defaut,
--- parce qu'il repartit le travail entre plusieurs dissipeurs.
+-- Ordre produit : tank, puis soigneur, puis dps. Le tank passe devant parce
+-- qu'une affliction sur lui tue le groupe le plus vite ; le soigneur suit parce
+-- que sa perte est la seule irremplacable. L'ordre par groupe reste le defaut,
+-- parce que lui repartit le travail entre plusieurs dissipeurs.
 local ROLE_RANK = { TANK = 1, HEALER = 2, DAMAGER = 3, NONE = 4 }
 
 -- Names and classes are secret-capable in Retail 12.1, so both go through the

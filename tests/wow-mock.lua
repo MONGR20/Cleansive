@@ -26,8 +26,13 @@ frameMeta = {
     end,
 }
 
+-- Tous les cadres crees, pour qu'un test puisse parcourir les enfants d'une
+-- page. Sans registre, il n'y a aucun moyen de savoir ce qu'une page contient.
+local created = {}
+
 local function newFrame(name)
     local f = setmetatable({ __frameName = name, __shown = true }, frameMeta)
+    created[#created + 1] = f
     -- Show et Hide declenchaient l'etat sans declencher les scripts : un
     -- OnShow ou un OnHide pose par l'addon n'etait execute par aucun test, et
     -- tout ce qu'il fait passait donc pour verifie sans l'etre.
@@ -106,7 +111,19 @@ local function newFrame(name)
     end)
     -- Garder le dernier ancrage pose : c est la seule facon de verifier une
     -- mise en page calculee sans moteur de rendu.
-    rawset(f, "SetPoint", function(s, point, relative, relativePoint, x, y)
+    -- SetPoint accepte deux formes : (point, x, y) et
+    -- (point, cadre, pointDuCadre, x, y). Le stub ne comprenait que la longue,
+    -- donc pour la courte il rangeait x dans le champ « cadre de reference » et
+    -- laissait les coordonnees vides. Toute la mise en page de l'addon utilise
+    -- la forme courte : sa geometrie etait donc invisible aux tests, et c'est
+    -- ainsi que la 1.6 est partie avec des libelles empiles.
+    rawset(f, "SetPoint", function(s, point, a, b, c, d)
+        local relative, relativePoint, x, y
+        if type(a) == "number" or a == nil then
+            relative, relativePoint, x, y = nil, point, a, b
+        else
+            relative, relativePoint, x, y = a, b, c, d
+        end
         rawset(s, "__lastPoint", { point = point, relative = relative,
             relativePoint = relativePoint, x = x, y = y })
     end)
@@ -114,9 +131,19 @@ local function newFrame(name)
     -- appelee dessus leve une erreur Lua ordinaire, sans ADDON_ACTION_*.
     rawset(f, "IsForbidden", function(s) return rawget(s, "__forbidden") == true end)
     rawset(f, "GetName", function(s) return rawget(s, "__frameName") end)
-    rawset(f, "CreateTexture", function() return newFrame("texture") end)
-    rawset(f, "CreateFontString", function()
+    rawset(f, "CreateTexture", function(owner)
+        local texture = newFrame("texture")
+        texture.__parent = owner
+        texture.__type = "Texture"
+        return texture
+    end)
+    rawset(f, "CreateFontString", function(owner)
         local fs = newFrame("fontstring")
+        -- Le parent d'un texte n'etait pas retenu : impossible de savoir a
+        -- quelle page il appartient, donc impossible de voir deux libelles se
+        -- recouvrir. C'est exactement ce qui est arrive en 1.6.
+        fs.__parent = owner
+        fs.__type = "FontString"
         -- Garder la derniere police posee : les tailles sont calculees,
         -- donc verifiables sans moteur de rendu.
         rawset(fs, "SetFont", function(s, path, height, flags)
@@ -456,6 +483,14 @@ function M.install(_G)
     _G.IsInInstance = function() return false, "none" end
     _G.GetInstanceInfo = function() return "Royaumes de l'Est", "none", 0, "", 0, 0, false, 0 end
     _G.IsControlKeyDown, _G.IsShiftKeyDown, _G.IsAltKeyDown = function() return false end, function() return false end, function() return false end
+end
+
+function M.childrenOf(parent)
+    local list = {}
+    for _, frame in ipairs(created) do
+        if rawget(frame, "__parent") == parent then list[#list + 1] = frame end
+    end
+    return list
 end
 
 function M.reset()

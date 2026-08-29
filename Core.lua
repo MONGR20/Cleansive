@@ -292,7 +292,16 @@ end
 
 local TEST_STATES = { "MIXED", "ALL", "HEALTHY" }
 
+function NS:TestModeBlockedByCombat()
+    if not (InCombatLockdown and InCombatLockdown()) then return false end
+    self:Print(self.L.TEST_COMBAT_REFUSED)
+    return true
+end
+
 function NS:ToggleTest()
+    -- Refuser aussi l'extinction : elle passe par RebuildRoster, qui serait
+    -- reporte, et les cases resteraient sur de fausses afflictions.
+    if self:TestModeBlockedByCombat() then return end
     self.testMode = not self.testMode
     if not self.testMode then self.testModeFromOptions = nil end
     -- The preview cells live in the roster, so the roster is what changes.
@@ -318,6 +327,7 @@ function NS:EndTestModeForCombat()
 end
 
 function NS:SetTestUnits(count)
+    if self:TestModeBlockedByCombat() then return end
     count = math.max(1, math.min(40, math.floor(tonumber(count) or 1)))
     self.db.testUnits = count
     if not self.testMode then
@@ -776,6 +786,10 @@ function NS:HandleSlash(message)
     elseif command == "reset" then
         self:ResetPositions()
     elseif command == "test" then
+        -- Refuser la commande ENTIERE, pas seulement son effet visible : garder
+        -- l'etat demande sans ouvrir l'apercu serait une commande a moitie
+        -- appliquee qui se declare reussie.
+        if self:TestModeBlockedByCombat() then return end
         -- Demande a la main : l'apercu appartient au joueur, plus a la fenetre.
         self.testModeFromOptions = nil
         local count = tonumber(rest)

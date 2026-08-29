@@ -4078,6 +4078,22 @@ do
     eq(select(2, NS:AnalyzeProfileImport("CLEANSIVE1;inconnu=1")), NS.L.IMPORT_NOTHING_VALID,
         "import : une chaine sans aucun reglage connu est refusee")
 
+    -- Un texte enorme colle par erreur n'est pas une faille -- le parseur
+    -- n'execute rien -- mais c'est un gel du client pour rien.
+    local huge = "CLEANSIVE1;frameSize=30;" .. string.rep("a", 9000)
+    truthy(select(2, NS:AnalyzeProfileImport(huge)),
+        "import : un texte demesure est refuse avec sa raison")
+    eq(NS:AnalyzeProfileImport(huge), nil, "import : et rien n'en est retenu")
+
+    local manyIds = {}
+    for index = 1, 600 do manyIds[index] = tostring(100000 + index) end
+    local flooded = NS:AnalyzeProfileImport(
+        "CLEANSIVE1;spacing=3;ignoredAlways=" .. table.concat(manyIds, ","))
+    truthy(flooded, "import : une liste de filtres demesuree n'invalide pas le reste")
+    eq(flooded.accepted.ignoredAlways, nil,
+        "import : mais elle est refusee plutot que tronquee en silence")
+    eq(flooded.accepted.spacing, 3, "import : et le reglage valide passe quand meme")
+
     -- Une cle inconnue ne doit ni entrer, ni faire echouer le reste.
     local mixed = NS:AnalyzeProfileImport("CLEANSIVE1;frameSize=30;chargePayload=1")
     truthy(mixed, "import : une cle inconnue n'invalide pas le reste")
@@ -5436,6 +5452,251 @@ do
         truthy(trouble:find("diag copy", 1, true),
             "depannage : et la commande a lancer avant est nommee en " .. language)
     end
+end
+
+--------------------------------------------------------------------------
+-- 1.6.1 : deux controles ne doivent pas occuper la meme place
+--
+-- La 1.6 est partie avec des libelles empiles les uns sur les autres sur trois
+-- pages. Aucun test ne pouvait le voir : le harnais retenait les ancrages mais
+-- personne ne les comparait. Le voici qui les compare.
+--------------------------------------------------------------------------
+do
+    freshProfile("PALADIN")
+    knowSpells(4987)
+    NS:UpdateSpells()
+    NS:CreateOptions()
+
+    -- La zone de contenu des pages fait 550 px de haut (fenetre 700, moins
+    -- l'en-tete 88 et le pied 62).
+    local PAGE_HEIGHT = 550
+    local LINE_HEIGHT = 14
+
+    local function rectangleOf(frame)
+        local point = rawget(frame, "__lastPoint")
+        if not point or point.relative ~= nil then return nil end
+        local size = rawget(frame, "__lastSize")
+        local width = size and size.width or rawget(frame, "__width")
+        local height = size and size.height or rawget(frame, "__height")
+        if not width and frame.GetStringWidth and rawget(frame, "__text") then
+            local text = rawget(frame, "__text")
+            if text == nil or text == "" then return nil end
+            width, height = frame:GetStringWidth(), LINE_HEIGHT
+        end
+        if not width or not height or width <= 0 or height <= 0 then return nil end
+        local left, top
+        if point.point == "TOPLEFT" then
+            left, top = point.x or 0, -(point.y or 0)
+        elseif point.point == "BOTTOMLEFT" then
+            left = point.x or 0
+            top = PAGE_HEIGHT - (point.y or 0) - height
+        else
+            return nil
+        end
+        -- Un interrupteur ou un bouton n'a pas de texte propre : son libelle est
+        -- un enfant. Sans cela le rapport ne nomme que des points d'interrogation
+        -- et ne sert a rien pour corriger.
+        local label = rawget(frame, "__text")
+        if not label or label == "" then
+            for _, child in ipairs(mock.childrenOf(frame)) do
+                local childText = rawget(child, "__text")
+                if childText and childText ~= "" then label = childText break end
+            end
+        end
+        return { left = left, top = top, right = left + width, bottom = top + height,
+                 label = string.format("%s @%d,%d", tostring(label or "?"), left, top) }
+    end
+
+    local function overlaps(a, b)
+        -- Une marge de 2 px : deux controles qui se frolent restent lisibles,
+        -- deux controles qui se recouvrent de 3 px ne le sont plus.
+        return a.left < b.right - 2 and b.left < a.right - 2
+            and a.top < b.bottom - 2 and b.top < a.bottom - 2
+    end
+
+    local collisions = {}
+    for _, pageKey in ipairs({ "general", "appearance", "dispels", "history" }) do
+        local page = NS.optionsPages[pageKey]
+        local rects = {}
+        for _, child in ipairs(mock.childrenOf(page)) do
+            -- Les fonds et les traits sont poses SOUS les controles a dessein.
+            local kind = rawget(child, "__type")
+            if kind ~= "Texture" and child:IsShown() then
+                local rect = rectangleOf(child)
+                if rect then rects[#rects + 1] = rect end
+            end
+        end
+        for i = 1, #rects do
+            for j = i + 1, #rects do
+                if overlaps(rects[i], rects[j]) then
+                    collisions[#collisions + 1] = string.format("%s : « %s » recouvre « %s »",
+                        pageKey, rects[i].label, rects[j].label)
+                end
+            end
+        end
+    end
+
+    eq(table.concat(collisions, " | "), "",
+        "mise en page : aucun controle n'en recouvre un autre")
+end
+
+--------------------------------------------------------------------------
+-- 1.6.1 : l'apercu est refuse en combat, pas reporte
+--
+-- Ouvert en plein combat, il ne pouvait pas reconstruire le roster : les cases
+-- gardaient de VRAIES unites et recevaient de FAUSSES afflictions. Fausses
+-- cases rouges et fausse alerte au moment ou l'addon doit etre le plus fiable.
+--------------------------------------------------------------------------
+do
+    freshProfile("PALADIN")
+    knowSpells(4987)
+    NS:UpdateSpells()
+    NS:CreateGrid()
+    NS:RebuildRoster()
+    NS.testMode = false
+
+    local rosterBefore = #NS.roster
+    local alerts = 0
+    local realPlay = NS.PlayAfflictionAlert
+    NS.PlayAfflictionAlert = function(...) alerts = alerts + 1; return realPlay(...) end
+
+    mock.state.inCombat = true
+    NS:ToggleTest()
+    falsy(NS.testMode, "combat : le bouton d'apercu est refuse")
+    eq(#NS.roster, rosterBefore, "combat : le roster n'a pas bouge")
+    eq(alerts, 0, "combat : aucune alerte n'a ete jouee")
+    falsy(NS.pendingRoster, "combat : et rien n'a ete mis en attente pour plus tard")
+
+    NS:HandleSlash("test 20")
+    falsy(NS.testMode, "combat : la commande avec un nombre est refusee aussi")
+    eq(NS.db.testUnits, 5, "combat : et la taille demandee n'est pas retenue")
+
+    NS:HandleSlash("test all")
+    eq(NS.db.testState, "MIXED", "combat : l'etat demande ne change rien non plus")
+
+    local before = #mock.state.chat
+    NS:ToggleTest()
+    local printed = table.concat(mock.state.chat, "\n", before + 1)
+    truthy(printed:find(NS.L.TEST_COMBAT_REFUSED, 1, true),
+        "combat : le refus est dit au joueur, il ne disparait pas en silence")
+
+    -- Hors combat, tout redevient possible.
+    mock.state.inCombat = false
+    NS:ToggleTest()
+    truthy(NS.testMode, "hors combat : l'apercu s'ouvre normalement")
+
+    -- Et l'eteindre en combat est refuse aussi : l'extinction passe par une
+    -- reconstruction du roster, qui serait reportee, et les cases resteraient
+    -- sur de fausses afflictions.
+    mock.state.inCombat = true
+    NS:ToggleTest()
+    truthy(NS.testMode, "combat : eteindre l'apercu est refuse pour la meme raison")
+    mock.state.inCombat = false
+    NS:ToggleTest()
+    falsy(NS.testMode, "hors combat : il s'eteint")
+
+    NS.PlayAfflictionAlert = realPlay
+end
+
+--------------------------------------------------------------------------
+-- 1.6.1 : une base abimee est reparee, y compris sur les reglages recents
+--
+-- Les bornes vivaient dans une seconde liste, ecrite a la main a cote de la
+-- declaration des reglages. Elle avait pris huit champs de retard : une base
+-- disant testUnits = "beaucoup" repartait telle quelle.
+--------------------------------------------------------------------------
+do
+    mock.reset()
+    CleansiveDB = {
+        schemaVersion = 2,
+        global = { language = "frFR" },
+        profiles = { ["Ekinoks-Hyjal"] = { ["65"] = {
+            testUnits = "beaucoup",
+            sortMode = "NOM",
+            testState = "AUCUN",
+            showRaid = "false",
+            showDuration = 0,
+            controlWarning = "oui",
+            showSolo = {},
+            showParty = 1,
+            frameSize = 9999,
+            grow = "EN_DIAGONALE",
+        } } },
+    }
+    NS.dbRoot, NS.db = nil, nil
+    NS:InitializeProfiles()
+
+    eq(NS.db.testUnits, NS.profileDefaults.testUnits,
+        "reparation : un nombre illisible revient a sa valeur d'origine")
+    eq(NS.db.sortMode, NS.profileDefaults.sortMode,
+        "reparation : un mode de tri inconnu aussi")
+    eq(NS.db.testState, NS.profileDefaults.testState,
+        "reparation : un etat d'apercu inconnu aussi")
+    eq(NS.db.grow, NS.profileDefaults.grow,
+        "reparation : une direction inconnue aussi")
+    eq(NS.db.frameSize, 40, "reparation : un nombre hors bornes est ramene dans les bornes")
+
+    -- « false » et 0 sont VRAIS en Lua : un booleen mal type qui survit fait
+    -- exactement l'inverse de ce que la base disait.
+    for _, key in ipairs({ "showRaid", "showDuration", "controlWarning", "showSolo", "showParty" }) do
+        eq(type(NS.db[key]), "boolean",
+            "reparation : " .. key .. " redevient un vrai booleen")
+    end
+
+    -- Le vrai correctif n'est pas d'avoir ajoute huit noms a une liste : c'est
+    -- qu'il n'y ait plus de seconde liste a tenir. Chaque reglage transferable
+    -- doit etre reparable, sans exception et sans entretien.
+    local unrepaired = {}
+    for _, field in ipairs(NS.TRANSFER_FIELDS or {}) do
+        if field.kind == "number" or field.kind == "enum" or field.kind == "boolean" then
+            if not NS:IsRepairableSetting(field.key) then
+                unrepaired[#unrepaired + 1] = field.key
+            end
+        end
+    end
+    eq(table.concat(unrepaired, ", "), "",
+        "reparation : aucun reglage transferable n'echappe a la reparation")
+end
+
+--------------------------------------------------------------------------
+-- 1.6.1 : mesurer le cumul reel avant de decider quoi que ce soit
+--
+-- Pendant un changement de canal, le nouvel enregistrement natif existe un
+-- instant a cote de l'ancien. La table des poignees ne le voit pas : elle
+-- remplace la cle. Le cumul reel etait donc invisible, et sans mesure il n'y a
+-- rien a decider.
+--------------------------------------------------------------------------
+do
+    freshProfile("PALADIN")
+    knowSpells(4987)
+    NS:UpdateSpells()
+    NS.db.sound = true
+    NS.liveNativeSounds, NS.liveNativeSoundsPeak = 0, 0
+
+    NS.auraSoundFingerprint = nil
+    NS:RefreshAuraSoundRegistrations("premiere pose")
+    local afterFirst = NS.liveNativeSounds
+    truthy(afterFirst and afterFirst > 0, "pic sonore : les enregistrements vivants sont comptes")
+    eq(NS.liveNativeSoundsPeak, afterFirst, "pic sonore : le maximum suit la premiere pose")
+
+    -- Un changement de canal remplace chaque paire. Le compte VIVANT ne doit
+    -- pas rester gonfle a la fin : chaque ajout est suivi d'un retrait.
+    NS.db.soundChannel = "Dialog"
+    NS.auraSoundFingerprint = nil
+    NS:RefreshAuraSoundRegistrations("changement de canal")
+    eq(NS.liveNativeSounds, afterFirst,
+        "pic sonore : apres un changement de canal, autant de vivants qu'avant")
+    truthy(NS.liveNativeSoundsPeak >= afterFirst,
+        "pic sonore : et le maximum de la session retient la pointe")
+
+    truthy(NS:BuildDiagnosticsReport():find("soundNative live=", 1, true),
+        "pic sonore : le rapport copiable porte la mesure")
+
+    local before = #mock.state.chat
+    NS:PrintAuraSoundStatus()
+    truthy(table.concat(mock.state.chat, "\n", before + 1):find("aximum", 1, true)
+        or table.concat(mock.state.chat, "\n", before + 1):find("ighest", 1, true),
+        "pic sonore : soundstatus l'annonce au joueur")
 end
 
 --------------------------------------------------------------------------

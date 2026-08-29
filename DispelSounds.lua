@@ -383,7 +383,16 @@ function NS:RefreshAuraSoundRegistrations(reason)
 
     local function removeNativeHandle(handle)
         local ok, result = pcall(C_UnitAuras.RemoveAuraSound, handle)
-        return ok and result ~= false, ok and result or result
+        local removed = ok and result ~= false
+        if removed then self.liveNativeSounds = math.max(0, (self.liveNativeSounds or 0) - 1) end
+        return removed, ok and result or result
+    end
+
+    local function countNativeHandle()
+        self.liveNativeSounds = (self.liveNativeSounds or 0) + 1
+        if self.liveNativeSounds > (self.liveNativeSoundsPeak or 0) then
+            self.liveNativeSoundsPeak = self.liveNativeSounds
+        end
     end
 
     local function finalize()
@@ -451,6 +460,7 @@ function NS:RefreshAuraSoundRegistrations(reason)
             }
             local ok, handle = pcall(C_UnitAuras.AddAuraSound, trigger, info)
             if ok and type(handle) == "number" and accessible(handle) then
+                countNativeHandle()
                 if entry.oldHandle then
                     local removed, failure = removeNativeHandle(entry.oldHandle)
                     if removed then
@@ -529,6 +539,8 @@ function NS:PrintAuraSoundStatus()
             tonumber(diagnostics.preserved) or 0,
             tonumber(diagnostics.rolledBack) or 0)
     end
+    self:Print(string.format(self.L.SOUND_LIVE_PEAK,
+        tonumber(self.liveNativeSounds) or 0, tonumber(self.liveNativeSoundsPeak) or 0))
     self:Print(self.L.SOUND_STATUS_PERFORMANCE,
         activeHandles,
         tonumber(diagnostics.batches) or 0,

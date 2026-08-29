@@ -298,6 +298,8 @@ function NS:BuildDiagnosticsReport()
         tostring(liveSound.reused or 0), tostring(liveSound.replaced or 0),
         tostring(liveSound.preserved or 0), tostring(liveSound.rolledBack or 0),
         tostring(liveSound.batches or 0), tostring(liveSound.elapsedMs or 0))
+    lines[#lines + 1] = string.format("soundNative live=%s peak=%s",
+        tostring(self.liveNativeSounds or 0), tostring(self.liveNativeSoundsPeak or 0))
     if sound.error then lines[#lines + 1] = "soundError=" .. tostring(sound.error) end
 
     local peak = record.soundPeak

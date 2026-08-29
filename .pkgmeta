@@ -21,6 +21,11 @@ manual-changelog:
 ignore:
   - .pkgmeta
   - .github
+  - .gitignore
+  # Residu d'une reecriture d'historique. Trois dossiers VIDES, donc invisibles
+  # a tout controle qui ne regarde que les fichiers : ils sont partis dans
+  # l'archive 1.6 sans que rien ne le signale.
+  - .git-rewrite
   - tests
   - "*.bak"
   - .DS_Store

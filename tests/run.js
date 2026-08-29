@@ -402,16 +402,29 @@ const packageOffenders = [];
     }
   }
   const entries = [];
+  const directories = [];
   const walk = (dir, prefix) => {
     for (const name of fs.readdirSync(dir).sort()) {
       if (ignored.has(name) || ignored.has(prefix ? prefix + "/" + name : name)) continue;
       const full = path.join(dir, name);
       const relative = prefix ? prefix + "/" + name : name;
-      if (fs.statSync(full).isDirectory()) walk(full, relative);
-      else entries.push({ relative, full, name });
+      if (fs.statSync(full).isDirectory()) {
+        directories.push({ relative, name });
+        walk(full, relative);
+      } else entries.push({ relative, full, name });
     }
   };
   walk(addon, "");
+
+  // Un dossier vide ne contient aucun fichier, donc il echappait entierement a
+  // ce controle -- et .git-rewrite, residu d'une reecriture d'historique, est
+  // parti dans l'archive 1.6 sous forme de trois dossiers vides. Ce qui
+  // commence par un point n'a rien a faire chez le joueur, vide ou non.
+  for (const entry of [...directories, ...entries]) {
+    if (entry.name.startsWith(".")) {
+      packageOffenders.push(`${entry.relative} est un element cache et ne doit pas etre livre`);
+    }
+  }
 
   // #278 : la licence doit voyager avec le code. Un depot MIT dont l'archive
   // n'embarque pas sa licence n'est pas distribue sous MIT.
