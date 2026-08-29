@@ -438,6 +438,7 @@ local TRANSFER_FIELDS = {
     { key = "failureSound", kind = "boolean" },
     { key = "showCooldown", kind = "boolean" },
     { key = "showDuration", kind = "boolean" },
+    { key = "controlWarning", kind = "boolean" },
     { key = "showStacks", kind = "boolean" },
     { key = "showClickHints", kind = "boolean" },
     { key = "autoHide", kind = "boolean" },
@@ -690,7 +691,7 @@ end
 -- grid back should not have to lose his lists and his filters to get it.
 NS.PAGE_RESET_KEYS = {
     general = { "enabled", "locked", "showPets", "showFocus", "showTooltips",
-        "showSolo", "showParty", "showRaid",
+        "showSolo", "showParty", "showRaid", "controlWarning", "controlTypes",
         "sound", "failureSound", "soundChannel", "soundMaxRegistrations",
         "blacklistTime", "autoHide" },
     appearance = { "frameSize", "spacing", "columns", "inactiveAlpha", "grow",

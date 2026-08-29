@@ -779,6 +779,8 @@ function NS:CreateOptions()
     attachHelp(language, self.L.LANGUAGE, self.L.TIP_LANGUAGE)
     self.languageButton = language
 
+    self.optionChecks[#self.optionChecks + 1] = toggle(general, self.L.CONTROL_WARNING, 0, -430, 560,
+        "controlWarning", function() self:RefreshAll(true) end, self.L.TIP_CONTROL_WARNING)
     self.optionChecks[#self.optionChecks + 1] = toggle(general, self.L.SHOW_SOLO, 310, -28, 275,
         "showSolo", function() self:UpdateGridVisibilityDriver() end, self.L.TIP_SHOW_CONTEXT)
     self.optionChecks[#self.optionChecks + 1] = toggle(general, self.L.SHOW_PARTY, 310, -64, 275,

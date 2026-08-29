@@ -209,6 +209,10 @@ local function createStatusPlate(name, parent)
 end
 
 
+-- Volontairement loin des couleurs de dissipation : une entrave n'est pas une
+-- affliction a dissiper, et la confondre ferait cliquer pour rien.
+CONTROL_COLOR = { 0.62, 0.82, 0.95 }
+
 local function setBorderColor(frame, r, g, b, a)
     for _, texture in ipairs(frame.border) do
         texture:SetColorTexture(r, g, b, a or 1)
@@ -1847,14 +1851,22 @@ function NS:SetButtonState(button, aura, auraType, slot, secret, charmed)
         -- cooldown probes to observe the real spell cooldown after the aura
         -- disappears. RefreshDispelCooldowns clears it once a readable zero
         -- has survived the 750 ms race window.
-        local visualKey = "normal:" .. tostring(self.db.inactiveAlpha) .. ":" .. (hiddenBase and "hidden" or "shown")
+        local control = self:UnitWatchedControl(button.unit)
+        local visualKey = "normal:" .. tostring(self.db.inactiveAlpha) .. ":"
+            .. (hiddenBase and "hidden" or "shown") .. ":" .. tostring(control)
         if button.lastVisualKey ~= visualKey then
             button.lastVisualKey = visualKey
             button.background:SetColorTexture(0.05, 0.07, 0.09, hiddenBase and 0 or self.db.inactiveAlpha)
             button.typeMark:SetColorTexture(0, 0, 0, 0)
-            setBorderColor(button, 1, 1, 1, hiddenBase and 0 or 0.10)
+            if control and not hiddenBase then
+                local color = CONTROL_COLOR
+                setBorderColor(button, color[1], color[2], color[3], 1)
+            else
+                setBorderColor(button, 1, 1, 1, hiddenBase and 0 or 0.10)
+            end
             self:SetCooldown(button, nil)
         end
+        button.controlType = control
     end
 
     -- A readable manual-only affliction has an aura but no secure click slot.
@@ -2640,4 +2652,104 @@ function NS:ClassColor(classToken)
     local color = type(palette) == "table" and palette[classToken]
     if type(color) ~= "table" or type(color.r) ~= "number" then return { 1, 1, 1 } end
     return { color.r, color.g, color.b }
+end
+
+--------------------------------------------------------------------------
+-- Loss of control
+--
+-- C_LossOfControl.GetActiveLossOfControlDataByUnit accepte un jeton d'unite,
+-- pas seulement "player" : une entrave sur un allie est donc lisible. Mais la
+-- fonction est marquee SecretWhenLossOfControlInfoRestricted, donc chaque
+-- valeur passe par CanAccess et un echec n'est jamais une absence d'entrave.
+--------------------------------------------------------------------------
+
+function NS:UnitControlTypes(unit)
+    local api = C_LossOfControl
+    if not unit or not api or not api.GetActiveLossOfControlDataCountByUnit
+        or not api.GetActiveLossOfControlDataByUnit then
+        return nil
+    end
+    local ok, count = pcall(api.GetActiveLossOfControlDataCountByUnit, unit)
+    if not ok or not self:CanAccess(count) or type(count) ~= "number" or count < 1 then
+        return nil
+    end
+    local found
+    for index = 1, count do
+        local readable, data = pcall(api.GetActiveLossOfControlDataByUnit, unit, index)
+        if readable and type(data) == "table" then
+            local locType = data.locType
+            if self:CanAccess(locType) and type(locType) == "string" and locType ~= "" then
+                found = found or {}
+                found[#found + 1] = locType
+                self:RememberControlType(locType, data)
+            end
+        end
+    end
+    return found
+end
+
+-- Une observation positive, jamais une liste de reference : ce que Cleansive
+-- n'a pas vu n'est pas une preuve que ca n'existe pas.
+function NS:RememberControlType(locType, data)
+    local global = self.dbRoot and self.dbRoot.global
+    if not global or type(locType) ~= "string" then return end
+    global.controlSeen = type(global.controlSeen) == "table" and global.controlSeen or {}
+    local record = global.controlSeen[locType]
+    if type(record) ~= "table" then
+        record = { count = 0 }
+        global.controlSeen[locType] = record
+    end
+    record.count = record.count + 1
+    local text = data and data.displayText
+    if self:CanAccess(text) and type(text) == "string" and text ~= "" then
+        record.example = text
+    end
+    local place = self.AuraHistoryPlace and select(1, self:AuraHistoryPlace())
+    if place then record.place = place end
+end
+
+function NS:UnitWatchedControl(unit)
+    if not self.db or not self.db.controlWarning then return nil end
+    local watched = self.db.controlTypes
+    if type(watched) ~= "table" or not next(watched) then return nil end
+    local active = self:UnitControlTypes(unit)
+    if not active then return nil end
+    for _, locType in ipairs(active) do
+        if watched[locType] then return locType end
+    end
+    return nil
+end
+
+function NS:PrintControlStatus()
+    local global = self.dbRoot and self.dbRoot.global
+    local seen = global and global.controlSeen
+    if type(seen) ~= "table" or not next(seen) then
+        self:Print(self.L.CONTROL_NONE_SEEN)
+        return
+    end
+    self:Print(self.L.CONTROL_SEEN_TITLE)
+    local names = {}
+    for locType in pairs(seen) do names[#names + 1] = locType end
+    table.sort(names)
+    for _, locType in ipairs(names) do
+        local record = seen[locType]
+        self:Print(string.format(self.L.CONTROL_SEEN_LINE, locType,
+            tostring(record.count or 0),
+            tostring(record.example or "-"),
+            tostring(record.place or "-"),
+            self.db.controlTypes[locType] and self.L.CONTROL_WATCHED or self.L.CONTROL_IGNORED))
+    end
+end
+
+function NS:ToggleControlType(locType)
+    if not self.db or type(locType) ~= "string" then return false end
+    self.db.controlTypes = type(self.db.controlTypes) == "table" and self.db.controlTypes or {}
+    if self.db.controlTypes[locType] then
+        self.db.controlTypes[locType] = nil
+    else
+        self.db.controlTypes[locType] = true
+    end
+    self:RefreshAll(true)
+    if self.RefreshOptions then self:RefreshOptions() end
+    return true
 end

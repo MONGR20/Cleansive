@@ -1,4 +1,4 @@
-# Cleansive 1.5.57
+# Cleansive 1.5.58
 
 Cleansive is a standalone one-click cleansing addon for **World of Warcraft Retail 12.1** (`120100`). It provides a compact Decursive-style workflow with a dark, class-colored interface inspired by the clarity of Ellesmere UI. The interface follows the language of your WoW client, English or French; either can be picked from the General page at any time.
 
@@ -97,9 +97,26 @@ Red, blue, and orange identify the click to use. The optional L/R/C corner lette
 - `/cleansive diag`: report this session's diagnostics; `diag copy` opens a selected, copyable support report and `diag reset` clears the stored counters.
 - `/cleansive cdstatus`: show the last inspected cleansing-spell cooldown and display result.
 - `/cleansive history`: open the clickable affliction history.
+- `/cleansive control`: list the loss-of-control effects seen so far; `control <type>` starts or stops watching one.
 - `/cleansive setup`: reopen the setup assistant.
 
 When Decursive is disabled, `/dcr` and `/decursive` remain available as compatibility aliases.
+
+## Roots, stuns and other loss of control
+
+`C_LossOfControl` reports these per unit, so an effect on a group member is
+readable -- but the data can be secret under restriction, and a secret count
+must never be used as a loop bound. Cleansive reads defensively and treats a
+refusal as "unknown", never as "no effect".
+
+Nothing is watched by default. `/cleansive control` lists only what Cleansive
+has actually observed, with the place it was seen; you pick which types deserve
+a mark. **A type missing from that list is not proof it does not exist** -- it
+means Cleansive has not seen it yet.
+
+A watched effect marks the cell border. It never covers an affliction: a cell
+with something to cleanse keeps its cleansing color, because cleansing is the
+job.
 
 ## Retail 12.1 protected-aura behavior
 
@@ -154,6 +171,7 @@ the reason on its own.
 
 ## Recent changes
 
+- **1.5.58** - Cleansive can watch roots, stuns and other loss-of-control effects on your group, but only the ones you picked from what it has actually seen.
 - **1.5.57** - the sound registry states its condition in a sentence, the affliction fade can be switched off on its own, and sizes can be set by command.
 - **1.5.56** - the cell order can follow role or class instead of raid group, and the release archive is checked before it ships.
 - **1.5.55** - three combinable rules for where the grid appears (alone, party, raid), and the grid stays visible while you are configuring it.

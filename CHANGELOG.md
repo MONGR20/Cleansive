@@ -6,6 +6,14 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.5.58
+
+- **Cleansive peut signaler racines, étourdissements et autres pertes de contrôle** sur les membres du groupe. Vérification faite dans les définitions d’API avant d’écrire une ligne : `C_LossOfControl.GetActiveLossOfControlDataByUnit` accepte bien un jeton d’unité, et pas seulement `player`.
+- **Rien n’est surveillé par défaut.** `/cleansive control` liste uniquement ce que Cleansive a *réellement observé*, avec le lieu, et vous choisissez les types qui méritent une marque. Un type absent de cette liste n’est pas la preuve qu’il n’existe pas : c’est que Cleansive ne l’a pas encore vu. Demander à surveiller un type jamais vu est refusé et dit, pas accepté en silence.
+- **Une entrave ne masque jamais une affliction.** Elle n’utilise la bordure que sur une case qui n’a rien à dissiper. Dissiper reste le travail.
+- La donnée peut être secrète sous restriction. **Un compte secret n’est jamais utilisé comme borne de boucle** — la comparaison lèverait dans le client. Un refus de lecture veut dire « inconnu », jamais « aucune entrave ».
+- Tests : 1018 à 1036. Le test du compte secret a été réécrit : la première version vérifiait que rien n’était rendu, ce qui restait vrai même sans le garde-fou. Il compte désormais les lectures, qui doivent être nulles.
+
 ## 1.5.57
 
 - **Le registre sonore dit son état en une phrase** au lieu d’une suite de nombres : coupé, indisponible, pas encore mis en place, en cours, dégradé, ou actif. Un joueur qui lit « 46/46, 0 en attente, 0 erreur » doit encore conclure lui-même ; conclure est le travail de l’addon. Un remplacement préservé et des unités écartées par le budget comptent comme **dégradé**, pas comme un succès.

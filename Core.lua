@@ -117,6 +117,8 @@ local defaults = {
     inactiveAlpha = 0.18,
     blacklistTime = 5,
     sortMode = "GROUP",
+    controlWarning = false,
+    controlTypes = {},
     showSolo = true,
     showParty = true,
     showRaid = true,
@@ -769,6 +771,20 @@ function NS:HandleSlash(message)
         end
     elseif command == "macro" then
         self:CreateMouseoverMacro()
+    elseif command == "control" then
+        if rest == "" then
+            self:PrintControlStatus()
+        else
+            local locType = string.upper(rest)
+            local seen = self.dbRoot and self.dbRoot.global and self.dbRoot.global.controlSeen
+            if type(seen) ~= "table" or not seen[locType] then
+                self:Print(string.format(self.L.CONTROL_UNKNOWN, locType, locType))
+            else
+                self:ToggleControlType(locType)
+                self:Print(string.format(self.L.CONTROL_TOGGLED, locType,
+                    self.db.controlTypes[locType] and self.L.CONTROL_WATCHED or self.L.CONTROL_IGNORED))
+            end
+        end
     elseif command == "size" or command == "spacing" then
         local value = tonumber(rest)
         if not value then
@@ -867,6 +883,7 @@ local EVENT_NAMES = {
     -- now Cleansive had to infer its refusals afterwards. Neither event is
     -- marked HasRestrictions, and the static check verifies that against
     -- Blizzard's own definitions rather than against this comment.
+    "LOSS_OF_CONTROL_ADDED", "LOSS_OF_CONTROL_UPDATE",
     "ADDON_ACTION_FORBIDDEN", "ADDON_ACTION_BLOCKED",
     -- The only signal that a restriction has lifted. Without it, work deferred
     -- because the client refused permission would wait for an unrelated event:
@@ -912,6 +929,18 @@ events:SetScript("OnEvent", function(_, event, ...)
     if event == "ADDON_ACTION_FORBIDDEN" or event == "ADDON_ACTION_BLOCKED" then
         local culprit, func = ...
         if NS.NoteForbiddenAction then NS:NoteForbiddenAction(culprit, func) end
+        NS.pendingNoticeSuppressed, NS.currentEvent = nil, nil
+        return
+    end
+
+    if event == "LOSS_OF_CONTROL_ADDED" or event == "LOSS_OF_CONTROL_UPDATE" then
+        local unit = ...
+        -- Le jeton peut etre celui d'une unite hors grille : la lecture est
+        -- faite quand meme, car c'est ainsi que le catalogue s'apprend.
+        if type(unit) == "string" then
+            NS:UnitControlTypes(unit)
+            NS:RefreshUnit(unit)
+        end
         NS.pendingNoticeSuppressed, NS.currentEvent = nil, nil
         return
     end
