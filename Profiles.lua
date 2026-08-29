@@ -454,6 +454,7 @@ local TRANSFER_FIELDS = {
     { key = "inactiveAlpha", kind = "number", min = 0.05, max = 0.80 },
     { key = "grow", kind = "enum", values = { "RIGHT_DOWN", "RIGHT_UP", "LEFT_DOWN", "LEFT_UP" } },
     { key = "layoutMode", kind = "enum", values = { "GRID", "HORIZONTAL", "VERTICAL" } },
+    { key = "sortMode", kind = "enum", values = { "GROUP", "ROLE", "CLASS" } },
     { key = "soundChannel", kind = "enum", values = { "Master", "SFX", "Dialog" } },
     { key = "testState", kind = "enum", values = { "MIXED", "ALL", "HEALTHY" } },
     { key = "typeOrder", kind = "typelist" },
@@ -694,7 +695,7 @@ NS.PAGE_RESET_KEYS = {
     appearance = { "frameSize", "spacing", "columns", "inactiveAlpha", "grow",
         "layoutMode", "showNames", "showCooldown", "showStacks", "showClickHints",
         "afflictedOnly", "testUnits", "testState", "positions" },
-    dispels = { "typeOrder", "enabledTypes", "groupManualTypes", "priority", "skip" },
+    dispels = { "typeOrder", "enabledTypes", "groupManualTypes", "priority", "skip", "sortMode" },
 }
 
 function NS:ResetOptionsPage(page)

@@ -1,4 +1,4 @@
-# Cleansive 1.5.55
+# Cleansive 1.5.56
 
 Cleansive is a standalone one-click cleansing addon for **World of Warcraft Retail 12.1** (`120100`). It provides a compact Decursive-style workflow with a dark, class-colored interface inspired by the clarity of Ellesmere UI. The interface follows the language of your WoW client, English or French; either can be picked from the General page at any time.
 
@@ -40,7 +40,9 @@ Red, blue, and orange identify the click to use. The optional L/R/C corner lette
 - Magic, Curse, Poison, Disease, Bleed, and Charm support.
 - Player, class, and raid-group priorities and exclusions.
 - A default raid order relative to your own group rather than an absolute
-  1-to-8 order, so cleansing work spreads across dispellers on its own.
+  1-to-8 order, so cleansing work spreads across dispellers on its own. Role
+  and class orders are available instead; the priority list is read before any
+  of them.
 - Permanent and combat-only aura filters.
 - A preview that pads the grid to any size from 1 to 40 with inert cells, so a
   raid layout can be sized and placed without a raid. A preview cell carries no
@@ -151,6 +153,7 @@ the reason on its own.
 
 ## Recent changes
 
+- **1.5.56** - the cell order can follow role or class instead of raid group, and the release archive is checked before it ships.
 - **1.5.55** - three combinable rules for where the grid appears (alone, party, raid), and the grid stays visible while you are configuring it.
 - **1.5.54** - a search box in the settings window finds a setting and says which page it is on.
 - **1.5.53** - the tooltip says why a cell sits where it does, and the affliction history remembers where each one was seen.

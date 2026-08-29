@@ -3,6 +3,11 @@ local _, NS = ...
 local RAID_GROUPS = 8
 local PREVIEW_MAX = 40
 
+-- Un dissipeur regarde d'abord les soigneurs et les tanks : ils meurent en
+-- premier et ils sont irremplacables. L'ordre par groupe reste le defaut,
+-- parce qu'il repartit le travail entre plusieurs dissipeurs.
+local ROLE_RANK = { TANK = 1, HEALER = 2, DAMAGER = 3, NONE = 4 }
+
 -- Names and classes are secret-capable in Retail 12.1, so both go through the
 -- guards. An unreadable name falls back to the unit token for display and
 -- counts as "no match" for the priority and skip lists: the unit stays in the
@@ -55,6 +60,7 @@ function NS:GetUnitDescriptor(unit)
         group = group,
         isPlayer = self:IsPlayerUnit(unit),
         isPet = string.find(unit, "pet", 1, true) ~= nil,
+        role = NS:SafeUnitRole(unit),
     }
 end
 
@@ -172,10 +178,21 @@ function NS:BuildRoster()
         if offset < 0 then offset = offset + RAID_GROUPS end
         return offset
     end
+    local sortMode = self.db.sortMode or "GROUP"
     table.sort(descriptors, function(a, b)
         local ar, br = self:PriorityRank(a), self:PriorityRank(b)
         if ar ~= br then return ar < br end
         if a.isPet ~= b.isPet then return not a.isPet end
+        if sortMode == "ROLE" then
+            local arole = ROLE_RANK[a.role] or ROLE_RANK.NONE
+            local brole = ROLE_RANK[b.role] or ROLE_RANK.NONE
+            if arole ~= brole then return arole < brole end
+        elseif sortMode == "CLASS" then
+            -- Une classe illisible part a la fin plutot que de se ranger avant
+            -- les classes connues, ce que ferait la chaine vide.
+            local ac, bc = a.class or "\255", b.class or "\255"
+            if ac ~= bc then return ac < bc end
+        end
         if a.group ~= b.group then return groupRank(a.group) < groupRank(b.group) end
         return (a.displayName or a.unit) < (b.displayName or b.unit)
     end)

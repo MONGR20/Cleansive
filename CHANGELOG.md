@@ -6,6 +6,13 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.5.56
+
+- **L’ordre des cases se choisit** : par groupe de raid (inchangé, et toujours le défaut parce qu’il répartit le travail entre plusieurs dissipeurs), par rôle, ou par classe. Le tri par rôle place les tanks puis les soigneurs devant. **Votre liste de priorité passe avant tous les modes** — elle décide, ils arrangent le reste.
+- Le rôle est lu **une fois par reconstruction** et rangé dans la fiche de l’unité. Le lire dans le comparateur aurait appelé l’API à chaque comparaison, soit des centaines de fois par tri en raid.
+- **L’archive livrée est contrôlée avant de partir** : licence présente, changelog qui parle de la version du `.toc`, README d’accord avec elle, aucun jeton de version resté tel quel, aucun BOM, aucune fin de ligne CRLF, aucun reste de développement. Écrit après avoir constaté que le premier contrôle du changelog acceptait « 1.5.55bis » pour « 1.5.55 » : il comparait un préfixe, il compare désormais la ligne entière.
+- Tests : 975 à 985, plus un dixième contrôle statique.
+
 ## 1.5.55
 
 - **Trois règles combinables pour l’endroit où la grille apparaît** : seul, en groupe, en raid. Elles se combinent avec la règle « seulement en combat » plutôt que de la remplacer. Tout passe par le pilote de visibilité sécurisé de Blizzard, donc les règles continuent de s’appliquer pendant le combat, quand Lua ne peut plus rien.

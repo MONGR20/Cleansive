@@ -53,6 +53,13 @@ function NS:SafeUnitFullName(unit)
     return name
 end
 
+function NS:SafeUnitRole(unit)
+    if not unit or not UnitGroupRolesAssigned then return "NONE" end
+    local ok, role = pcall(UnitGroupRolesAssigned, unit)
+    if not ok or not self:CanAccess(role) or type(role) ~= "string" then return "NONE" end
+    return role
+end
+
 function NS:SafeUnitClass(unit)
     if not unit or not UnitClass then return nil end
     local ok, _, token = pcall(UnitClass, unit)
@@ -108,6 +115,7 @@ local defaults = {
     columns = 10,
     inactiveAlpha = 0.18,
     blacklistTime = 5,
+    sortMode = "GROUP",
     showSolo = true,
     showParty = true,
     showRaid = true,
@@ -1099,4 +1107,16 @@ function NS:OptionsStatusText()
     end
     if not self.enabled then return self.L.STATUS_PAUSED end
     return self.L.STATUS_READY
+end
+
+local SORT_MODES = { "GROUP", "ROLE", "CLASS" }
+
+function NS:CycleSortMode()
+    local current, index = self.db.sortMode or "GROUP", 1
+    for position, mode in ipairs(SORT_MODES) do
+        if mode == current then index = position end
+    end
+    self.db.sortMode = SORT_MODES[(index % #SORT_MODES) + 1]
+    self:RebuildRoster()
+    if self.RefreshOptions then self:RefreshOptions() end
 end

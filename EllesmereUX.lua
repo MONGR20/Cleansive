@@ -1015,6 +1015,14 @@ function NS:CreateOptions()
     local dispels = CreateFrame("Frame", nil, content)
     dispels:SetAllPoints()
     self.optionsPages.dispels = dispels
+    local sortLabel = text(dispels, self.L.SORT_MODE, 13, C.text)
+    sortLabel:SetPoint("BOTTOMLEFT", 0, 14)
+    local sortButton = button(dispels, "", 190, 28)
+    sortButton:SetPoint("BOTTOMLEFT", 150, 8)
+    sortButton:SetScript("OnClick", function() self:CycleSortMode() end)
+    attachHelp(sortButton, self.L.SORT_MODE, self.L.TIP_SORT_MODE)
+    self.sortModeButton = sortButton
+
     section(dispels, self.L.CURE_ORDER, -2)
     local explanation = text(dispels, localized("La couleur indique le clic à utiliser. Réorganisez les types pour changer l’affectation.", "The color indicates which click to use. Reorder types to change the assignment."), 11, C.dim)
     explanation:SetPoint("TOPLEFT", 0, -28)
@@ -1404,6 +1412,10 @@ function NS:RefreshOptions()
     if self.profileLabel and self.GetActiveProfileLabel then self.profileLabel:SetText(self:GetActiveProfileLabel()) end
     if self.priorityKeyButton and not self.priorityKeyButton.capturing then
         self.priorityKeyButton:SetText(self.db.priorityKey ~= "" and self.db.priorityKey or self.L.NOT_BOUND)
+    end
+    if self.sortModeButton then
+        self.sortModeButton:SetText(self.L["SORT_" .. tostring(self.db.sortMode or "GROUP")]
+            or self.L.SORT_GROUP)
     end
     if self.optionsStatusText then
         self.optionsStatusText:SetText(self:OptionsStatusText())
