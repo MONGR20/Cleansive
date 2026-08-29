@@ -6,6 +6,13 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.5.41
+
+- **La plaque de la lettre de clic nait cachee.** C'est `StyleAuraVisual` qui decidait de la montrer ou non, et ce stylage peut etre refuse par le client : le releve du 29/08/2026 en compte 690 refus en une session. De toutes les regions du visuel, la plaque est la seule a naitre avec une couleur -- les autres n'ont ni teinte ni texte et ne se voient pas. Un refus au tout premier passage laissait donc un petit carre sombre dans le coin d'une cellule, alors meme que le joueur avait desactive les lettres de clic. La cellule de repli cachait deja la sienne des la creation ; celle du moteur avait ete oubliee.
+- Rien d'autre n'est masque par precaution : les autres regions ont ete verifiees une a une et n'affichent rien tant qu'aucune couleur ni aucun texte ne leur est donne.
+
+*Note sur la 1.5.40 : le decoupage de la passe de style en neuf etapes n'a rien recupere. Le meme releve montre 6210 etapes perdues pour 690 refus, soit les neuf a chaque fois -- toutes les regions du visuel sont filles du cadre protege du moteur, donc interdites ensemble ou pas du tout. Le decoupage reste juste face a un refus partiel, mais il ne traitait pas la cause. La corriger demande de reparenter ces regions sur la cellule de Cleansive, ce qui change l'ordre d'affichage et ne peut se valider qu'en jeu.*
+
 ## 1.5.40
 
 - **Un refus du client n'emporte plus le reste de la mise en forme.** Le releve du 29/08/2026 montrait `Frames.lua:641: calling 'SetFrameLevel' on bad self (forbidden object)`, 315 fois en une session. `SetFrameLevel` etait la premiere ligne d'un `pcall` qui contenait toute la passe : quand le client refusait ce seul appel, le fond, la bande de type, le compteur de charges et la lettre de clic n'etaient jamais poses non plus. C'est le defaut de police de la 1.5.35 dans un autre bloc -- corrige a l'epoque seulement la ou il avait ete observe, ce qui est exactement pourquoi celui-ci a survecu. Chaque etape tient maintenant seule.

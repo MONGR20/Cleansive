@@ -867,6 +867,15 @@ function NS:AddAuraSlotForType(button, auraType)
             local hintPlate = labelLayer:CreateTexture(nil, "ARTWORK", nil, 2)
             hintPlate:SetSize(9, 11)
             hintPlate:SetColorTexture(0.015, 0.025, 0.030, 0.78)
+            -- Cachee des la creation. C'est StyleAuraVisual qui decide de la
+            -- montrer, et ce stylage peut etre refuse par le client : le releve
+            -- du 29/08/2026 en compte 690 refus en une session. De toutes ces
+            -- regions, la plaque est la seule a naitre avec une couleur -- les
+            -- autres n'ont ni teinte ni texte et ne se voient pas. Un refus au
+            -- tout premier passage laissait donc un carre sombre dans le coin
+            -- d'une cellule, sur une option que le joueur avait desactivee.
+            -- La cellule de repli fait deja cela depuis toujours (CreateButton).
+            hintPlate:Hide()
             local hint = labelLayer:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
             hint:SetPoint("TOPLEFT", button, "TOPLEFT", 2, -1)
             hint:SetTextColor(1, 1, 1, 1)
