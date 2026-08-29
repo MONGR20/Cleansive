@@ -969,14 +969,25 @@ function NS:CreateOptions()
     end
 
     section(appearance, localized("Dimensions", "Dimensions"), -148)
+    -- L'apercu des options reste immediat : c'est lui que le joueur regarde
+    -- pendant qu'il glisse. Seule la vraie grille attend la fin du geste.
     self.optionSliders[#self.optionSliders + 1] = slider(appearance, self.L.SIZE, 0, -180, 265, 12, 40, 1, "frameSize", "%d px", function()
-        self:LayoutButtons()
+        self:Debounce("layout", 0.1, function() self:LayoutButtons() end)
         self:RefreshCellPreview()
+        self:RefreshOptions()
     end, self.L.TIP_SIZE)
-    self.optionSliders[#self.optionSliders + 1] = slider(appearance, self.L.SPACING, 310, -180, 265, 0, 12, 1, "spacing", "%d px", function() self:LayoutButtons() end, self.L.TIP_SPACING)
-    self.optionSliders[#self.optionSliders + 1] = slider(appearance, self.L.COLUMNS, 0, -246, 265, 1, 20, 1, "columns", "%d", function() self:LayoutButtons() end, self.L.TIP_COLUMNS)
+    self.optionSliders[#self.optionSliders + 1] = slider(appearance, self.L.SPACING, 310, -180, 265, 0, 12, 1, "spacing", "%d px",
+        function() self:Debounce("layout", 0.1, function() self:LayoutButtons() end) end, self.L.TIP_SPACING)
+    self.optionSliders[#self.optionSliders + 1] = slider(appearance, self.L.COLUMNS, 0, -246, 265, 1, 20, 1, "columns", "%d",
+        function() self:Debounce("layout", 0.1, function() self:LayoutButtons() end) end, self.L.TIP_COLUMNS)
     self.optionSliders[#self.optionSliders + 1] = slider(appearance, self.L.OPACITY, 310, -246, 265, 0.05, 0.80, 0.05, "inactiveAlpha", "%d %%", function() self:RefreshAll(true) end, self.L.TIP_OPACITY,
         function(current) return math.floor(current * 100 + 0.5) end)
+
+    local nameNote = text(appearance, "", 10, C.dim)
+    nameNote:SetPoint("TOPLEFT", 0, -294)
+    nameNote:SetWidth(560)
+    nameNote:SetJustifyH("LEFT")
+    self.nameWidthNote = nameNote
 
     local resizeNote = text(appearance, self.L.SIZE_COMBAT_NOTE, 10, C.dim)
     resizeNote:SetPoint("TOPLEFT", 0, -308)
@@ -1435,6 +1446,10 @@ function NS:RefreshOptions()
     if self.sortModeButton then
         self.sortModeButton:SetText(self.L["SORT_" .. tostring(self.db.sortMode or "GROUP")]
             or self.L.SORT_GROUP)
+    end
+    if self.nameWidthNote then
+        local wanted = self.db.showNames and not self:CellShowsNames()
+        self.nameWidthNote:SetText(wanted and string.format(self.L.NAME_TOO_SMALL, 16) or "")
     end
     if self.soundStateText then
         self.soundStateText:SetText(self:AuraSoundStateSentence())

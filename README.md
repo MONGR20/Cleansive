@@ -1,4 +1,4 @@
-# Cleansive 1.5.59
+# Cleansive 1.5.60
 
 Cleansive is a standalone one-click cleansing addon for **World of Warcraft Retail 12.1** (`120100`). It provides a compact Decursive-style workflow with a dark, class-colored interface inspired by the clarity of Ellesmere UI. The interface follows the language of your WoW client, English or French; either can be picked from the General page at any time.
 
@@ -99,7 +99,7 @@ Red, blue, and orange identify the click to use. The optional L/R/C corner lette
 - `/cleansive diag`: report this session's diagnostics; `diag copy` opens a selected, copyable support report and `diag reset` clears the stored counters.
 - `/cleansive cdstatus`: show the last inspected cleansing-spell cooldown and display result.
 - `/cleansive history`: open the clickable affliction history.
-- `/cleansive control`: list the loss-of-control effects seen so far; `control <type>` starts or stops watching one.
+- `/cleansive control`: list the loss-of-control effects seen so far; `control <type>` starts or stops watching one; `control clear` empties the observed list without touching your choices.
 - `/cleansive setup`: reopen the setup assistant.
 
 When Decursive is disabled, `/dcr` and `/decursive` remain available as compatibility aliases.
@@ -173,6 +173,7 @@ the reason on its own.
 
 ## Recent changes
 
+- **1.5.60** - dragging a size slider no longer relays the whole grid at every notch, and a switch that cannot apply now says why.
 - **1.5.59** - the tooltip stops promising a mouse button that does nothing, and the addon credits what it learned from.
 - **1.5.58** - Cleansive can watch roots, stuns and other loss-of-control effects on your group, but only the ones you picked from what it has actually seen.
 - **1.5.57** - the sound registry states its condition in a sentence, the affliction fade can be switched off on its own, and sizes can be set by command.

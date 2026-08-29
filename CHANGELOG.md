@@ -6,6 +6,15 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.5.60
+
+- **Glisser un curseur de taille ne replace plus la grille à chaque cran.** Un glissement complet déclenchait des dizaines de repositionnements de 82 cases dont un seul comptait. Seul le dernier s’applique désormais. L’aperçu des options, lui, reste immédiat : c’est celui que vous regardez pendant le geste.
+- **« Afficher les noms » n’a plus l’air cassé.** Sous 16 px il n’y a pas la place pour un nom, et l’interrupteur ne faisait donc rien sans rien dire. L’interface l’explique maintenant, et l’explication disparaît dès qu’elle n’a plus lieu d’être.
+- **`/cleansive control clear`** vide la liste des pertes de contrôle observées sans effacer les types que vous avez choisi de surveiller : ce que Cleansive a appris et ce que vous avez décidé sont deux choses.
+- Un contrôle vérifie désormais que **chaque réglage explique ce qu’il fait**. Aucun n’était muet, mais rien ne garantissait que le prochain ne le serait pas.
+- Un test vérifie qu’un talent qui **remplace** un sort par un autre sans changer leur nombre est bien vu : un rafraîchissement qui se fierait au compte n’aurait rien remarqué.
+- Tests : 1044 à 1059.
+
 ## 1.5.59
 
 - **L’infobulle ne promet plus un bouton qui ne fait rien.** Elle annonçait « Souris 4 : troisième dissipation » à toutes les spécialisations, y compris à celles qui n’ont qu’un seul sort. Elle n’annonce désormais que ce qui existe vraiment.

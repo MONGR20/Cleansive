@@ -772,7 +772,11 @@ function NS:HandleSlash(message)
     elseif command == "macro" then
         self:CreateMouseoverMacro()
     elseif command == "control" then
-        if rest == "" then
+        if rest == "clear" then
+            local global = self.dbRoot and self.dbRoot.global
+            if global then global.controlSeen = {} end
+            self:Print(self.L.CONTROL_CLEARED)
+        elseif rest == "" then
             self:PrintControlStatus()
         else
             local locType = string.upper(rest)
@@ -1164,4 +1168,19 @@ function NS:CycleSortMode()
     self.db.sortMode = SORT_MODES[(index % #SORT_MODES) + 1]
     self:RebuildRoster()
     if self.RefreshOptions then self:RefreshOptions() end
+end
+
+function NS:Debounce(key, delay, action)
+    self.debounced = self.debounced or {}
+    local generation = (self.debounced[key] or 0) + 1
+    self.debounced[key] = generation
+    if not (C_Timer and C_Timer.After) then
+        action()
+        return
+    end
+    C_Timer.After(delay, function()
+        -- Un appel plus recent a pris la main : celui-ci n'a plus rien a dire.
+        if self.debounced[key] ~= generation then return end
+        action()
+    end)
 end
