@@ -6,6 +6,13 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.5.55
+
+- **Trois règles combinables pour l’endroit où la grille apparaît** : seul, en groupe, en raid. Elles se combinent avec la règle « seulement en combat » plutôt que de la remplacer. Tout passe par le pilote de visibilité sécurisé de Blizzard, donc les règles continuent de s’appliquer pendant le combat, quand Lua ne peut plus rien.
+- **Aucun pilote n’est posé quand il ne pourrait dire que « affiche ».** Une règle sécurisée ne se retire pas en combat : en poser une pour rien, c’est se lier les mains sans contrepartie.
+- **La grille reste visible pendant que vous la réglez.** Ouvrir la fenêtre de réglages suspend les règles de masquage, les fermer les rend. Régler la taille et la position d’une chose invisible n’avait pas de sens.
+- Tests : 964 à 975.
+
 ## 1.5.54
 
 - **Une recherche dans les réglages.** Elle ignore les accents et les majuscules — on tape « opacite » et on trouve « Opacité » — et elle cherche aussi dans les textes d’aide, parce qu’on cherche souvent par ce qu’un réglage *fait* plutôt que par son nom exact.

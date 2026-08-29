@@ -1,4 +1,4 @@
-# Cleansive 1.5.54
+# Cleansive 1.5.55
 
 Cleansive is a standalone one-click cleansing addon for **World of Warcraft Retail 12.1** (`120100`). It provides a compact Decursive-style workflow with a dark, class-colored interface inspired by the clarity of Ellesmere UI. The interface follows the language of your WoW client, English or French; either can be picked from the General page at any time.
 
@@ -63,7 +63,10 @@ Red, blue, and orange identify the click to use. The optional L/R/C corner lette
   member. Off by default; the per-unit protected indicator stays in place
   either way, because it is the only signal for an aura the addon may not
   read.
-- Secure combat-only auto visibility and an afflicted-only visual mode.
+- Where the grid appears is three combinable rules -- alone, in a party, in a
+  raid -- on top of the combat-only rule. All of it runs through Blizzard's
+  secure visibility driver, so it keeps working during combat.
+- An afflicted-only visual mode.
 - A persistent, clickable history of readable afflictions.
 - A secure hover-cleanse key for the first configured cleansing spell.
 
@@ -148,6 +151,7 @@ the reason on its own.
 
 ## Recent changes
 
+- **1.5.55** - three combinable rules for where the grid appears (alone, party, raid), and the grid stays visible while you are configuring it.
 - **1.5.54** - a search box in the settings window finds a setting and says which page it is on.
 - **1.5.53** - the tooltip says why a cell sits where it does, and the affliction history remembers where each one was seen.
 - **1.5.52** - four starting points for the look, a reset that touches only the page you are on, and two clicks before anything is destroyed.

@@ -108,6 +108,9 @@ local defaults = {
     columns = 10,
     inactiveAlpha = 0.18,
     blacklistTime = 5,
+    showSolo = true,
+    showParty = true,
+    showRaid = true,
     testUnits = 5,
     testState = "MIXED",
     grow = "RIGHT_DOWN",
@@ -330,6 +333,29 @@ function NS:TestStateLabel()
     return self.L.TEST_STATE_MIXED
 end
 
+function NS:VisibilityDriverMacro()
+    local contexts = {}
+    if self.db.showSolo ~= false then contexts[#contexts + 1] = "nogroup" end
+    if self.db.showParty ~= false then contexts[#contexts + 1] = "group:party" end
+    if self.db.showRaid ~= false then contexts[#contexts + 1] = "group:raid" end
+    if #contexts == 0 then return "hide" end
+    local prefix = self.db.autoHide and "combat," or ""
+    local parts = {}
+    for index, context in ipairs(contexts) do
+        parts[index] = "[" .. prefix .. context .. "]"
+    end
+    return table.concat(parts) .. " show; hide"
+end
+
+-- Every context allowed and no combat rule means "always": registering a
+-- driver that can only ever say show would put the grid under a secure rule
+-- for nothing, and a secure rule cannot be lifted during combat.
+function NS:NeedsVisibilityDriver()
+    if self.db.autoHide then return true end
+    return self.db.showSolo == false or self.db.showParty == false
+        or self.db.showRaid == false
+end
+
 function NS:UpdateGridVisibilityDriver()
     if not self.gridAnchor then return end
     if self.UpdateCooldownOverlayVisibility then self:UpdateCooldownOverlayVisibility() end
@@ -353,12 +379,15 @@ function NS:UpdateGridVisibilityDriver()
     end
     self.gridAnchor:Show()
 
-    if self.testMode then
+    -- The settings window is open: the player is placing and sizing the grid,
+    -- and a rule that hides it now would hide the thing being configured.
+    local configuring = self.optionsFrame and self.optionsFrame:IsShown()
+    if self.testMode or configuring then
         body:Show()
     elseif self.gridManuallyHidden then
         body:Hide()
-    elseif self.db.autoHide and RegisterStateDriver then
-        RegisterStateDriver(body, "visibility", "[combat] show; hide")
+    elseif self:NeedsVisibilityDriver() and RegisterStateDriver then
+        RegisterStateDriver(body, "visibility", self:VisibilityDriverMacro())
     else
         body:Show()
     end

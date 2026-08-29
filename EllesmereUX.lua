@@ -658,7 +658,9 @@ function NS:CreateOptions()
     frame:SetScript("OnShow", function()
         self:RefreshOptions()
         self:ShowOptionsPage(self.activeOptionsPage or "general")
+        self:UpdateGridVisibilityDriver()
     end)
+    frame:SetScript("OnHide", function() self:UpdateGridVisibilityDriver() end)
 
     local sidebar = CreateFrame("Frame", nil, frame)
     sidebar:SetPoint("TOPLEFT", 1, -3)
@@ -776,6 +778,13 @@ function NS:CreateOptions()
     end)
     attachHelp(language, self.L.LANGUAGE, self.L.TIP_LANGUAGE)
     self.languageButton = language
+
+    self.optionChecks[#self.optionChecks + 1] = toggle(general, self.L.SHOW_SOLO, 310, -28, 275,
+        "showSolo", function() self:UpdateGridVisibilityDriver() end, self.L.TIP_SHOW_CONTEXT)
+    self.optionChecks[#self.optionChecks + 1] = toggle(general, self.L.SHOW_PARTY, 310, -64, 275,
+        "showParty", function() self:UpdateGridVisibilityDriver() end, self.L.TIP_SHOW_CONTEXT)
+    self.optionChecks[#self.optionChecks + 1] = toggle(general, self.L.SHOW_RAID, 310, -100, 275,
+        "showRaid", function() self:UpdateGridVisibilityDriver() end, self.L.TIP_SHOW_CONTEXT)
 
     section(general, localized("Retour d’information", "Feedback"), -158)
     self.optionChecks[#self.optionChecks + 1] = toggle(general, self.L.TOOLTIPS, 0, -184, 275, "showTooltips", function()
