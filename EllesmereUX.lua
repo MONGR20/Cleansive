@@ -645,7 +645,7 @@ local function createPreview(parent)
     -- 16 px de marge. Les huit pixels rendus paient la quatrieme rangee de
     -- reglages sans tasser quoi que ce soit d'autre.
     preview:SetSize(560, 70)
-    preview:SetPoint("TOPLEFT", 0, -444)
+    preview:SetPoint("TOPLEFT", 0, -554)
     local bg = solid(preview, "BACKGROUND", C.panelDeep[1], C.panelDeep[2], C.panelDeep[3], 0.80)
     bg:SetAllPoints()
     border(preview, 0.08)
@@ -1039,7 +1039,7 @@ function NS:CreateOptions()
     local appearance = CreateFrame("Frame", nil, content)
     appearance:SetAllPoints()
     self.optionsPages.appearance = appearance
-    self.optionsPageHeights.appearance = 550
+    self.optionsPageHeights.appearance = 670
     section(appearance, localized("Informations sur les cases", "Cell information"), -2)
     self.optionChecks[#self.optionChecks + 1] = toggle(appearance, self.L.NAMES, 0, -28, 275, "showNames", function()
         self:UpdateAuraContainerConfiguration(true)
@@ -1097,51 +1097,72 @@ function NS:CreateOptions()
     self.optionSliders[#self.optionSliders + 1] = slider(appearance, self.L.OPACITY, 310, -278, 265, 0.05, 0.80, 0.05, "inactiveAlpha", "%d %%", function() self:RefreshAll(true) end, self.L.TIP_OPACITY,
         function(current) return math.floor(current * 100 + 0.5) end)
 
+    -- Quarante cases a la taille d'un groupe de cinq ne tiennent nulle part.
+    -- Les deux jeux se separent SUR DEMANDE ; par defaut le raid garde ceux du
+    -- groupe, donc rien ne bouge pour qui n'y touche pas.
+    self.optionChecks[#self.optionChecks + 1] = toggle(appearance, self.L.SEPARATE_RAID, 0, -330, 560,
+        "separateRaidSize", function()
+            self:RefreshOptions()
+            self:LayoutButtons()
+        end, self.L.TIP_SEPARATE_RAID)
+    -- Grises plutot que caches : un controle qui disparait laisse un trou et
+    -- ne dit plus qu'il existe -- et surtout, un controle cache echappe au
+    -- controle de recouvrement, qui ne mesure que ce qui est affiche.
+    self.raidGeometrySliders = {}
+    local raidSize = slider(appearance, self.L.RAID_SIZE, 0, -386, 265, 12, 40, 1, "raidFrameSize", "%d px",
+        function() self:Debounce("layout", 0.1, function() self:LayoutButtons() end) end, self.L.TIP_RAID_SIZE)
+    local raidSpacing = slider(appearance, self.L.RAID_SPACING, 310, -386, 265, 0, 12, 1, "raidSpacing", "%d px",
+        function() self:Debounce("layout", 0.1, function() self:LayoutButtons() end) end, self.L.TIP_RAID_SPACING)
+    self.optionSliders[#self.optionSliders + 1] = raidSize
+    self.optionSliders[#self.optionSliders + 1] = raidSpacing
+    self.raidGeometrySliders[1] = raidSize
+    self.raidGeometrySliders[2] = raidSpacing
+
     local nameNote = text(appearance, "", 10, C.dim)
-    nameNote:SetPoint("TOPLEFT", 0, -324)
+    nameNote:SetPoint("TOPLEFT", 0, -434)
     nameNote:SetWidth(560)
     nameNote:SetJustifyH("LEFT")
     self.nameWidthNote = nameNote
 
     local resizeNote = text(appearance, self.L.SIZE_COMBAT_NOTE, 10, C.dim)
-    resizeNote:SetPoint("TOPLEFT", 0, -338)
+    resizeNote:SetPoint("TOPLEFT", 0, -448)
     resizeNote:SetWidth(560)
     resizeNote:SetJustifyH("LEFT")
-    section(appearance, localized("Disposition", "Layout"), -372)
+    section(appearance, localized("Disposition", "Layout"), -482)
     local growLabel = text(appearance, self.L.GROW, 13, C.text)
-    growLabel:SetPoint("TOPLEFT", 0, -399)
+    growLabel:SetPoint("TOPLEFT", 0, -509)
     local grow = button(appearance, "", 160, 28)
-    grow:SetPoint("TOPLEFT", 150, -392)
+    grow:SetPoint("TOPLEFT", 150, -502)
     grow:SetScript("OnClick", function() self:CycleGrowth() end)
     attachHelp(grow, self.L.GROW, self.L.TIP_GROW)
     self.growButton = grow
     local layoutModeTitle = text(appearance, self.L.LAYOUT_MODE, 13, C.text)
-    layoutModeTitle:SetPoint("TOPLEFT", 330, -399)
+    layoutModeTitle:SetPoint("TOPLEFT", 330, -509)
     local layoutMode = button(appearance, "", 150, 28)
-    layoutMode:SetPoint("TOPLEFT", 425, -392)
+    layoutMode:SetPoint("TOPLEFT", 425, -502)
     layoutMode:SetScript("OnClick", function() self:CycleLayoutMode() end)
     attachHelp(layoutMode, self.L.LAYOUT_MODE, self.L.TIP_LAYOUT_MODE)
     self.layoutModeButton = layoutMode
 
-    section(appearance, localized("Aperçu en direct", "Live preview"), -426)
+    section(appearance, localized("Aperçu en direct", "Live preview"), -536)
     self.uxPreview = createPreview(appearance)
 
     -- The four cells above show the cell language. They cannot show whether a
     -- twenty-man grid still fits the screen, which is the question the player
     -- actually has. These buttons answer it on the real grid.
     local previewLabel = text(appearance, self.L.PREVIEW_GROUP, 13, C.text)
-    previewLabel:SetPoint("TOPLEFT", 0, -528)
+    previewLabel:SetPoint("TOPLEFT", 0, -638)
     self.previewSizeButtons = {}
     for index, count in ipairs({ 1, 5, 10, 20, 40 }) do
         local sizeButton = button(appearance, tostring(count), 42, 26)
-        sizeButton:SetPoint("TOPLEFT", 122 + ((index - 1) * 46), -522)
+        sizeButton:SetPoint("TOPLEFT", 122 + ((index - 1) * 46), -632)
         sizeButton:SetScript("OnClick", function() self:SetTestUnits(count) end)
         attachHelp(sizeButton, self.L.PREVIEW_GROUP, self.L.TIP_PREVIEW_GROUP)
         sizeButton.previewCount = count
         self.previewSizeButtons[index] = sizeButton
     end
     local stateButton = button(appearance, "", 168, 26)
-    stateButton:SetPoint("TOPLEFT", 400, -522)
+    stateButton:SetPoint("TOPLEFT", 400, -632)
     stateButton:SetScript("OnClick", function() self:CycleTestState() end)
     attachHelp(stateButton, self.L.PREVIEW_STATE, self.L.TIP_PREVIEW_STATE)
     self.previewStateButton = stateButton
@@ -1496,7 +1517,7 @@ function NS:RefreshCellPreview()
     local cap = 30
     if layoutMode == "HORIZONTAL" then cap = 38
     elseif layoutMode == "VERTICAL" then cap = 26 end
-    local previewSize = math.max(12, math.min(self.db.frameSize, cap))
+    local previewSize = math.max(12, math.min(self:CellSize(), cap))
     local verticalStep = previewSize + 3
     -- The preview box is 78 px tall with a 5 px margin. Three cells at the
     -- vertical cap ran 11 px past the bottom, and nothing clips them: show only
@@ -1509,7 +1530,7 @@ function NS:RefreshCellPreview()
     -- plafond : a 40 px reglés, une lettre calculee pour une case de 26
     -- recouvrait le nombre. L'apercu est une reduction de la vraie case, donc
     -- tout son contenu subit la meme echelle.
-    local realSize = math.max(1, self.db.frameSize)
+    local realSize = math.max(1, self:CellSize())
     local previewScale = previewSize / realSize
     local function scaled(role)
         local real = self:CellFontSize(role, realSize)
@@ -1617,6 +1638,9 @@ function NS:RefreshOptions()
     local soundOn = self.db and self.db.sound and true or false
     for _, control in ipairs(self.soundDependentControls or {}) do
         control:SetShown(soundOn)
+    end
+    for _, control in ipairs(self.raidGeometrySliders or {}) do
+        control:SetEnabled(self.db and self.db.separateRaidSize and true or false)
     end
     if self.alertSoundButton then
         local chosen = self.db and self.db.alertSound or "DEFAULT"

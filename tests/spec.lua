@@ -2549,7 +2549,7 @@ do
     NS:UpdateSpells()
     NS:RebuildRoster()
     NS:CreateOptions()
-    truthy(NS.optionSliders and #NS.optionSliders == 6, "options : les six curseurs existent")
+    truthy(NS.optionSliders and #NS.optionSliders == 8, "options : les huit curseurs existent")
 
     -- LE defaut vu sur les captures : SetPoint a trois arguments ancrait la
     -- valeur sur le TOPRIGHT du parent, donc un decalage x positif la poussait
@@ -5660,7 +5660,7 @@ do
     -- une qui porte du personnel, c'est ici que ca casse.
     local allowed = {}
     for _, key in ipairs({
-        "enabled", "locked", "showPets", "showFocus", "showNames", "classColorCells", "alertSound", "showTooltips",
+        "enabled", "locked", "showPets", "showFocus", "showNames", "classColorCells", "alertSound", "separateRaidSize", "raidFrameSize", "raidSpacing", "showTooltips",
         "sound", "failureSound", "showCooldown", "showDuration", "showStacks",
         "showClickHints", "autoHide", "afflictedOnly", "groupManualTypes",
         "showSolo", "showParty", "showRaid", "controlWarning",
@@ -5752,6 +5752,88 @@ do
         truthy(trouble:find("diag copy", 1, true),
             "depannage : et la commande a lancer avant est nommee en " .. language)
     end
+end
+
+--------------------------------------------------------------------------
+-- 1.6.8 : taille et espacement separes en groupe et en raid
+--
+-- Quarante cases a la taille d'un groupe de cinq ne tiennent nulle part. Dix-
+-- huit endroits lisaient db.frameSize et db.spacing directement : ils passent
+-- tous par CellSize et CellSpacing, sans quoi la geometrie se deciderait a
+-- dix-huit endroits et un seul oubli suffirait a la desaccorder.
+--------------------------------------------------------------------------
+do
+    freshProfile("PALADIN")
+    knowSpells(4987)
+    NS:UpdateSpells()
+    NS.testMode = false
+    NS.db.frameSize, NS.db.spacing = 22, 4
+    NS.db.raidFrameSize, NS.db.raidSpacing = 14, 1
+
+    -- Eteint, un raid garde les valeurs du groupe : c'est le comportement
+    -- d'avant, et il ne doit pas bouger pour qui n'a rien demande.
+    NS.db.separateRaidSize = false
+    mock.state.inRaid, mock.state.inGroup = true, true
+    eq(NS:CellSize(), 22, "geometrie : separation eteinte, le raid garde la taille du groupe")
+    eq(NS:CellSpacing(), 4, "geometrie : et son espacement")
+
+    NS.db.separateRaidSize = true
+    mock.state.inRaid, mock.state.inGroup = false, false
+    eq(NS:CellSize(), 22, "geometrie : hors raid, la taille du groupe")
+    eq(NS:CellSpacing(), 4, "geometrie : et son espacement")
+    mock.state.inRaid, mock.state.inGroup = true, true
+    eq(NS:CellSize(), 14, "geometrie : en raid, la taille du raid")
+    eq(NS:CellSpacing(), 1, "geometrie : et son espacement")
+
+    -- L'apercu existe pour regler une grille de raid SANS raid : au-dela d'un
+    -- groupe de cinq, il doit montrer la geometrie de raid, sinon il ne sert
+    -- plus a ce pour quoi il a ete fait.
+    mock.state.inRaid, mock.state.inGroup = false, false
+    NS.testMode = true
+    NS.db.testUnits = 5
+    eq(NS:CellSize(), 22, "apercu : a cinq cases, c'est encore un groupe")
+    NS.db.testUnits = 20
+    eq(NS:CellSize(), 14, "apercu : au-dela, il montre la geometrie de raid")
+    NS.testMode = false
+
+    -- Et la vraie grille suit : ce sont les cases qui doivent changer, pas
+    -- seulement l'accesseur.
+    mock.state.inRaid, mock.state.inGroup = true, true
+    NS:RebuildRoster()
+    NS:LayoutButtons()
+    eq(NS.buttons[1].__lastSize.width, 14, "geometrie : la case elle-meme prend la taille de raid")
+    mock.state.inRaid, mock.state.inGroup = false, false
+    NS:RebuildRoster()
+    NS:LayoutButtons()
+    eq(NS.buttons[1].__lastSize.width, 22, "geometrie : et la retrouve en sortant")
+
+    -- Entrer en raid redessine tout seul : RebuildRoster finit par
+    -- AssignRosterToButtons, qui finit par LayoutButtons. Rien n'a ete ajoute
+    -- pour cela -- un garde-fou ecrit puis retire, parce que son injection de
+    -- defaut restait verte. Le chemin est verifie ici, pas suppose.
+    mock.state.inRaid, mock.state.inGroup = true, true
+    NS.pendingLayout = false
+    NS.buttons[1].__lastSize = { width = 0, height = 0 }
+    NS:RebuildRoster()
+    eq(NS.buttons[1].__lastSize.width, 14,
+        "geometrie : entrer en raid redessine la grille sans qu'on touche a rien")
+
+    -- Les deux curseurs de raid sont GRISES, jamais caches : un controle cache
+    -- echappe au controle de recouvrement, qui ne mesure que ce qui s'affiche.
+    NS.db.separateRaidSize = false
+    NS:RefreshOptions()
+    for index, control in ipairs(NS.raidGeometrySliders) do
+        truthy(control:IsShown(), "raid : le curseur " .. index .. " reste affiche")
+        falsy(control:IsEnabled(), "raid : mais grise tant que la separation est eteinte")
+    end
+    NS.db.separateRaidSize = true
+    NS:RefreshOptions()
+    for index, control in ipairs(NS.raidGeometrySliders) do
+        truthy(control:IsEnabled(), "raid : le curseur " .. index .. " s'active avec la separation")
+    end
+
+    NS.db.separateRaidSize = false
+    mock.state.inRaid, mock.state.inGroup = false, false
 end
 
 --------------------------------------------------------------------------

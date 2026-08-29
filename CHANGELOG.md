@@ -6,6 +6,18 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.6.8
+
+**Taille et espacement separes en groupe et en raid.** Quarante cases a la taille d'un groupe de cinq ne tiennent nulle part.
+
+- Nouvelle bascule sur la page Apparence, **eteinte par defaut** : un raid garde alors les valeurs du groupe, exactement comme avant. Activee, il prend sa propre taille de case et son propre espacement. Le changement s'applique en entrant ou en sortant d'un raid — et pendant un combat, a la fin de celui-ci, redimensionner une case etant une modification protegee.
+- **L'apercu suit.** Il existe pour regler une grille de raid SANS raid : au-dela de cinq cases simulees, il montre donc la geometrie de raid, sinon il ne sert plus a ce pour quoi il a ete fait.
+- **Dix-huit endroits lisaient la taille et l'espacement directement.** Ils passent tous par un seul accesseur : c'est la seule facon que la geometrie ne se decide qu'a un endroit, et c'etait la vraie raison pour laquelle ce chantier etait reporte depuis la 1.6.
+- **Les deux curseurs de raid sont grises, jamais caches.** Un controle qui disparait laisse un trou et ne dit plus qu'il existe — et surtout, un controle cache echappe au controle de recouvrement, qui ne mesure que ce qui s'affiche.
+- **Un garde-fou ecrit puis retire.** J'avais ajoute une fonction pour redessiner a l'entree en raid ; son injection de defaut est restee VERTE, ce qui voulait dire qu'elle ne servait a rien : `RebuildRoster` redessine deja par `AssignRosterToButtons`. Lister les appelants avant d'ajouter une garde, pas apres.
+- La page Apparence passe a 670 px de haut. Sans le defilement de la 1.6.7, ces quatre reglages n'auraient eu nulle part ou aller.
+- Tests : 1 265 a 1 292.
+
 ## 1.6.7
 
 **Les pages de reglages defilent.** Ce n'est pas un confort : c'etait le blocage.

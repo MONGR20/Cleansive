@@ -113,6 +113,9 @@ local defaults = {
     showNames = false,
     classColorCells = false,
     alertSound = "DEFAULT",
+    separateRaidSize = false,
+    raidFrameSize = 18,
+    raidSpacing = 2,
     showTooltips = true,
     sound = true,
     soundChannel = "Master",
@@ -423,6 +426,41 @@ function NS:NeedsVisibilityDriver()
     return self.db.showSolo == false or self.db.showParty == false
         or self.db.showRaid == false
 end
+
+-- Une grille de raid n'a pas les memes contraintes qu'une grille de groupe :
+-- quarante cases a la taille d'un groupe de cinq ne tiennent nulle part. Les
+-- deux jeux de valeurs sont separes SUR DEMANDE ; par defaut le raid utilise
+-- ceux du groupe, donc rien ne bouge pour qui n'y touche pas.
+--
+-- Dix-huit endroits lisaient db.frameSize et db.spacing directement. Ils
+-- passent tous par ici : c'est la seule facon que la geometrie ne se decide
+-- qu'a un seul endroit.
+function NS:UsesRaidGeometry()
+    if not (self.db and self.db.separateRaidSize) then return false end
+    -- L'apercu existe pour regler une grille de raid SANS raid. Au-dela de la
+    -- taille d'un groupe, c'est donc la geometrie de raid qu'il doit montrer,
+    -- sinon il ne sert plus a ce pour quoi il a ete fait.
+    if self.testMode then return (tonumber(self.db.testUnits) or 1) > 5 end
+    return IsInRaid and IsInRaid() and true or false
+end
+
+function NS:CellSize()
+    local base = tonumber(self.db and self.db.frameSize) or 22
+    if not self:UsesRaidGeometry() then return base end
+    return tonumber(self.db.raidFrameSize) or base
+end
+
+function NS:CellSpacing()
+    local base = tonumber(self.db and self.db.spacing) or 4
+    if not self:UsesRaidGeometry() then return base end
+    return tonumber(self.db.raidSpacing) or base
+end
+
+-- Entrer ou sortir d'un raid redessine deja : AssignRosterToButtons termine par
+-- LayoutButtons, et RebuildRoster passe par lui. J'avais ajoute un garde-fou
+-- pour ce cas ; l'injection de defaut est restee VERTE, ce qui voulait dire
+-- qu'il ne servait a rien. Il est parti. Lister les appelants avant d'ajouter
+-- une garde, pas apres.
 
 function NS:UpdateGridVisibilityDriver()
     if not self.gridAnchor then return end

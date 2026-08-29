@@ -100,7 +100,7 @@ local NAME_MIN_CELL = 16
 function NS:CellFontSize(role, size)
     local rule = FONT_RULES[role]
     if not rule then return nil end
-    local cell = tonumber(size) or tonumber(self.db and self.db.frameSize) or 22
+    local cell = tonumber(size) or self:CellSize()
     local scaled = math.floor(rule.base * cell / 22 + 0.5)
     return math.max(rule.min, math.min(rule.max, scaled))
 end
@@ -114,7 +114,7 @@ end
 -- by construction, with no offset and nothing pushed outside.
 -- Returns the offset, or nil if even a single plate cannot fit.
 function NS:ClickHintOffset(slot, size)
-    local cell = tonumber(size) or tonumber(self.db and self.db.frameSize) or 22
+    local cell = tonumber(size) or self:CellSize()
     -- The plate is anchored at 1 px, so that pixel counts.
     if 1 + self:CellFontSize("plate", cell) > cell then return nil end
     return 0
@@ -122,14 +122,14 @@ end
 
 function NS:CellShowsNames()
     if not self.db or not self.db.showNames then return false end
-    return (tonumber(self.db.frameSize) or 22) >= NAME_MIN_CELL
+    return self:CellSize() >= NAME_MIN_CELL
 end
 
 function NS:ApplyCellFonts(button)
     if not button then return end
     local font = self.GetUXFont and self:GetUXFont()
     if not font then return end
-    local size = self.db and self.db.frameSize
+    local size = self:CellSize()
     local plate = self:CellFontSize("plate", size)
     -- Half of these regions belong to the protected engine, and in 12.1 the
     -- client can declare them forbidden to addon code: SetFont then raises.
@@ -503,7 +503,7 @@ end
 
 function NS:CreateUnitButton(index)
     local button = CreateFrame("Button", "CleansiveMUF" .. index, self.gridBody, "SecureActionButtonTemplate")
-    button:SetSize(self.db.frameSize, self.db.frameSize)
+    button:SetSize(self:CellSize(), self:CellSize())
     button:RegisterForClicks("AnyUp")
     button.index = index
 
@@ -542,7 +542,7 @@ function NS:CreateUnitButton(index)
 
     local name = labelLayer:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     name:SetPoint("BOTTOM", labelLayer, "BOTTOM", 0, 3)
-    name:SetWidth(math.max(8, self.db.frameSize - 4))
+    name:SetWidth(math.max(8, self:CellSize() - 4))
     name:SetJustifyH("CENTER")
     if name.SetWordWrap then name:SetWordWrap(false) end
     if name.SetMaxLines then name:SetMaxLines(1) end
@@ -580,7 +580,7 @@ function NS:CreateUnitButton(index)
 
     local cooldown = CreateFrame("Cooldown", "CleansiveMUFSpellCooldown" .. index,
         self.cooldownBody, "CooldownFrameTemplate")
-    cooldown:SetSize(self.db.frameSize, self.db.frameSize)
+    cooldown:SetSize(self:CellSize(), self:CellSize())
     cooldown:SetDrawBling(false)
     cooldown:SetDrawEdge(false)
     cooldown:SetDrawSwipe(false)
@@ -711,7 +711,7 @@ function NS:StyleAuraVisual(button, auraType, visual)
         end
     end
 
-    local hintOffset = self:ClickHintOffset(slot, self.db.frameSize)
+    local hintOffset = self:ClickHintOffset(slot, self:CellSize())
     local hintShown = enabled and (slot ~= nil or manual ~= nil)
         and self.db.showClickHints and hintOffset ~= nil
 
@@ -757,7 +757,7 @@ function NS:StyleAuraVisual(button, auraType, visual)
     end)
     if visual.unitName then
         step(function()
-            visual.unitName:SetWidth(math.max(8, self.db.frameSize - 4))
+            visual.unitName:SetWidth(math.max(8, self:CellSize() - 4))
             visual.unitName:SetText(button.descriptor and button.descriptor.displayName or button.unit or "")
             visual.unitName:SetShown(enabled and self:CellShowsNames())
         end)
@@ -977,7 +977,7 @@ function NS:AddAuraSlotForType(button, auraType)
 
             local unitName = labelLayer:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
             unitName:SetPoint("BOTTOM", button, "BOTTOM", 0, 3)
-            unitName:SetWidth(math.max(8, self.db.frameSize - 4))
+            unitName:SetWidth(math.max(8, self:CellSize() - 4))
             unitName:SetJustifyH("CENTER")
             if unitName.SetWordWrap then unitName:SetWordWrap(false) end
             if unitName.SetMaxLines then unitName:SetMaxLines(1) end
@@ -1337,7 +1337,7 @@ function NS:LayoutButtons()
         self:MarkPending("pendingLayout")
         return
     end
-    local size, spacing, columns = self.db.frameSize, self.db.spacing, self.db.columns
+    local size, spacing, columns = self:CellSize(), self:CellSpacing(), self.db.columns
     local layoutMode = self.db.layoutMode or "GRID"
     -- A run that leaves the screen shows nothing, so it wraps instead. The
     -- shape the player asked for is kept: horizontal still fills a row before
@@ -2356,7 +2356,7 @@ end
 function NS:LayoutManualIndicator()
     local frame = self.manualIndicator
     if not frame or not self.cooldownBody then return end
-    local size = self.db.frameSize
+    local size = self:CellSize()
     frame:SetSize(size, size)
     -- The badge follows the cell size, so its labels follow it too.
     local font = self.GetUXFont and self:GetUXFont()
@@ -2381,7 +2381,7 @@ end
 -- Whatever is actually visible is stacked instead, in a fixed order.
 function NS:LayoutStatusNotices()
     if not self.cooldownBody then return end
-    local size = self.db.frameSize
+    local size = self:CellSize()
     local grow = self.db.grow or "RIGHT_DOWN"
     local up = grow == "RIGHT_UP" or grow == "LEFT_UP"
     local left = grow == "RIGHT_DOWN" or grow == "RIGHT_UP"
