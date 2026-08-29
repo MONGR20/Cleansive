@@ -660,7 +660,13 @@ function NS:CreateOptions()
         self:ShowOptionsPage(self.activeOptionsPage or "general")
         self:UpdateGridVisibilityDriver()
     end)
-    frame:SetScript("OnHide", function() self:UpdateGridVisibilityDriver() end)
+    frame:SetScript("OnHide", function()
+        if self.testMode and self.testModeFromOptions then
+            self.testModeFromOptions = nil
+            self:ToggleTest()
+        end
+        self:UpdateGridVisibilityDriver()
+    end)
 
     local sidebar = CreateFrame("Frame", nil, frame)
     sidebar:SetPoint("TOPLEFT", 1, -3)
@@ -1221,7 +1227,10 @@ function NS:CreateOptions()
     local test = button(frame, localized("Mode test", "Test mode"), 126, 28, false)
     -- 156 pour le bouton + 20 de marge droite + 12 d'ecart entre les deux.
     test:SetPoint("BOTTOMRIGHT", -188, 14)
-    test:SetScript("OnClick", function() self:ToggleTest() end)
+    test:SetScript("OnClick", function()
+        self:ToggleTest()
+        self.testModeFromOptions = self.testMode and true or nil
+    end)
     self.testModeButton = test
     local reset = button(frame, self.L.RESET_POSITIONS, 156, 28)
     reset:SetPoint("BOTTOMRIGHT", -20, 14)
@@ -1407,7 +1416,11 @@ function NS:RefreshCellPreview()
             cell.typeMark:SetColorTexture(colors[index][1], colors[index][2], colors[index][3], 1)
             cell.cooldown:SetText(index == 1 and "4.2" or "")
             if cell.duration and cell.duration.SetCooldown then
-                pcall(cell.duration.SetCooldown, cell.duration, GetTime() - (index * 2), 18, 1)
+                local drawn = pcall(cell.duration.SetCooldown, cell.duration,
+                    GetTime() - (index * 2), 18, 1)
+                -- Un balayage a moitie pose est pire qu'aucun : il fait croire
+                -- a un reglage qui ne marche pas.
+                cell.duration:SetShown(drawn and true or false)
             end
         else
             cell.bg:SetColorTexture(C.panel[1], C.panel[2], C.panel[3], self.db.afflictedOnly and 0 or self.db.inactiveAlpha)

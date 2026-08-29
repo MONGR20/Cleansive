@@ -6,6 +6,14 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.5.62
+
+- **Trois appels protégés jetaient leur résultat.** `pcall` empêche l’erreur Lua, il ne dit pas que l’opération a eu lieu : un retour ignoré transforme un refus du client en silence, ce qui est exactement ce qui avait masqué les 480 refus de mise en forme jusqu’à ce qu’on les compte. Un balayage qui refuse de s’effacer se cache désormais au lieu d’afficher un compte à rebours faux ; un pilote d’attribut qui survit est signalé, parce qu’il garde le clic pointé sur l’ancien véhicule. **Un onzième contrôle statique** interdit qu’un `pcall` reparte aveugle.
+- **Un douzième contrôle** vérifie qu’aucune cellule ne va vivre dans l’arbre d’un autre addon. La règle est facile à tenir aujourd’hui et facile à oublier le jour où une intégration arrivera : mêler deux arbres de sécurité, c’est laisser l’erreur de l’un fermer l’autre.
+- **L’aperçu appartient à qui l’a ouvert.** Ouvert depuis la fenêtre de réglages, il se ferme avec elle ; ouvert à la commande, une fenêtre que vous n’avez pas ouverte n’a rien à en dire.
+- Le harnais déclenchait l’état d’une fenêtre sans déclencher ses scripts : `OnShow` et `OnHide` n’étaient exercés par aucun test, et tout ce qu’ils font passait pour vérifié sans l’être. C’est réparé, et la suite reste verte.
+- Tests : 1082 à 1092, plus deux contrôles statiques.
+
 ## 1.5.61
 
 - **Sortir du combat n’est pas sortir de la rencontre.** Un changement de spécialisation en plein combat laissait une reconstruction du moteur d’auras en attente, rejouée au premier répit — c’est-à-dire potentiellement entre deux vagues d’un boss. Un emplacement d’aura ne se retire jamais : reconstruire au milieu d’une rencontre coûte des emplacements définitifs pour deux secondes de calme. Le travail attend maintenant `ENCOUNTER_END`. Hors rencontre, la fin de combat suffit toujours — il ne faut pas attendre un signal qui ne viendra jamais en monde ouvert.

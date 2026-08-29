@@ -1,4 +1,4 @@
-# Cleansive 1.5.61
+# Cleansive 1.5.62
 
 Cleansive is a standalone one-click cleansing addon for **World of Warcraft Retail 12.1** (`120100`). It provides a compact Decursive-style workflow with a dark, class-colored interface inspired by the clarity of Ellesmere UI. The interface follows the language of your WoW client, English or French; either can be picked from the General page at any time.
 
@@ -173,6 +173,7 @@ the reason on its own.
 
 ## Recent changes
 
+- **1.5.62** - every protected call now reads its own result, and the preview belongs to whoever opened it.
 - **1.5.61** - the protected aura engine is no longer rebuilt during a boss fight, and the General page opens with the profile and the engine's condition.
 - **1.5.60** - dragging a size slider no longer relays the whole grid at every notch, and a switch that cannot apply now says why.
 - **1.5.59** - the tooltip stops promising a mouse button that does nothing, and the addon credits what it learned from.

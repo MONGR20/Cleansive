@@ -1557,7 +1557,11 @@ end
 function NS:ApplySpellCooldown(cooldown, def, durationCache)
     if not cooldown then return nil end
     local function clearCooldown()
-        if cooldown.Clear then pcall(cooldown.Clear, cooldown) end
+        if not cooldown.Clear then return end
+        local cleared = pcall(cooldown.Clear, cooldown)
+        -- Un compte a rebours qui refuse de s'effacer continue d'afficher une
+        -- valeur fausse. Le cacher ment moins que le laisser tourner.
+        if not cleared then cooldown:Hide() end
     end
     if not self.db.showCooldown or not def or not C_Spell or not C_Spell.GetSpellCooldownDuration
         or not cooldown.SetCooldownFromDurationObject then
@@ -2067,7 +2071,10 @@ function NS:ApplyVehicleDriver(frame, unit)
         frame.vehicleToken = nil
     end
     if UnregisterAttributeDriver then
-        pcall(UnregisterAttributeDriver, frame, "unit")
+        local removed = pcall(UnregisterAttributeDriver, frame, "unit")
+        -- Un pilote qui survit garde le clic pointe sur l'ancien vehicule.
+        -- Le signaler permet de reprendre la liaison a la fin du combat.
+        if not removed then self:MarkPending("pendingPriorityBinding") end
     end
     if not unit then return end
 

@@ -281,6 +281,7 @@ local TEST_STATES = { "MIXED", "ALL", "HEALTHY" }
 
 function NS:ToggleTest()
     self.testMode = not self.testMode
+    if not self.testMode then self.testModeFromOptions = nil end
     -- The preview cells live in the roster, so the roster is what changes.
     self:RebuildRoster()
     self:RefreshAll(true)
@@ -762,6 +763,8 @@ function NS:HandleSlash(message)
     elseif command == "reset" then
         self:ResetPositions()
     elseif command == "test" then
+        -- Demande a la main : l'apercu appartient au joueur, plus a la fenetre.
+        self.testModeFromOptions = nil
         local count = tonumber(rest)
         if count then
             self:SetTestUnits(count)
