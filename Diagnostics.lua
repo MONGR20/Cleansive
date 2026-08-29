@@ -35,7 +35,7 @@ function NS:GetDiagnostics()
         record.pending = {}
         record.styleFailures, record.styleError, record.styleSteps = nil, nil, nil
         record.styleContext, record.forbidden = nil, nil
-        record.forbiddenVisuals = nil
+        record.forbiddenVisuals, record.styleSkipped = nil, nil
         record.soundPeak = nil
     end
     record.version = self.version
@@ -111,6 +111,15 @@ function NS:NoteForbiddenVisual()
     local record = self:GetDiagnostics()
     if not record then return end
     record.forbiddenVisuals = (record.forbiddenVisuals or 0) + 1
+end
+
+-- A pass the client would refuse, skipped before it is attempted. This is not
+-- a failure and must not be counted as one: it is the addon declining to
+-- knock on a door it has been told is locked.
+function NS:NoteStyleSkipped()
+    local record = self:GetDiagnostics()
+    if not record then return end
+    record.styleSkipped = (record.styleSkipped or 0) + 1
 end
 
 -- The engine can refuse to let its own labels be restyled. The call is already
@@ -293,6 +302,9 @@ function NS:PrintDiagnostics()
 
     -- A deferral is not a fault: the plate is the addon working as designed.
     -- Only the client's refusals and the engine's failures count here.
+    if record.styleSkipped then
+        self:Print(self.L.DIAG_STYLE_SKIPPED, tostring(record.styleSkipped))
+    end
     if record.forbiddenVisuals then
         problems = problems + 1
         self:Print(self.L.DIAG_FORBIDDEN_VISUAL, tostring(record.forbiddenVisuals))

@@ -656,6 +656,31 @@ function NS:StyleAuraVisual(button, auraType, visual)
         end
     end
 
+    -- IsForbidden above answers whether the object was DECLARED forbidden. It
+    -- returned false on all 480 refusals of a recorded key: these objects are
+    -- not declared anything, the calling context simply has no permission to
+    -- touch them -- "from code tainted by an AddOn", as the error itself says.
+    -- That is the question this asks. silent = true so the check cannot signal
+    -- a blocked action of its own.
+    --
+    -- The recorded contexts were lock=0|ChallengeMode,Map,Chat (450) and
+    -- lock=0|Encounter,ChallengeMode,Map,Chat (30): every single refusal
+    -- happened while InCombatLockdown() said the addon was free to act. That
+    -- is why nine calls were fired and refused 480 times over one dungeon.
+    local api = C_RestrictedActions
+    if auraButton and api and api.CheckAllowProtectedFunctions then
+        local known, permitted = pcall(api.CheckAllowProtectedFunctions, auraButton, true)
+        if known and not permitted then
+            -- Deferred, not abandoned: the restriction lifts at the end of the
+            -- run and the visual must be styled then. One check replaces nine
+            -- refused calls, and it is not an error -- counting it as one was
+            -- what made the diagnostics look like a fault.
+            self:MarkPending("pendingAuraStyle", true)
+            if self.NoteStyleSkipped then self:NoteStyleSkipped() end
+            return
+        end
+    end
+
     local hintOffset = self:ClickHintOffset(slot, self.db.frameSize)
     local hintShown = enabled and (slot ~= nil or manual ~= nil)
         and self.db.showClickHints and hintOffset ~= nil

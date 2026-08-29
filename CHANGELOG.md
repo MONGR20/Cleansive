@@ -6,6 +6,16 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.5.45
+
+- **Cleansive ne frappe plus a une porte que le client a declaree fermee.** Le releve d'une cle mythique reelle le tranche : 480 refus de mise en forme sur 480 avec le verrou de combat BAISSE -- `lock=0|ChallengeMode,Map,Chat` 450 fois, `lock=0|Encounter,ChallengeMode,Map,Chat` 30 fois. `InCombatLockdown()` annoncait l'addon libre d'agir pendant toute la course. La passe demande desormais `C_RestrictedActions.CheckAllowProtectedFunctions(auraButton, true)` avant ses neuf operations : un appel remplace neuf refus, et la passe est comptee comme differee, pas comme un echec.
+- **La correction 1.5.44 par `IsForbidden` etait inerte, et le releve le prouve** : le compteur qu'elle alimente est absent de la base, donc l'appel a repondu faux 480 fois sur 480. `IsForbidden` dit si un objet a ete *declare* interdit ; ces objets ne le sont pas, c'est le contexte d'appel qui n'a pas la permission -- « from code tainted by an AddOn », comme le message le disait depuis le debut. Le garde est conserve pour le cas qu'il couvre reellement, et le vrai test a ete ajoute a cote.
+- **La levee d'une restriction rejoue le travail differe.** `ADDON_RESTRICTION_STATE_CHANGED` est enregistre : une cle garde `ChallengeMode` actif longtemps apres le dernier pack, et `PLAYER_REGEN_ENABLED` se declenche pendant qu'elle court encore. Sans ce signal, la mise en forme reportee attendait un evenement sans rapport.
+- `/cleansive diag` distingue desormais une passe differee faute d'autorisation d'un echec de restyle. Les deux etaient confondus, ce qui faisait passer un comportement correct pour une panne.
+- Tests : 730 a 743, verifies par reinjection.
+
+*Ce que cette version ne fait toujours pas : deplacer les elements decoratifs sur les cases appartenant a Cleansive plutot que sur les objets du moteur. C'est la correction de fond, elle change l'ordre d'affichage, et l'ordre d'affichage ne se prouve pas hors du jeu.*
+
 ## 1.5.44
 
 - **Le bouton souris 4 alimente enfin le suivi de recharge.** La 1.5.43 l'a lie au troisieme sort mais ne l'a pas ajoute au registre des clics : le jeu lancait bien le sort, et la case gardait la recharge du precedent, ou aucune. La liaison securisee et le registre doivent nommer les memes boutons ; c'est desormais verifie par un test qui compare le bouton 4 a Ctrl + clic gauche plutot qu'a un numero d'emplacement fixe.

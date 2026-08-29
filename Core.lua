@@ -730,6 +730,11 @@ local EVENT_NAMES = {
     -- marked HasRestrictions, and the static check verifies that against
     -- Blizzard's own definitions rather than against this comment.
     "ADDON_ACTION_FORBIDDEN", "ADDON_ACTION_BLOCKED",
+    -- The only signal that a restriction has lifted. Without it, work deferred
+    -- because the client refused permission would wait for an unrelated event:
+    -- a mythic key keeps ChallengeMode active long after the last pull, and
+    -- PLAYER_REGEN_ENABLED fires while it is still on.
+    "ADDON_RESTRICTION_STATE_CHANGED",
 }
 
 local events = CreateFrame("Frame")
@@ -809,6 +814,15 @@ events:SetScript("OnEvent", function(_, event, ...)
     elseif event == "PLAYER_REGEN_ENABLED" then
         NS:UpdateCooldownOverlayVisibility(false)
         NS:OnCombatEnded()
+    elseif event == "ADDON_RESTRICTION_STATE_CHANGED" then
+        -- Replay the deferred work only once something is actually released.
+        -- Activating and Active mean the door is closing or shut.
+        local _, state = ...
+        local inactive = Enum and Enum.AddOnRestrictionState
+            and Enum.AddOnRestrictionState.Inactive
+        if state == inactive and not (InCombatLockdown and InCombatLockdown()) then
+            NS:OnCombatEnded()
+        end
     elseif event == "UI_ERROR_MESSAGE" then
         NS:OnUIError(...)
     elseif event == "PLAYER_LOGOUT" then
