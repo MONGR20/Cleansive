@@ -222,7 +222,6 @@ function NS:GetKnownDispelType(spellID)
 end
 
 function NS:RefreshAuraSoundRegistrations(reason)
-    self.pendingSoundRefresh = false
 
     local startedAt = nowMilliseconds()
     local spellIDs, units, fingerprint, registrations = self:BuildAuraSoundPlan()
@@ -334,8 +333,12 @@ function NS:RefreshAuraSoundRegistrations(reason)
             self.auraSoundFingerprint = fingerprint
             self.auraSoundChannel = currentChannel
         else
+            -- Clearing the fingerprint is what schedules the retry: the next
+            -- RequestAuraSoundRefresh sees a mismatch and rebuilds. A
+            -- pendingSoundRefresh flag used to be raised here as well and was
+            -- never read by anything -- the end of combat calls
+            -- RequestAuraSoundRefresh("combat ended") regardless.
             self.auraSoundFingerprint = nil
-            if InCombatLockdown and InCombatLockdown() then self.pendingSoundRefresh = true end
         end
         if diagnostics.attempted >= SOUND_WARNING_THRESHOLD and not self.soundLoadWarningShown then
             self.soundLoadWarningShown = true

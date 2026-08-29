@@ -72,9 +72,11 @@ NS.enabled = true
 NS.pendingRoster = false
 NS.pendingLayout = false
 NS.pendingSpells = false
-NS.pendingEnabled = nil
+NS.pendingEnabled = false
+NS.pendingEnabledValue = nil
 NS.pendingPositionReset = false
-NS.pendingGridVisibility = nil
+NS.pendingGridVisibility = false
+NS.pendingGridVisibilityValue = nil
 NS.pendingVisibilityDriver = false
 NS.pendingAnchorAppearance = false
 NS.pendingProfileSwitch = false
@@ -215,7 +217,8 @@ end
 function NS:SetEnabled(enabled, silent)
     self.db.enabled = enabled and true or false
     if InCombatLockdown and InCombatLockdown() then
-        self.pendingEnabled = self.db.enabled
+        self.pendingEnabledValue = self.db.enabled
+        self:MarkPending("pendingEnabled")
         self:Print(self.L.COMBAT_LOCKED)
         return
     end
@@ -233,7 +236,8 @@ end
 function NS:SetGridVisible(visible, silent)
     visible = visible and true or false
     if InCombatLockdown and InCombatLockdown() then
-        self.pendingGridVisibility = visible
+        self.pendingGridVisibilityValue = visible
+        self:MarkPending("pendingGridVisibility")
         self:Print(self.L.COMBAT_LOCKED)
         return
     end
@@ -601,8 +605,19 @@ function NS:FlushCombatUpdates()
     -- a pass, refresh them explicitly so combat-only exclusions expire now.
     if not configured then self:RefreshAuraCandidateFilters() end
     if self.RefreshOptions then self:RefreshOptions() end
-    if self.pendingEnabled ~= nil then self:SetEnabled(self.pendingEnabled) end
-    if self.pendingGridVisibility ~= nil then self:SetGridVisible(self.pendingGridVisibility) end
+    -- The flag says a change is waiting; the value says which. Keeping them in
+    -- one field meant the plate could not see the deferral at all, because a
+    -- business boolean is not the literal true the static check looks for.
+    if self.pendingEnabled then
+        self.pendingEnabled = false
+        self:SetEnabled(self.pendingEnabledValue)
+        self.pendingEnabledValue = nil
+    end
+    if self.pendingGridVisibility then
+        self.pendingGridVisibility = false
+        self:SetGridVisible(self.pendingGridVisibilityValue)
+        self.pendingGridVisibilityValue = nil
+    end
     if self.pendingVisibilityDriver or profileChanged then self:UpdateGridVisibilityDriver() end
     if self.pendingAnchorAppearance and self.UpdateGridAnchorAppearance then
         self:UpdateGridAnchorAppearance()
@@ -610,6 +625,10 @@ function NS:FlushCombatUpdates()
     if self.pendingPriorityBinding then self:ApplyPriorityDispelBinding() end
     if self.RequestAuraSoundRefresh then self:RequestAuraSoundRefresh("combat ended") end
     self:RefreshAll(true)
+    -- The plate went out because some refresh path happened to re-evaluate it,
+    -- never because the flags were cleared. Disabling the addon in combat took
+    -- a path that did not, and the plate survived its own reason.
+    self:UpdatePendingIndicator()
 end
 
 function NS:OnCombatEnded()
@@ -707,12 +726,6 @@ events:SetScript("OnEvent", function(_, event, ...)
             "UNIT_CONNECTION", "UNIT_ENTERED_VEHICLE", "UNIT_EXITED_VEHICLE", "PLAYER_FOCUS_CHANGED", "SPELLS_CHANGED", "SPELL_UPDATE_COOLDOWN", "SPELL_UPDATE_CHARGES",
             "PLAYER_SPECIALIZATION_CHANGED", "TRAIT_CONFIG_UPDATED", "PLAYER_REGEN_DISABLED",
             "PLAYER_REGEN_ENABLED", "UI_ERROR_MESSAGE", "PLAYER_LOGOUT",
-            -- Last, as a precaution rather than a proven need: 1.5.36 added
-            -- this one and the very next session raised ADDON_ACTION_FORBIDDEN
-            -- on a registration. Whether a refusal stops the loop is unknown --
-            -- it arrives as an event, not as a raised error -- so the one event
-            -- suspected of being refused is asked for after everything else.
-            "COMBAT_LOG_EVENT_UNFILTERED",
         }) do
             -- A refusal does not raise: it shows the player a dialog whose
             -- first button disables this addon. Nothing can be done in advance
@@ -770,11 +783,6 @@ events:SetScript("OnEvent", function(_, event, ...)
         NS:OnCombatEnded()
     elseif event == "UI_ERROR_MESSAGE" then
         NS:OnUIError(...)
-    elseif event == "COMBAT_LOG_EVENT_UNFILTERED" then
-        -- The combat log carries spell IDs for auras C_UnitAuras refuses to
-        -- read. Only SPELL_DISPEL is looked at, so the busiest event in the
-        -- game costs one string comparison here.
-        NS:OnCombatLogEvent()
     elseif event == "PLAYER_LOGOUT" then
         NS:SnapshotDiagnostics()
     end

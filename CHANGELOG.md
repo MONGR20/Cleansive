@@ -6,6 +6,17 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.5.38
+
+- **The backlash warning added in 1.5.31 is removed.** It was not merely inert -- it was inverted. `AuraContainerUtil.CanApplyIdentityCandidateFilters` refuses `includeSpellIDs` on a harmful aura carried by a unit the player can assist, unless the spell is `NeverSecret`. The warning slot had no other filter, so the yellow ring was drawn on *every* dispellable affliction rather than on the dangerous ones: it told the player not to cleanse, on everything. A safety feature cannot rest on a filter the client is free to ignore.
+- **`COMBAT_LOG_EVENT_UNFILTERED` is no longer requested,** and the collector built on it is gone with it. Blizzard's own generated documentation marks the event `HasRestrictions = true`; registering it fires `ADDON_ACTION_FORBIDDEN`, a dialog whose first button disables the addon. 1.5.36 added it and the very next session raised exactly that. Seasonal spell IDs go back to being read from a recorded combat log outside the addon, then confirmed on screen before being typed.
+- **Disabling the addon or hiding the grid during combat now says so.** Both were deferred correctly and silently: the option appeared to change and the screen did not. They were written straight to their flags instead of going through `MarkPending`, and the static check could not see it because a business boolean is not the literal `true` it looks for. The flag and the requested value are now separate fields.
+- The plate is re-evaluated when the flags are cleared, instead of going out because some refresh path happened to run. Disabling the addon in combat took a path that did not, and the plate outlived its own reason.
+- Two new static checks: no event Blizzard marks `HasRestrictions` may be named in the code -- the list is read from `DefinitionsAPI` rather than written by hand -- and the mock now records any aura slot filtered by spell ID alone, which is what made the 1.5.31 ring invisible to 660 green tests.
+- `pendingSoundRefresh` is deleted rather than documented for a third time. It was written in two places and read in none; clearing the sound fingerprint is what actually schedules the retry, and the end of combat requests one regardless.
+- Three changelog entries carried claims the code had never honoured or no longer honours. They are corrected in place rather than left standing, because a note that has to be disbelieved is worse than no note.
+- Tests: 660 to 646. The count went down because two features were removed; what remains covers the client's real rules rather than an assumed version of them.
+
 ## 1.5.37
 
 - **A refused event registration is asked for once, not at every login.** The session that followed 1.5.36 raised `ADDON_ACTION_FORBIDDEN` on `Frame:RegisterEvent()` -- a dialog whose first button disables this addon. The refusal does not raise, so nothing could catch it; the frame is now asked afterwards whether the registration took, and a refusal is remembered. 1.5.36 added exactly two events, which is where the fault came from.
@@ -19,6 +30,7 @@ du moteur d'auras protégé restent également vérifiées en jeu.
 - `/cleansive diag` reports what a session leaves behind, and the same record is kept in SavedVariables. Three things earned their place, each because its absence cost an evening.
 - **Deferrals now name what caused them.** Explaining why the pending plate appeared during dungeon pulls meant auditing eleven flags by hand against every event that can raise one. A flag now records its count and the event being dispatched when it went up, or `player` when no event was.
 - **Afflictions the seasonal sound list has never heard of are collected.** The combat log carries spell IDs for auras `C_UnitAuras` refuses to read; finding one missing meant reading 82 MB of log with grep. Only `SPELL_DISPEL` is inspected, so the busiest event in the game costs one string comparison. Enemy buffs removed by a purge are excluded on `auraType`: in a combat log a purge looks exactly like a dispel, and two of them nearly entered the sound list by hand.
+  *Corrected in 1.5.38: `COMBAT_LOG_EVENT_UNFILTERED` is marked `HasRestrictions` by Blizzard and registering it offers to disable the addon, so this collector was removed. "One string comparison" also undersold the cost -- each event resolved an API, ran a `pcall`, unpacked eighteen values and applied two guards.*
 - **The engine's own failure table is kept instead of being discarded at logout.** It existed all along and died with the session.
 - The dispel type is still not in there. A combat log never carries it -- only the school, which does not separate Magic from Poison or Disease. The recorder narrows the work to one tooltip per affliction; it cannot remove it.
 - A new static check refuses a Lua file that the addon loads and no test ever executes, with an explicit list of the two deliberate exclusions. `spec.lua` keeps its own hand-written file list, and it drifts: that is how `EllesmereUX.lua` stayed out of the suite for years, and `Diagnostics.lua` was forgotten in it the same day it was written.
@@ -56,6 +68,7 @@ du moteur d'auras protégé restent également vérifiées en jeu.
 
 - Auras that punish the dispeller are flagged. Dispelling Unstable Affliction turns its damage on you and silences you; Cleansive painted it like any other magic debuff and invited the reflex. A cell carrying one now gets a warning ring and a `!` on top of its normal click colour. The click is still there -- eating the backlash is sometimes correct -- but it can no longer be made without seeing it.
 - The warning survives 12.1's protected auras because it never reads them: a dedicated aura slot is filtered engine-side on `includeSpellIDs`, the same mechanism the seasonal sound registrations already use. It carries the same weakness, and the list is marked with its season for that reason -- an unlisted aura is silently not flagged.
+  *Wrong, corrected in 1.5.38: `CanApplyIdentityCandidateFilters` refuses spell-ID filters on a harmful aura carried by a unit the player can assist. The filter was ignored and the slot had no other, so the ring appeared on every dispellable affliction. The feature is removed.*
 - A dangerous aura of a type the character cannot clear, or one the player has ignored, is not flagged: the cell would not light up anyway, and a ring pointing at nothing is worse than no ring.
 - Tests: 591 to 609. The mock now runs `initializeFrame`, so every visual the protected engine draws -- rings, letters, timers -- is finally executed by the suite instead of being declared and never built. `SetHeight` and `SetWidth` are recorded too: a bar drawn at the wrong thickness, or not drawn at all, used to be invisible to a test.
 
@@ -81,10 +94,13 @@ du moteur d'auras protégé restent également vérifiées en jeu.
 - A protected change asked for during combat says so. Blizzard locks layout, roster, bindings and profile work while you fight; Cleansive deferred them correctly and silently, so the option moved and the screen did not. A plate now appears beside the grid for as long as something is waiting, and it goes out when the change lands. It lives on the unprotected layer, which is the only reason it can appear during the fight it is describing.
 - A character with no cleansing spell gets an explanation instead of a grid of grey cells that can never light up. The notice only appears once the client has actually answered about the spellbook -- before that an empty book is ignorance, not a fact about the character.
 - Every combat deferral now goes through `MarkPending`, and a static check refuses a flag set by hand: a deferral the plate does not know about is exactly the silent state it exists to remove. `pendingSoundRefresh` is the one exception, and it is documented as such -- see below.
+  *Not true at the time, corrected in 1.5.38: `pendingEnabled` and `pendingGridVisibility` were written straight to their fields, and the check could not see them because it only matched the literal `true`. Both now go through `MarkPending`, the check matches any value, and the `pendingSoundRefresh` exception is gone with the flag itself.*
 - `ApplyPriorityDispelBinding` clears its pending flag when there is no binding owner. The flag was set and never cleared for the session; harmless while nothing read it, but the plate would have stayed lit with nothing able to put it out.
 - Tests: 492 to 512, and a sixth static check.
 
 Known, not fixed: `pendingSoundRefresh` is set when a sound registration fails in combat and is never read again -- nothing replays it when the fight ends. It is left alone rather than announced, because a plate nothing can extinguish is worse than no plate.
+
+*Removed in 1.5.38: nothing read it, and clearing the sound fingerprint already schedules the retry that the end of combat performs anyway.*
 
 ## 1.5.27
 

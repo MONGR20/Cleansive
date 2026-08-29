@@ -1,4 +1,4 @@
-# Cleansive 1.5.37
+# Cleansive 1.5.38
 
 Cleansive is a standalone one-click cleansing addon for **World of Warcraft Retail 12.1** (`120100`). It provides a compact Decursive-style workflow with a dark, class-colored interface inspired by the clarity of Ellesmere UI. The interface follows the language of your WoW client, English or French; either can be picked from the General page at any time.
 
@@ -30,8 +30,6 @@ Red, blue, and orange identify the click to use. The optional L/R/C corner lette
 - Blizzard-managed protected aura indicators for Retail 12.1 combat.
 - Secure click casting for solo play, parties, and raids.
 - Magic, Curse, Poison, Disease, Bleed, and Charm support.
-- A warning marker on auras whose dispel backfires on the dispeller, filtered
-  engine-side by spell ID so it works while the aura itself is protected.
 - Player, class, and raid-group priorities and exclusions.
 - A default raid order relative to your own group rather than an absolute
   1-to-8 order, so cleansing work spreads across dispellers on its own.
@@ -99,6 +97,12 @@ combat. Avoid clicking empty grid positions while this mode is enabled.
 
 The hover-cleanse key also respects these restrictions: it casts through a secure action button on your mouseover, target, or player. It never asks Lua to select an afflicted unit during combat, because the secure engine evaluates targeting conditions only and cannot read auras.
 
+## 1.5.38 changes
+
+- The backlash warning is removed: the client is free to ignore the spell-ID filter it rested on, and the ring was appearing on every dispellable affliction instead of the dangerous ones.
+- The addon no longer requests a Blizzard event marked as restricted, so no dialog can offer to disable it.
+- Disabling Cleansive or hiding the grid during combat now shows the pending plate like every other deferred change.
+
 ## 1.5.37 changes
 
 - An event registration the client refuses is attempted once and remembered, instead of raising its dialog at every login.
@@ -106,7 +110,7 @@ The hover-cleanse key also respects these restrictions: it casts through a secur
 
 ## 1.5.36 changes
 
-- `/cleansive diag` reports the session's deferrals and their causes, the protected engine's failures, and any dispelled affliction the seasonal sound list does not know.
+- `/cleansive diag` reports the session's deferrals and their causes, and the protected engine's failures. (The seasonal-affliction collector announced here was removed in 1.5.38: it rested on an event Blizzard restricts.)
 
 ## 1.5.35 changes
 
