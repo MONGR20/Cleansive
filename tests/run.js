@@ -576,8 +576,15 @@ if (parentOffenders.length) {
 // ---------------------------------------------------------------------------
 const ciOffenders = [];
 {
+  // Ce controle vise le DEPOT, pas l'archive livree : .github en est exclu a
+  // dessein. .pkgmeta ne vit qu'a la racine du depot et sert donc a distinguer
+  // les deux. Sans cette distinction, valider une archive construite echouait
+  // en reprochant l'absence d'un fichier qu'on avait volontairement retire.
+  const isRepository = fs.existsSync(path.join(addon, ".pkgmeta"));
   const workflow = path.join(addon, ".github", "workflows", "release.yml");
-  if (!fs.existsSync(workflow)) {
+  if (!isRepository) {
+    // Rien a dire : on regarde un paquet, pas un depot.
+  } else if (!fs.existsSync(workflow)) {
     ciOffenders.push("aucun workflow de publication a verifier");
   } else {
     const lines = fs.readFileSync(workflow, "utf8").split("\n");
@@ -610,8 +617,10 @@ if (ciOffenders.length) {
   failed += 1;
   console.log("\n  ECHEC publication : la chaine ne protege plus la page de telechargement");
   for (const o of ciOffenders) console.log("          " + o);
-} else {
+} else if (fs.existsSync(path.join(addon, ".pkgmeta"))) {
   console.log("  ok    publication : verify ne tient aucun secret, et rien ne publie sans lui");
+} else {
+  console.log("  ok    publication : sans objet, ceci est un paquet et non le depot");
 }
 
 process.exit(failed > 0 ? 1 : 0);

@@ -6,6 +6,42 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.6
+
+Cette version rassemble le travail mené à partir de l’étude des addons
+concurrents : environ 110 des 176 points retenus y sont passés, en vingt et une
+étapes.
+
+**Ce que vous pouvez faire et que vous ne pouviez pas :**
+
+- **Voir votre grille en raid sans être en raid.** L’aperçu la complète jusqu’à quarante cases inertes, ce qui permet enfin de régler taille, espacement et position d’une grille de raid — et d’en faire une capture. Une case d’aperçu ne porte aucune unité sécurisée, n’est jamais présentée au moteur d’auras protégé et n’entre jamais dans le registre sonore.
+- **Partager un profil.** Export et import en texte, avec la liste exacte de ce qui changerait montrée avant que quoi que ce soit ne bouge. Ne partent jamais : votre position à l’écran, votre langue, et vos listes de priorité et d’exclusion — elles contiennent des noms de joueurs.
+- **Savoir ce que Cleansive a compris.** `/cleansive spells` liste les sorts détectés, `/cleansive soundstatus <id>` explique pourquoi une affliction reste muette, `/cleansive alerts` montre les dernières décisions sonores et leur raison, `/cleansive order` explique l’ordre des cases, `/cleansive coverage` dit ce que la liste de saison couvre type par type.
+- **Signaler un problème correctement.** `/cleansive diag copy` produit un rapport d’un bloc, sans nom de personnage, avec la révision exacte du code.
+- **Surveiller racines et étourdissements.** Rien n’est surveillé par défaut : Cleansive apprend ce qu’il voit, vous choisissez. Une entrave ne masque jamais une affliction.
+- **Trouver un réglage.** Une recherche sans accents ni majuscules, qui dit sur quelle page aller et vous y emmène. Une page Aide avec toutes les commandes, un dépannage par symptôme, et ce que Cleansive **ne peut pas** faire.
+- Quatre points de départ pour l’allure, une remise à zéro limitée à la page affichée, deux clics avant toute destruction, trois règles combinables pour l’endroit où la grille apparaît, un ordre par rôle ou par classe, et des fenêtres qui retiennent leur place.
+
+**Ce qui a été réparé en profondeur :**
+
+- Le son se remplace sans période de silence, et un remplacement refusé conserve l’alerte qui fonctionnait.
+- Le moteur d’auras protégé n’est plus reconstruit au milieu d’une rencontre. Un emplacement d’aura ne se retire jamais : le reconstruire pendant un boss coûte des emplacements définitifs.
+- Trois appels protégés jetaient leur résultat, transformant un refus du client en silence. C’est ce mécanisme qui avait masqué 480 refus d’affichage jusqu’à ce qu’on les compte.
+- L’interface a cessé de promettre ce qu’elle ne fait pas : un bouton de souris sans sort derrière, un interrupteur de noms inopérant sur de petites cases, un aperçu qui montrait des éléments coupés.
+
+**Sous le capot :** 1 146 tests et 13 contrôles statiques, dont un qui vérifie
+que la chaîne de publication ne peut pas publier sans être passée par la
+vérification, et un autre que rien de superflu n’entre dans l’archive. Chaque
+correction a été éprouvée en réinjectant le défaut pour voir les tests virer au
+rouge.
+
+**Ce qui n’est pas fait, et pourquoi :** les points touchant au dessin et à
+l’ordre d’affichage — reparentage des décorations, second bord d’affliction,
+icône de rôle — ne se prouvent pas hors du jeu et attendent une vérification à
+l’écran. Le catalogue sonore par instance attend des données de terrain, pas du
+code.
+
+
 ## 1.5.67
 
 - **L’aperçu des réglages mentait sur deux points.** Il affichait la lettre de clic et le chiffre de recharge même quand vous les aviez coupés : il promettait une case que la vraie grille ne dessine pas. Un aperçu qui ne suit pas les réglages est pire qu’aucun aperçu, parce qu’il fait douter de la grille.
