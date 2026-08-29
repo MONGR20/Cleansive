@@ -637,6 +637,25 @@ function NS:StyleAuraVisual(button, auraType, visual)
     -- the engine still sees something here.
     local alpha = enabled and (grouped and 0 or 0.92) or 0
 
+    -- The engine can declare its own AuraSlot forbidden to addon code. That is
+    -- a different mechanism from a protected function: it raises an ordinary
+    -- Lua error, caught by the guards below, and never reaches
+    -- ADDON_ACTION_FORBIDDEN or the dialog that offers to disable the addon --
+    -- five recorded sessions confirm it. What it does do is never change back
+    -- for this object, so re-arming pendingAuraStyle after it meant retrying
+    -- nine refused calls on every combat for the rest of the session: 690 of
+    -- them in one run, silent and pointless. Asked once, remembered, dropped.
+    if visual.forbidden then return end
+    local auraButton = visual.auraButton
+    if auraButton and auraButton.IsForbidden then
+        local known, forbidden = pcall(auraButton.IsForbidden, auraButton)
+        if known and forbidden then
+            visual.forbidden = true
+            if self.NoteForbiddenVisual then self:NoteForbiddenVisual() end
+            return
+        end
+    end
+
     local hintOffset = self:ClickHintOffset(slot, self.db.frameSize)
     local hintShown = enabled and (slot ~= nil or manual ~= nil)
         and self.db.showClickHints and hintOffset ~= nil

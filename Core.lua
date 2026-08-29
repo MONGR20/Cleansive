@@ -406,11 +406,19 @@ end
 
 function NS:RecordSecureClick(button, mouseButton)
     if not button or not button.unit then return end
-    if mouseButton and mouseButton ~= "LeftButton" and mouseButton ~= "RightButton" then return end
+    -- Button4 casts the third cleanse (1.5.43) but was not listed here, so the
+    -- click was performed by the game and never recorded: the cell kept the
+    -- previous spell's cooldown, or none. The secure binding and this ledger
+    -- have to name the same buttons.
+    if mouseButton and mouseButton ~= "LeftButton" and mouseButton ~= "RightButton"
+        and mouseButton ~= "Button4" then
+        return
+    end
     local slot = 1
     if mouseButton == "RightButton" then
         slot = 2
-    elseif mouseButton == "LeftButton" and IsControlKeyDown and IsControlKeyDown() then
+    elseif mouseButton == "Button4"
+        or (mouseButton == "LeftButton" and IsControlKeyDown and IsControlKeyDown()) then
         slot = 3
     end
     if not (self.clickSpells and self.clickSpells[slot]) then slot = 1 end

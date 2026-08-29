@@ -6,6 +6,16 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.5.44
+
+- **Le bouton souris 4 alimente enfin le suivi de recharge.** La 1.5.43 l'a lie au troisieme sort mais ne l'a pas ajoute au registre des clics : le jeu lancait bien le sort, et la case gardait la recharge du precedent, ou aucune. La liaison securisee et le registre doivent nommer les memes boutons ; c'est desormais verifie par un test qui compare le bouton 4 a Ctrl + clic gauche plutot qu'a un numero d'emplacement fixe.
+- **Un visuel que le moteur declare interdit n'est plus retente a chaque combat.** Un objet interdit ne redevient jamais autorise : il est desormais demande une fois via `IsForbidden`, retenu, et abandonne. Une session enregistree rejouait neuf appels refuses 690 fois pour rien. `/cleansive diag` compte maintenant les cases concernees au lieu d'accumuler des echecs de restyle qui n'en etaient pas.
+- **Le budget de reprise sonore appartient au plan, pas a la session.** Deux refus definitifs sur un plan laissaient un plan different, qui n'avait jamais echoue, sans aucune reprise. Le compteur repart des que l'empreinte du plan change.
+- Le README annoncait encore la 1.5.38 et ignorait les boutons 4 et 5. Les sections de version qui s'y accumulaient sont remplacees par un resume court renvoyant au changelog.
+- Tests : 713 a 730, verifies par reinjection.
+
+*Sur un point de l'audit, je ne suis pas d'accord : ces refus de mise en forme ne declenchent ni `ADDON_ACTION_FORBIDDEN` ni la fenetre proposant de desactiver l'addon. Un objet interdit et une fonction protegee sont deux mecanismes distincts -- le premier leve une erreur Lua ordinaire, que les gardes interceptent. Cinq sessions enregistrees le confirment : zero evenement de ce type depuis que la cause reelle a ete corrigee en 1.5.38. Le gaspillage etait reel, la fenetre non.*
+
 ## 1.5.43
 
 - **Les boutons souris 4 et 5 sont pris en charge.** Rien de neuf n'y est lie : le bouton 4 lance la troisieme dissipation, deja disponible sur Ctrl + clic gauche, et le bouton 5 pose la focalisation, deja sur Ctrl + clic milieu. Les deux combinaisons les plus penibles a faire en plein combat sont simplement accessibles au pouce. Une souris sans ces boutons ne perd rien, et aucune assignation existante ne bouge. L'infobulle de la grille les decrit, en anglais comme en francais.

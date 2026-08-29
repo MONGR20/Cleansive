@@ -283,6 +283,13 @@ function NS:RefreshAuraSoundRegistrations(reason)
         error = nil,
     }
     self.auraSoundDiagnostics = diagnostics
+    -- The retry budget belongs to a plan, not to the session. Two permanent
+    -- refusals on plan A used to leave a different plan B with no retries at
+    -- all, because the counter only ever reset on a complete success.
+    if fingerprint ~= self.auraSoundRetryFingerprint then
+        self.auraSoundRetryFingerprint = fingerprint
+        self.auraSoundRetries = 0
+    end
     self.auraSoundGeneration = (self.auraSoundGeneration or 0) + 1
     local generation = self.auraSoundGeneration
 

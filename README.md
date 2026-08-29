@@ -1,4 +1,4 @@
-# Cleansive 1.5.38
+# Cleansive 1.5.43
 
 Cleansive is a standalone one-click cleansing addon for **World of Warcraft Retail 12.1** (`120100`). It provides a compact Decursive-style workflow with a dark, class-colored interface inspired by the clarity of Ellesmere UI. The interface follows the language of your WoW client, English or French; either can be picked from the General page at any time.
 
@@ -19,6 +19,8 @@ You can also open Cleansive from **Options > AddOns**, the addon compartment, or
 - Ctrl + left click: third spell.
 - Middle click: target the unit.
 - Ctrl + middle click: set the unit as focus.
+- Mouse button 4: third spell, the same action as Ctrl + left click.
+- Mouse button 5: set the unit as focus, the same action as Ctrl + middle click.
 - Drag the small `C` handle to move the grid.
 - `/cleansive macro` creates a global mouseover macro. On that macro, no modifier uses the left-click spell, Shift uses the right-click spell, and Ctrl uses the Ctrl-click spell.
 
@@ -97,25 +99,15 @@ combat. Avoid clicking empty grid positions while this mode is enabled.
 
 The hover-cleanse key also respects these restrictions: it casts through a secure action button on your mouseover, target, or player. It never asks Lua to select an afflicted unit during combat, because the secure engine evaluates targeting conditions only and cannot read auras.
 
-## 1.5.38 changes
+## Recent changes
 
-- The backlash warning is removed: the client is free to ignore the spell-ID filter it rested on, and the ring was appearing on every dispellable affliction instead of the dangerous ones.
-- The addon no longer requests a Blizzard event marked as restricted, so no dialog can offer to disable it.
-- Disabling Cleansive or hiding the grid during combat now shows the pending plate like every other deferred change.
+- **1.5.43** - mouse buttons 4 and 5 mirror the two awkward modifier combinations.
+- **1.5.42** - the six 12.1 restriction types are recorded, and the client's own refusals are logged by name.
+- **1.5.41** - nothing visible is left behind when the client refuses a styling pass.
+- **1.5.40** - one refused call no longer takes the whole styling pass with it.
+- **1.5.39** - a failed sound registration is retried; the two status plates stack instead of overlapping.
 
-## 1.5.37 changes
-
-- An event registration the client refuses is attempted once and remembered, instead of raising its dialog at every login.
-- The pending plate no longer announces a restyle the client has forbidden, which used to keep it lit for entire fights.
-
-## 1.5.36 changes
-
-- `/cleansive diag` reports the session's deferrals and their causes, and the protected engine's failures. (The seasonal-affliction collector announced here was removed in 1.5.38: it rested on an event Blizzard restricts.)
-
-## 1.5.35 changes
-
-- A label the client declares forbidden no longer aborts the layout, which used to strand the pending flag for the rest of the session.
-
+The full history, with the reasoning behind each change, is in [CHANGELOG.md](CHANGELOG.md).
 ## 1.5.34 changes
 
 - The pending plate no longer appears for deferrals the game raised on its own. It announces only a change you asked for.

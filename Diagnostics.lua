@@ -35,6 +35,7 @@ function NS:GetDiagnostics()
         record.pending = {}
         record.styleFailures, record.styleError, record.styleSteps = nil, nil, nil
         record.styleContext, record.forbidden = nil, nil
+        record.forbiddenVisuals = nil
         record.soundPeak = nil
     end
     record.version = self.version
@@ -102,6 +103,14 @@ function NS:NoteForbiddenAction(addon, func)
     end
     entry.count = entry.count + 1
     entry.context = self:RestrictionSnapshot() or entry.context
+end
+
+-- Counted once per visual, not once per attempt: the point is how many cells
+-- the engine has taken away, not how many times we noticed.
+function NS:NoteForbiddenVisual()
+    local record = self:GetDiagnostics()
+    if not record then return end
+    record.forbiddenVisuals = (record.forbiddenVisuals or 0) + 1
 end
 
 -- The engine can refuse to let its own labels be restyled. The call is already
@@ -284,6 +293,10 @@ function NS:PrintDiagnostics()
 
     -- A deferral is not a fault: the plate is the addon working as designed.
     -- Only the client's refusals and the engine's failures count here.
+    if record.forbiddenVisuals then
+        problems = problems + 1
+        self:Print(self.L.DIAG_FORBIDDEN_VISUAL, tostring(record.forbiddenVisuals))
+    end
     for context, count in pairs(record.styleContext or {}) do
         self:Print(self.L.DIAG_STYLE_CONTEXT, context, tostring(count))
     end
