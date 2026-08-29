@@ -160,6 +160,8 @@ function NS:GetAuraHistoryEntries()
                 id = tonumber(id) or id,
                 name = record.name,
                 auraType = record.auraType,
+                place = record.place,
+                instanceID = record.instanceID,
             }
         end
     end
@@ -221,7 +223,9 @@ function NS:RefreshAuraHistoryPage()
             local ignored = self.db.ignoredAlways[id] or self.db.ignoredAlways[tostring(id)]
                 or self.db.ignoredCombat[id] or self.db.ignoredCombat[tostring(id)]
             local typeLabel = entry.auraType and ("  -  " .. tostring(self:GetTypeLabel(entry.auraType))) or ""
-            row.label:SetText(tostring(entry.name or self.L.UNKNOWN) .. "  -  " .. tostring(id) .. typeLabel)
+            local placeLabel = entry.place and ("  -  " .. string.format(self.L.HISTORY_PLACE, tostring(entry.place))) or ""
+            row.label:SetText(tostring(entry.name or self.L.UNKNOWN) .. "  -  " .. tostring(id)
+                .. typeLabel .. placeLabel)
             row.action:SetText(ignored and self.L.HISTORY_UNIGNORE or self.L.HISTORY_IGNORE)
             row.action:SetScript("OnClick", function() self:ToggleHistoryFilter(id) end)
             row:Show()
@@ -317,4 +321,22 @@ function NS:RefreshFilterWindow()
         self.filterFrame.next:SetShown(paged)
         self.filterFrame.next:SetEnabled(offset < maxOffset)
     end
+end
+
+-- #196 : a list of a hundred lines is unusable as a bug report unless it can
+-- leave the game in one block. Same shape as the diagnostic report, and the
+-- place travels with the ID so the reader can go and look.
+function NS:BuildAuraHistoryReport()
+    local lines = { "Cleansive affliction history" }
+    for _, entry in ipairs(self:GetAuraHistoryEntries()) do
+        local parts = { tostring(entry.id), tostring(entry.name or "?") }
+        if entry.auraType then parts[#parts + 1] = tostring(entry.auraType) end
+        if entry.instanceID then
+            parts[#parts + 1] = "instance=" .. tostring(entry.instanceID)
+        elseif entry.place then
+            parts[#parts + 1] = "place=" .. tostring(entry.place)
+        end
+        lines[#lines + 1] = table.concat(parts, " | ")
+    end
+    return table.concat(lines, "\n")
 end

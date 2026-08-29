@@ -337,8 +337,9 @@ function NS:BuildDiagnosticsReport()
     return table.concat(lines, "\n")
 end
 
-function NS:ShowDiagnosticsCopy()
-    local report = self:BuildDiagnosticsReport()
+-- One copy window, retitled. A second near-identical one would drift: the
+-- first fix would land on whichever copy the reporter happened to open.
+function NS:ShowCopyWindow(title, hint, report)
     local frame = self.diagnosticsCopyFrame
     if not frame then
         frame = CreateFrame("Frame", "CleansiveDiagnosticsCopyFrame", UIParent)
@@ -402,12 +403,17 @@ function NS:ShowDiagnosticsCopy()
         end
     end
 
-    frame.title:SetText(self.L.DIAG_COPY_TITLE)
-    frame.hint:SetText(self.L.DIAG_COPY_HINT)
+    frame.title:SetText(title)
+    frame.hint:SetText(hint)
     frame.edit:SetText(report)
     frame:Show()
     frame.edit:SetFocus()
     frame.edit:HighlightText()
+end
+
+function NS:ShowDiagnosticsCopy()
+    self:ShowCopyWindow(self.L.DIAG_COPY_TITLE, self.L.DIAG_COPY_HINT,
+        self:BuildDiagnosticsReport())
     self:Print(self.L.DIAG_COPY_READY)
 end
 

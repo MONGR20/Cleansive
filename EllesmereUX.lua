@@ -1048,6 +1048,13 @@ function NS:CreateOptions()
     local clearHistory = button(history, self.L.HISTORY_CLEAR, 116, 26)
     clearHistory:SetPoint("TOPRIGHT", 0, -22)
     clearHistory:SetScript("OnClick", function() self:ConfirmClearAuraHistory() end)
+    local copyHistory = button(history, self.L.HISTORY_COPY, 132, 26)
+    copyHistory:SetPoint("TOPRIGHT", clearHistory, "TOPLEFT", -10, 0)
+    copyHistory:SetScript("OnClick", function()
+        self:ShowCopyWindow(self.L.HISTORY_COPY, self.L.HISTORY_COPY_HINT,
+            self:BuildAuraHistoryReport())
+    end)
+    self.historyCopyButton = copyHistory
     history.rows = {}
     for index = 1, 11 do
         local row = CreateFrame("Frame", nil, history)

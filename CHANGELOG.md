@@ -6,6 +6,16 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.5.53
+
+- **L’infobulle d’une case dit pourquoi elle est là** : parce que c’est vous, parce que l’unité figure à telle position de votre liste de priorité, ou parce que c’est une case d’aperçu. L’ordre était déjà déterministe ; il n’était simplement écrit nulle part.
+- **Le nom prend la couleur de sa classe** dans l’infobulle.
+- **L’historique retient où chaque affliction a été vue.** Une instance est retenue par son **numéro**, pas par son nom traduit : un client français et un client anglais doivent pouvoir parler du même donjon. Dehors, la carte suffit et aucun numéro d’instance n’est inventé.
+- **La liste peut sortir du jeu en un bloc** avec le lieu à côté de chaque identifiant. Un identifiant seul n’est vérifiable par personne ; avec le lieu, il se rejoue.
+- La fenêtre de copie est devenue unique et retitrable au lieu d’être dupliquée. Deux fenêtres presque identiques dériveraient, et la correction irait sur celle que le rapporteur n’a pas ouverte.
+- Un contrôle de type redondant a été retiré : `palette[42]` rend déjà `nil`, et `nil` était déjà traité une ligne plus bas. Un garde-fou de plus n’est pas un garde-fou de mieux.
+- Tests : 924 à 943.
+
 ## 1.5.52
 
 - **Quatre points de départ pour l’allure de la grille** : Compact, Lisible, Raid, Minimal. Ce sont des points de départ, pas des modes : chacun écrit des réglages ordinaires que vous modifiez ensuite un par un. Rien ne mémorise « le préréglage sur lequel vous êtes » — dès que vous bougez un curseur ce serait faux, et un libellé qui ment est pire que pas de libellé.

@@ -1427,9 +1427,12 @@ function NS:RememberAura(aura)
         history[tostring(oldest)] = nil
     end
     local auraType = aura.dispelName
+    local place, instanceID = self:AuraHistoryPlace()
     history[id] = {
         name = self:CanAccess(name) and name or (self.L.UNKNOWN .. " " .. id),
         auraType = self:CanAccess(auraType) and auraType or nil,
+        place = place,
+        instanceID = instanceID,
     }
     if self.RefreshAuraHistoryPage and self.optionsFrame and self.optionsFrame:IsShown() then
         if not self.auraHistoryRefreshScheduled then
@@ -1969,7 +1972,19 @@ function NS:ShowButtonTooltip(button)
     if button.baseHidden then return end
     GameTooltip:SetOwner(button, "ANCHOR_RIGHT")
     local descriptor = button.descriptor
-    GameTooltip:AddLine(descriptor and descriptor.displayName or button.unit, 1, 1, 1)
+    local nameColor = self:ClassColor(descriptor and descriptor.class)
+    GameTooltip:AddLine(descriptor and descriptor.displayName or button.unit,
+        nameColor[1], nameColor[2], nameColor[3])
+    if descriptor then
+        local rank = self:PriorityRank(descriptor)
+        if descriptor.preview then
+            GameTooltip:AddLine(self.L.ORDER_REASON_PREVIEW, 0.6, 0.6, 0.6)
+        elseif descriptor.isPlayer then
+            GameTooltip:AddLine(self.L.WHY_SELF, 0.6, 0.6, 0.6)
+        elseif rank < 1000 then
+            GameTooltip:AddLine(string.format(self.L.WHY_PRIORITY, rank), 0.95, 0.78, 0.35)
+        end
+    end
     if button.state == "blacklist" then
         GameTooltip:AddLine(self.L.STATUS_BLACKLIST, 0.6, 0.6, 0.6)
     elseif button.state == "absent" then
@@ -2597,4 +2612,32 @@ function NS:RefreshAuraEngineTypes()
         self.auraEngineRetries, self.pendingAuraEngineReconcile = 0, false
     end
     return true
+end
+
+-- The place an affliction was seen, kept next to its ID. An ID alone cannot be
+-- checked by anyone; with the place it can be reproduced. Instances are keyed
+-- by their numeric ID rather than their localised name, so a French and an
+-- English client agree.
+function NS:AuraHistoryPlace()
+    if not GetInstanceInfo then return nil, nil end
+    local ok, name, instanceType, _, _, _, _, _, instanceID = pcall(GetInstanceInfo)
+    if not ok then return nil, nil end
+    instanceID = tonumber(instanceID)
+    if instanceType and instanceType ~= "none" then
+        return name, instanceID
+    end
+    if GetRealZoneText then
+        local zoneOk, zone = pcall(GetRealZoneText)
+        if zoneOk and type(zone) == "string" and zone ~= "" then return zone, nil end
+    end
+    return name, nil
+end
+
+-- RAID_CLASS_COLORS is a table the client owns and a class token can be secret,
+-- so both go through a guard. A missing colour is white, never an error.
+function NS:ClassColor(classToken)
+    local palette = type(classToken) == "string" and (CUSTOM_CLASS_COLORS or RAID_CLASS_COLORS)
+    local color = type(palette) == "table" and palette[classToken]
+    if type(color) ~= "table" or type(color.r) ~= "number" then return { 1, 1, 1 } end
+    return { color.r, color.g, color.b }
 end
