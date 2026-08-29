@@ -238,6 +238,7 @@ function NS:UpdateGridAnchorAppearance()
 end
 
 function NS:CreateGrid()
+    self.gridStartedAt = GetTimePreciseSec and GetTimePreciseSec() or (GetTime and GetTime()) or 0
     local anchor = CreateFrame("Frame", "CleansiveGridAnchor", UIParent, "SecureHandlerStateTemplate")
     anchor:SetSize(24, 14)
     anchor:SetClampedToScreen(true)
@@ -395,6 +396,17 @@ function NS:CreateGrid()
         end
     end
     self.engineAuraMode = #self.engineAuraTypes > 0 and self.auraContainerDiagnostics.readyButtons > 0
+    if self.gridStartedAt then
+        local now = GetTimePreciseSec and GetTimePreciseSec() or (GetTime and GetTime()) or 0
+        self.startupDiagnostics = {
+            elapsedMs = math.max(0, math.floor((now - self.gridStartedAt) * 1000 + 0.5)),
+            buttons = #self.buttons,
+            readyButtons = self.auraContainerDiagnostics.readyButtons,
+            slots = self.auraContainerDiagnostics.added,
+            firstError = self.auraContainerDiagnostics.firstError,
+        }
+        self.gridStartedAt = nil
+    end
     if #self.engineAuraTypes > 0 and self.auraContainerDiagnostics.readyButtons < MAX_BUTTONS then
         self:Print(self.L.AURA_ENGINE_FAILED,
             self.auraContainerDiagnostics.added,

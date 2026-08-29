@@ -6,6 +6,14 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.5.64
+
+- **Le rapport porte la révision exacte du code**, pas seulement le numéro de version : deux archives d’une même version peuvent différer, et sans la révision un signalement ne désigne aucun état du dépôt. Sur une copie de travail le champ vaut encore le jeton de l’empaqueteur — il n’est alors **pas affiché**, parce qu’un artefact de fabrication n’est pas une information.
+- **Ce que la construction de la grille a coûté** : temps, cases construites, emplacements obtenus, première erreur.
+- **Qui pilote quelle case.** Deux moteurs coexistent, celui de Blizzard et le repli Lua, et rien ne disait lequel tenait combien de cases — c’est pourtant la première question devant un affichage surprenant.
+- Un test vérifie que **sans aucun sort de dissipation, Cleansive ne fait presque rien** : aucun conteneur d’auras protégé n’est créé et aucune alerte sonore n’est enregistrée pour rien.
+- Tests : 1108 à 1127.
+
 ## 1.5.63
 
 - **« Pourquoi ça n’a pas sonné » a enfin une réponse.** La décision était prise à chaque affliction et ne laissait aucune trace. `/cleansive alerts` montre les douze dernières : jouée, même affliction qu’avant, aucune affliction, son coupé, addon coupé, ou le client n’a rien joué. **Le son coupé et un fichier qui n’a pas pu être lu ne se confondent plus** : ce sont deux problèmes différents et deux corrections différentes.

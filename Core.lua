@@ -72,6 +72,19 @@ end
 -- v1.5.7, because bumping the .toc does not touch a copy kept here.
 NS.version = (C_AddOns and C_AddOns.GetAddOnMetadata
     and C_AddOns.GetAddOnMetadata(addonName, "Version")) or "dev"
+
+-- Le champ est remplace par l'empaqueteur. Sur une copie de travail il reste
+-- le jeton tel quel : l'afficher ferait passer un artefact de fabrication pour
+-- une information. La regle vit dans une fonction pour pouvoir etre eprouvee
+-- des deux cotes, la valeur ne se calculant qu'une fois au chargement.
+function NS:NormalizeRevision(raw)
+    if type(raw) ~= "string" or raw == "" then return nil end
+    if string.find(raw, "@", 1, true) then return nil end
+    return raw
+end
+
+NS.revision = NS:NormalizeRevision(C_AddOns and C_AddOns.GetAddOnMetadata
+    and C_AddOns.GetAddOnMetadata(addonName, "X-Revision"))
 NS.playerClass = NS:SafeUnitClass("player")
 NS.blacklist = {}
 NS.testMode = false

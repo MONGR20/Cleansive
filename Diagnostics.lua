@@ -266,6 +266,17 @@ function NS:BuildDiagnosticsReport()
         "testMode=" .. tostring(self.testMode == true),
     }
 
+    if self.revision then lines[#lines + 1] = "revision=" .. tostring(self.revision) end
+    local startup = self.startupDiagnostics
+    if type(startup) == "table" then
+        lines[#lines + 1] = string.format("startup elapsedMs=%s buttons=%s ready=%s slots=%s firstError=%s",
+            tostring(startup.elapsedMs), tostring(startup.buttons),
+            tostring(startup.readyButtons), tostring(startup.slots),
+            tostring(startup.firstError or "-"))
+    end
+    local driven, fallback, idle = self:CountAuraProviders()
+    lines[#lines + 1] = string.format("providers engine=%s lua=%s idle=%s", driven, fallback, idle)
+
     local engine = record.engine or {}
     lines[#lines + 1] = string.format("engine ready=%s slots=%s/%s firstError=%s",
         tostring(engine.readyButtons or 0), tostring(engine.added or 0),
@@ -583,4 +594,22 @@ function NS:SoundCoverageByType()
             self:GetTypeLabel(auraType), tostring(#ids), status)
     end
     return lines
+end
+
+-- #239 : deux moteurs coexistent -- celui de Blizzard et le repli Lua. Savoir
+-- lequel pilote combien de cases est la premiere question devant un affichage
+-- surprenant, et rien ne la posait.
+function NS:CountAuraProviders()
+    local engine, fallback, idle = 0, 0, 0
+    for _, button in ipairs(self.buttons or {}) do
+        if not button.unit then
+            idle = idle + 1
+        elseif self.engineAuraMode and button.engineAuraReady and button.auraContainer
+            and not self.testMode then
+            engine = engine + 1
+        else
+            fallback = fallback + 1
+        end
+    end
+    return engine, fallback, idle
 end
