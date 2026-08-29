@@ -1,4 +1,4 @@
-# Cleansive 1.5.48
+# Cleansive 1.5.49
 
 Cleansive is a standalone one-click cleansing addon for **World of Warcraft Retail 12.1** (`120100`). It provides a compact Decursive-style workflow with a dark, class-colored interface inspired by the clarity of Ellesmere UI. The interface follows the language of your WoW client, English or French; either can be picked from the General page at any time.
 
@@ -141,6 +141,7 @@ the reason on its own.
 
 ## Recent changes
 
+- **1.5.49** - a Help page inside the addon: every command, what to do when something looks wrong, and what Cleansive cannot do.
 - **1.5.48** - Cleansive can now say what it detected: the spells it found, why one affliction stays silent, and the order the cells are in.
 - **1.5.47** - the preview pads the grid to any size from 1 to 40, so a raid layout can be tuned without a raid. Preview cells are inert.
 - **1.5.46** - a sound alert is replaced without a silent gap: the new registration is created first, and a refused replacement keeps the working one. `/cleansive diag copy` opens a selected, copyable support report.

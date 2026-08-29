@@ -480,6 +480,8 @@ local function navButton(parent, value, key, y)
     return control
 end
 
+local REPORT_URL = "https://github.com/MONGR20/Cleansive/issues"
+
 local CLICK_BADGE_COLORS = {
     [1] = { 0.92, 0.08, 0.08 },
     [2] = { 0.08, 0.38, 0.96 },
@@ -533,6 +535,7 @@ function NS:ShowOptionsPage(key)
         appearance = { self.L.PAGE_APPEARANCE_TITLE, self.L.PAGE_APPEARANCE_DESC },
         dispels = { self.L.PAGE_DISPELS_TITLE, self.L.PAGE_DISPELS_DESC },
         history = { self.L.PAGE_HISTORY_TITLE, self.L.PAGE_HISTORY_DESC },
+        help = { self.L.PAGE_HELP_TITLE, self.L.PAGE_HELP_DESC },
     }
     local pageInfo = metadata[key] or metadata.general
     if self.optionsHeading then self.optionsHeading:SetText(pageInfo[1]) end
@@ -629,6 +632,7 @@ function NS:CreateOptions()
     self.optionsNav.appearance = navButton(sidebar, localized("Apparence", "Appearance"), "appearance", -136)
     self.optionsNav.dispels = navButton(sidebar, localized("Dissipations", "Dispels"), "dispels", -180)
     self.optionsNav.history = navButton(sidebar, self.L.HISTORY, "history", -224)
+    self.optionsNav.help = navButton(sidebar, self.L.PAGE_HELP_TITLE, "help", -268)
     for key, control in pairs(self.optionsNav) do
         local pageKey = key
         control:SetScript("OnClick", function() self:ShowOptionsPage(pageKey) end)
@@ -1057,6 +1061,79 @@ function NS:CreateOptions()
     local reset = button(frame, self.L.RESET_POSITIONS, 156, 28)
     reset:SetPoint("BOTTOMRIGHT", -20, 14)
     reset:SetScript("OnClick", function() self:ResetPositions() end)
+
+    -- Une seule zone de defilement pleine hauteur : deux barres sur la meme
+    -- page se disputent la molette et on ne sait jamais laquelle repond.
+    local help = CreateFrame("Frame", nil, content)
+    help:SetAllPoints()
+    self.optionsPages.help = help
+
+    local helpScroll = CreateFrame("ScrollFrame", nil, help, "UIPanelScrollFrameTemplate")
+    helpScroll:SetPoint("TOPLEFT", 0, -2)
+    helpScroll:SetPoint("BOTTOMRIGHT", -26, 0)
+    local helpBody = CreateFrame("Frame", nil, helpScroll)
+    helpBody:SetSize(540, 1180)
+    helpScroll:SetScrollChild(helpBody)
+
+    local function helpBlock(heading, body, y)
+        local title = text(helpBody, heading, 12, C.section)
+        title:SetPoint("TOPLEFT", 0, y)
+        local line = solid(helpBody, "ARTWORK", 1, 1, 1, 0.07)
+        line:SetPoint("TOPLEFT", 0, y - 18)
+        line:SetWidth(540)
+        line:SetHeight(1)
+        local content = text(helpBody, body, 11, C.text)
+        content:SetPoint("TOPLEFT", 0, y - 30)
+        content:SetWidth(540)
+        content:SetJustifyH("LEFT")
+        content:SetSpacing(3)
+        return content
+    end
+
+    helpBlock(self.L.HELP_SECTION_COMMANDS, self.L.HELP_COMMANDS_TEXT, 0)
+    helpBlock(self.L.HELP_SECTION_TROUBLE, self.L.HELP_TROUBLE_TEXT, -470)
+
+    local aboutTitle = text(helpBody, self.L.HELP_SECTION_ABOUT, 12, C.section)
+    aboutTitle:SetPoint("TOPLEFT", 0, -900)
+    local aboutLine = solid(helpBody, "ARTWORK", 1, 1, 1, 0.07)
+    aboutLine:SetPoint("TOPLEFT", 0, -918)
+    aboutLine:SetWidth(540)
+    aboutLine:SetHeight(1)
+    local aboutVersion = text(helpBody, "Cleansive v" .. self.version .. "  -  Retail 12.1  -  "
+        .. self.L.HELP_LICENSE, 11, C.text)
+    aboutVersion:SetPoint("TOPLEFT", 0, -930)
+    local reportLabel = text(helpBody, self.L.HELP_REPORT, 11, C.dim)
+    reportLabel:SetPoint("TOPLEFT", 0, -956)
+    reportLabel:SetWidth(540)
+    reportLabel:SetJustifyH("LEFT")
+
+    -- Un addon ne peut pas ouvrir un navigateur. La seule chose honnete est de
+    -- rendre l'adresse selectionnable pour que le joueur la copie.
+    local reportBox = CreateFrame("EditBox", nil, helpBody)
+    reportBox:SetSize(540, 24)
+    reportBox:SetPoint("TOPLEFT", 0, -996)
+    reportBox:SetAutoFocus(false)
+    reportBox:SetFontObject(ChatFontNormal)
+    reportBox:SetTextInsets(6, 6, 0, 0)
+    reportBox:SetText(REPORT_URL)
+    reportBox:SetScript("OnEscapePressed", function(box) box:ClearFocus() end)
+    reportBox:SetScript("OnEditFocusGained", function(box) box:HighlightText() end)
+    -- Ne restaurer que sur une saisie du joueur. Sans le test sur userInput, le
+    -- SetText de restauration declenche a son tour OnTextChanged et le client
+    -- part en boucle.
+    reportBox:SetScript("OnTextChanged", function(box, userInput)
+        if not userInput then return end
+        box:SetText(REPORT_URL)
+        box:HighlightText()
+    end)
+    self.reportURLBox = reportBox
+    local reportBg = solid(helpBody, "BACKGROUND", C.panelDeep[1], C.panelDeep[2], C.panelDeep[3], 0.80)
+    reportBg:SetPoint("TOPLEFT", reportBox, "TOPLEFT", 0, 0)
+    reportBg:SetPoint("BOTTOMRIGHT", reportBox, "BOTTOMRIGHT", 0, 0)
+
+    local diagButton = button(helpBody, self.L.HELP_DIAG_BUTTON, 190, 28)
+    diagButton:SetPoint("TOPLEFT", 0, -1034)
+    diagButton:SetScript("OnClick", function() self:ShowDiagnosticsCopy() end)
 
     self:CreateListWindow()
     self:CreateFilterWindow()

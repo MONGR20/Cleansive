@@ -6,6 +6,13 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.5.49
+
+- **Une page Aide dans l’addon.** Trois blocs dans une seule zone de défilement : toutes les commandes, un dépannage par symptôme, et un « À propos » avec la version, la licence et l’adresse de signalement — rendue copiable, parce qu’un addon ne peut pas ouvrir un navigateur. Le bouton « Diagnostic copiable » y ouvre directement le rapport à joindre.
+- Le dépannage explique les limites plutôt que de laisser croire à un bug : un identifiant protégé pendant le combat ne peut être nommé par aucun addon, une augmentation de charges n’est pas une nouvelle application, et les couleurs peintes par le moteur protégé appartiennent à Blizzard.
+- Un test vérifie que **chaque commande est documentée dans les deux langues**. La première version ne lisait qu’une langue et laissait passer un trou dans l’autre.
+- Tests : 810 à 824.
+
 ## 1.5.48
 
 - **`/cleansive spells` dit ce que Cleansive a détecté.** Chaque sort de dissipation trouvé, avec son identifiant, le clic auquel il est attaché — ou le fait qu’il doit être lancé à la main, sur soi ou en zone — et les types qu’il couvre. Un type que vous avez désactivé reste affiché et signalé comme tel, plutôt que de disparaître et de laisser croire que le sort ne le couvre pas. « Il ne détecte pas mon sort » est la remontée la plus fréquente pour ce genre d’addon, et la réponse était déjà dans des données que Cleansive calculait sans jamais les montrer.

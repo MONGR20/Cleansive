@@ -85,6 +85,37 @@ local en = {
     PAGE_APPEARANCE_DESC = "Make every cleansing cue readable at a glance in combat.",
     PAGE_DISPELS_TITLE = "Dispel logic",
     PAGE_DISPELS_DESC = "Enable, prioritize, and map every dispel type to a click.",
+    PAGE_HELP_TITLE = "Help",
+    PAGE_HELP_DESC = "Every command, what to do when something looks wrong, and what Cleansive cannot do.",
+    HELP_SECTION_COMMANDS = "Commands",
+    HELP_SECTION_TROUBLE = "When something looks wrong",
+    HELP_SECTION_ABOUT = "About",
+    HELP_COMMANDS_TEXT = [[/cleansive or /cls - open these settings.
+/cleansive show, hide - show or hide the grid for this session.
+/cleansive enable, disable - turn Cleansive on or off for good.
+/cleansive reset - put the grid and the windows back where they started.
+/cleansive test - open the preview. Add a number from 1 to 40 to pad it, or mixed, all, healthy to choose how many cells light up.
+/cleansive macro - create the mouseover macro.
+/cleansive prio, skip, filters - open the priority list, the exclusion list, the affliction filters. Add clear to empty a list.
+/cleansive pradd, skadd - add your current target to one of those lists.
+/cleansive history - the afflictions Cleansive was allowed to read.
+/cleansive spells - the cleansing spells detected, their click, and the types they cover.
+/cleansive order - the cell order right now, and why each cell sits there.
+/cleansive soundtest - play the alert file.
+/cleansive soundstatus - the state of the native sound registry. Add a spell ID to ask about one affliction.
+/cleansive cdstatus - the last cooldown Cleansive read.
+/cleansive diag - this session's diagnostics. diag copy opens a copyable report, diag reset clears the counters.
+/cleansive version - version, client language, class.
+/cleansive setup - reopen the first-time assistant.]],
+    HELP_TROUBLE_TEXT = [[A cell lights up but no sound. Ask /cleansive soundstatus <spell ID>. Blizzard protects some spell IDs during combat, and no addon can name a spell it is not allowed to read.
+A sound fires once and stays quiet as the affliction grows. That is by design: the alert marks an application, not a stack increase. The same affliction sounds again once it has fully expired and returns.
+Nothing happens when I click. Check that the cell carries a unit: preview cells never cast. Outside the preview, a click during combat goes through Blizzard's secure engine and cannot be intercepted.
+A setting does not apply. Combat locks the protected parts of the interface. The plate next to the grid says a change is waiting; it applies when you leave combat.
+The grid is empty. Your specialization may have no cleansing spell, which the grid says in words. Otherwise check /cleansive spells.
+Colors are wrong. Cleansive does not own the colors the protected aura engine paints. Those are Blizzard's.]],
+    HELP_LICENSE = "MIT License - Copyright 2026 Ro",
+    HELP_REPORT = "Report a problem. Run /cleansive diag copy first and paste the block with your report:",
+    HELP_DIAG_BUTTON = "Copyable diagnostic",
     PAGE_HISTORY_TITLE = "Affliction history",
     PAGE_HISTORY_DESC = "Review recently detected afflictions and silence unwanted alerts.",
     PREVIEW_DURATION = "Affliction duration",
@@ -351,6 +382,37 @@ local fr = {
     PAGE_APPEARANCE_DESC = "Rendez chaque indication de dissipation lisible d’un coup d’œil en combat.",
     PAGE_DISPELS_TITLE = "Logique de dissipation",
     PAGE_DISPELS_DESC = "Activez, priorisez et associez chaque type de dissipation à un clic.",
+    PAGE_HELP_TITLE = "Aide",
+    PAGE_HELP_DESC = "Toutes les commandes, quoi faire quand quelque chose cloche, et ce que Cleansive ne peut pas faire.",
+    HELP_SECTION_COMMANDS = "Commandes",
+    HELP_SECTION_TROUBLE = "Quand quelque chose cloche",
+    HELP_SECTION_ABOUT = "À propos",
+    HELP_COMMANDS_TEXT = [[/cleansive ou /cls - ouvrir ces réglages.
+/cleansive show, hide - afficher ou masquer la grille pour cette session.
+/cleansive enable, disable - activer ou désactiver Cleansive durablement.
+/cleansive reset - remettre la grille et les fenêtres à leur place d’origine.
+/cleansive test - ouvrir l’aperçu. Ajoutez un nombre de 1 à 40 pour le compléter, ou mixed, all, healthy pour choisir combien de cases s’allument.
+/cleansive macro - créer la macro de survol.
+/cleansive prio, skip, filters - ouvrir la liste de priorité, la liste d’exclusion, les filtres d’affliction. Ajoutez clear pour vider une liste.
+/cleansive pradd, skadd - ajouter votre cible actuelle à l’une de ces listes.
+/cleansive history - les afflictions que Cleansive a eu le droit de lire.
+/cleansive spells - les sorts de dissipation détectés, leur clic, et les types qu’ils couvrent.
+/cleansive order - l’ordre des cases en ce moment, et la raison de chacune.
+/cleansive soundtest - jouer le fichier d’alerte.
+/cleansive soundstatus - l’état du registre sonore natif. Ajoutez un identifiant de sort pour interroger une affliction.
+/cleansive cdstatus - la dernière recharge lue par Cleansive.
+/cleansive diag - le diagnostic de la session. diag copy ouvre un rapport copiable, diag reset remet les compteurs à zéro.
+/cleansive version - version, langue du client, classe.
+/cleansive setup - rouvrir l’assistant de première installation.]],
+    HELP_TROUBLE_TEXT = [[Une case s’allume mais aucun son. Demandez /cleansive soundstatus <identifiant>. Blizzard protège certains identifiants pendant le combat, et aucun addon ne peut nommer un sort qu’il n’a pas le droit de lire.
+Le son se déclenche une fois puis reste muet alors que l’affliction grandit. C’est voulu : l’alerte marque une application, pas une augmentation de charges. La même affliction resonne une fois qu’elle a totalement disparu et revient.
+Rien ne se passe quand je clique. Vérifiez que la case porte bien une unité : les cases d’aperçu ne lancent jamais rien. Hors aperçu, un clic en combat passe par le moteur sécurisé de Blizzard et ne peut pas être intercepté.
+Un réglage ne s’applique pas. Le combat verrouille les parties protégées de l’interface. La plaque à côté de la grille signale qu’un changement attend ; il s’applique à la fin du combat.
+La grille est vide. Votre spécialisation n’a peut-être aucun sort de dissipation, ce que la grille dit avec des mots. Sinon, regardez /cleansive spells.
+Les couleurs sont fausses. Cleansive ne possède pas les couleurs peintes par le moteur d’auras protégé. Elles appartiennent à Blizzard.]],
+    HELP_LICENSE = "Licence MIT - Copyright 2026 Ro",
+    HELP_REPORT = "Signaler un problème. Lancez d’abord /cleansive diag copy et joignez le bloc à votre message :",
+    HELP_DIAG_BUTTON = "Diagnostic copiable",
     PAGE_HISTORY_TITLE = "Historique des afflictions",
     PAGE_HISTORY_DESC = "Consultez les afflictions détectées et coupez les alertes indésirables.",
     PREVIEW_DURATION = "Durée de l’affliction",
