@@ -547,3 +547,50 @@ function NS:PrintAuraSoundStatus()
     if diagnostics.pending then self:Print(self.L.SOUND_STATUS_PENDING) end
     if diagnostics.error then self:Print(self.L.SOUND_STATUS_ERROR, diagnostics.error) end
 end
+
+-- A player reports "this affliction never makes a sound". The answer is one of
+-- five, and only the addon can tell which: the ID is not in the season list,
+-- its type is switched off, it is filtered, the budget ran out, or it is
+-- registered and something else is wrong. Answer with the one that applies.
+function NS:DescribeSpellSound(spellID)
+    spellID = tonumber(spellID)
+    if not spellID then return self.L.SOUND_QUERY_USAGE end
+
+    local auraType
+    for candidate, ids in pairs(self.KNOWN_DISPELLABLE_AURAS or {}) do
+        for _, id in ipairs(ids) do
+            if id == spellID then auraType = candidate break end
+        end
+        if auraType then break end
+    end
+    if not auraType then
+        return string.format(self.L.SOUND_QUERY_UNLISTED, spellID,
+            tostring(self.KNOWN_DISPELLABLE_AURAS_SEASON))
+    end
+
+    local typeLabel = self:GetTypeLabel(auraType)
+    if self.db.enabledTypes and self.db.enabledTypes[auraType] == false then
+        return string.format(self.L.SOUND_QUERY_TYPE_OFF, spellID, typeLabel)
+    end
+    local always = self.db.ignoredAlways or {}
+    local combat = self.db.ignoredCombat or {}
+    if always[spellID] or always[tostring(spellID)] then
+        return string.format(self.L.SOUND_QUERY_FILTERED, spellID, typeLabel)
+    end
+    if combat[spellID] or combat[tostring(spellID)] then
+        return string.format(self.L.SOUND_QUERY_FILTERED_COMBAT, spellID, typeLabel)
+    end
+
+    local units = {}
+    for key in pairs(self.auraSoundRegistered or {}) do
+        local unit, id = string.match(tostring(key), "^(.*):(%d+)$")
+        if id and tonumber(id) == spellID then units[#units + 1] = unit end
+    end
+    if #units == 0 then
+        return string.format(self.L.SOUND_QUERY_NOT_REGISTERED, spellID, typeLabel,
+            tonumber(self.auraSoundSkippedUnits) or 0)
+    end
+    table.sort(units)
+    return string.format(self.L.SOUND_QUERY_REGISTERED, spellID, typeLabel,
+        #units, table.concat(units, ", "))
+end

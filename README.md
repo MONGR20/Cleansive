@@ -1,12 +1,18 @@
-# Cleansive 1.5.47
+# Cleansive 1.5.48
 
 Cleansive is a standalone one-click cleansing addon for **World of Warcraft Retail 12.1** (`120100`). It provides a compact Decursive-style workflow with a dark, class-colored interface inspired by the clarity of Ellesmere UI. The interface follows the language of your WoW client, English or French; either can be picked from the General page at any time.
 
 ## Installation
 
 1. Exit World of Warcraft completely.
-2. Copy the `Cleansive` folder into `_retail_/Interface/AddOns/`.
+2. **Replace** the `Cleansive` folder in `_retail_/Interface/AddOns/`. Delete the
+   old folder first rather than merging: a merge leaves behind files a newer
+   version no longer loads, and they can still be read.
 3. Enable Cleansive, log in, and type `/cleansive`.
+
+Your settings live in `_retail_/WTF/Account/<account>/SavedVariables/Cleansive.lua`
+and survive an update. They are written when you log out or reload, so a client
+crash can lose the changes you made since the last one.
 
 Cleansive can run alongside Decursive. Its own commands are `/cleansive` and `/cls`; the familiar `/dcr` and `/decursive` aliases are enabled only when Decursive itself is disabled.
 
@@ -70,6 +76,11 @@ Red, blue, and orange identify the click to use. The optional L/R/C corner lette
 - `/cleansive skadd`: add the current player target to the skip list.
 - `/cleansive soundtest`: play the configured alert.
 - `/cleansive soundstatus`: show native sound-registration and performance diagnostics.
+- `/cleansive soundstatus <spell ID>`: say why one affliction is or is not announced.
+- `/cleansive spells`: list the cleansing spells Cleansive detected, with their click and the types they cover.
+- `/cleansive order`: print the current cell order and why each cell sits there.
+- `/cleansive version`: print the version, client language, and class.
+- `/cleansive prio clear`, `/cleansive skip clear`: empty a list without opening it.
 - `/cleansive diag`: report this session's diagnostics; `diag copy` opens a selected, copyable support report and `diag reset` clears the stored counters.
 - `/cleansive cdstatus`: show the last inspected cleansing-spell cooldown and display result.
 - `/cleansive history`: open the clickable affliction history.
@@ -105,8 +116,32 @@ combat. Avoid clicking empty grid positions while this mode is enabled.
 
 The hover-cleanse key also respects these restrictions: it casts through a secure action button on your mouseover, target, or player. It never asks Lua to select an afflicted unit during combat, because the secure engine evaluates targeting conditions only and cannot read auras.
 
+## Known limitations
+
+- An affliction whose spell ID Blizzard protects during combat cannot be
+  identified by any addon, so it can show its protected indicator without ever
+  making a sound.
+- A stack increase is not a new application. The native alert fires when an
+  affliction appears; going from two stacks to three is silent by design. The
+  same affliction can sound again once it has fully expired and returns.
+- Cleansive cannot recolor what the protected aura engine paints. The colors it
+  owns are Blizzard's.
+- The season spell list is calibrated by hand. A new season goes quiet on its
+  unlisted afflictions until the list is updated.
+
+## Reporting a problem
+
+Run `/cleansive diag copy`, copy the block, and paste it into your report. It
+carries the version, the active Retail 12.1 restrictions, the aura-engine state,
+the sound registry, deferred work and refusals -- and no character name. Add
+what you were doing, and whether it was a dungeon, a raid, or PvP.
+
+If one affliction never makes a sound, `/cleansive soundstatus <spell ID>` names
+the reason on its own.
+
 ## Recent changes
 
+- **1.5.48** - Cleansive can now say what it detected: the spells it found, why one affliction stays silent, and the order the cells are in.
 - **1.5.47** - the preview pads the grid to any size from 1 to 40, so a raid layout can be tuned without a raid. Preview cells are inert.
 - **1.5.46** - a sound alert is replaced without a silent gap: the new registration is created first, and a refused replacement keeps the working one. `/cleansive diag copy` opens a selected, copyable support report.
 - **1.5.45** - a styling pass asks the client for permission before its nine calls instead of after.

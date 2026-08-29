@@ -193,8 +193,6 @@ function NS:BuildRoster()
                 unit = "cleansivePreview" .. index,
                 guid = "cleansive-preview-" .. index,
                 displayName = string.format(self.L.TEST_UNIT, index),
-                group = math.min(RAID_GROUPS, math.ceil(index / 5)),
-                isPlayer = true,
                 isPet = false,
                 preview = true,
             }

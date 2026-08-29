@@ -6,6 +6,16 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.5.48
+
+- **`/cleansive spells` dit ce que Cleansive a détecté.** Chaque sort de dissipation trouvé, avec son identifiant, le clic auquel il est attaché — ou le fait qu’il doit être lancé à la main, sur soi ou en zone — et les types qu’il couvre. Un type que vous avez désactivé reste affiché et signalé comme tel, plutôt que de disparaître et de laisser croire que le sort ne le couvre pas. « Il ne détecte pas mon sort » est la remontée la plus fréquente pour ce genre d’addon, et la réponse était déjà dans des données que Cleansive calculait sans jamais les montrer.
+- **`/cleansive soundstatus <identifiant>` explique une affliction muette.** Il n’y a que cinq réponses possibles et Cleansive est le seul à savoir laquelle s’applique : l’identifiant n’est pas dans la liste de la saison, son type est désactivé, il est filtré, le budget d’enregistrement l’a écarté, ou il est bien enregistré et le problème est ailleurs. La réponse est lue dans le registre réel.
+- **`/cleansive order` montre l’ordre des cases et sa raison** : vous, la liste de priorité, l’ordre du groupe, ou l’aperçu.
+- **`/cleansive version`**, et **`prio clear` / `skip clear`** pour vider une liste sans ouvrir sa fenêtre.
+- Le README dit désormais ce que Cleansive **ne peut pas** faire, où vivent les réglages, pourquoi une augmentation de charges ne resonne pas, et quoi joindre à un signalement.
+- Deux garde-fous écrits pendant ce travail se sont révélés inatteignables et ont été retirés plutôt que gardés « au cas où ».
+- Tests : 792 à 810, vérifiés par réinjection de sept défauts.
+
 ## 1.5.47
 
 - **L’aperçu peut enfin montrer un raid.** Le mode test n’affichait que les unités réellement présentes : seul, il montrait une case. La grille se complète maintenant jusqu’au nombre demandé (1 à 40) avec des cases inertes, ce qui permet de régler la taille, l’espacement et la position d’une grille de raid — et de la prendre en capture — sans être en raid. Boutons 1 / 5 / 10 / 20 / 40 dans **Apparence → Aperçu en direct**, ou `/cleansive test 20`.

@@ -731,12 +731,20 @@ function NS:HandleSlash(message)
         end
     elseif command == "macro" then
         self:CreateMouseoverMacro()
+    elseif command == "spells" then
+        self:PrintSpellReport()
+    elseif command == "version" then
+        self:Print(string.format(self.L.VERSION_LINE, tostring(self.version),
+            tostring(GetLocale and GetLocale() or "?"),
+            tostring(self.playerClass or "?")))
+    elseif command == "order" then
+        self:PrintProcessingOrder()
     elseif command == "prio" or command == "priority" then
-        self:ShowList("priority")
+        if rest == "clear" then self:ClearList("priority") else self:ShowList("priority") end
     elseif command == "pradd" then
         self:AddTargetToList("priority")
     elseif command == "skip" then
-        self:ShowList("skip")
+        if rest == "clear" then self:ClearList("skip") else self:ShowList("skip") end
     elseif command == "skadd" then
         self:AddTargetToList("skip")
     elseif command == "filters" or command == "filter" then
@@ -753,7 +761,11 @@ function NS:HandleSlash(message)
     elseif command == "soundtest" then
         self:PlayAfflictionAlert(true)
     elseif command == "soundstatus" then
-        self:PrintAuraSoundStatus()
+        if rest ~= "" then
+            self:Print(self:DescribeSpellSound(rest))
+        else
+            self:PrintAuraSoundStatus()
+        end
     elseif command == "cdstatus" then
         local status = self.cooldownDiagnostics
         if not status then
@@ -985,4 +997,25 @@ end
 
 function Cleansive_AddonCompartmentOnLeave()
     if GameTooltip then GameTooltip:Hide() end
+end
+
+function NS:PrintProcessingOrder()
+    local roster = self.roster or {}
+    if #roster == 0 then
+        self:Print(self.L.ORDER_EMPTY)
+        return
+    end
+    self:Print(self.L.ORDER_TITLE)
+    for index, descriptor in ipairs(roster) do
+        local reason = self.L.ORDER_REASON_GROUP
+        if descriptor.preview then
+            reason = self.L.ORDER_REASON_PREVIEW
+        elseif descriptor.isPlayer then
+            reason = self.L.ORDER_REASON_SELF
+        elseif self:PriorityRank(descriptor) < 1000 then
+            reason = self.L.ORDER_REASON_PRIORITY
+        end
+        self:Print(string.format(self.L.ORDER_LINE, index,
+            tostring(descriptor.displayName or descriptor.unit), reason))
+    end
 end

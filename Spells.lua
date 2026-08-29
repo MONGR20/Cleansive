@@ -279,3 +279,44 @@ function NS:IsSpellInRange(def, unit)
     end
     return true
 end
+
+-- "It does not detect my spell" is the report an addon like this gets most
+-- often, and the answer always sits in data Cleansive already worked out.
+-- Show that data instead of asking the player to describe their talents.
+function NS:BuildSpellReport()
+    local lines = {}
+    local slotByID = {}
+    for slot, def in ipairs(self.clickSpells or {}) do slotByID[def.id] = slot end
+    for _, def in ipairs(self.knownSpells or {}) do
+        local slot = slotByID[def.id]
+        local action = self.L.SPELL_MANUAL
+        if slot == 1 then action = self.L.LEFT
+        elseif slot == 2 then action = self.L.RIGHT
+        elseif slot == 3 then action = self.L.CTRL_LEFT
+        elseif def.selfOnly then action = self.L.SPELL_SELF_ONLY
+        elseif def.untargeted then action = self.L.SPELL_AREA
+        end
+        local types = {}
+        for _, dispelType in ipairs(def.activeTypes or {}) do
+            local label = self:GetTypeLabel(dispelType)
+            if self.db and self.db.enabledTypes and self.db.enabledTypes[dispelType] == false then
+                label = string.format(self.L.SPELL_TYPE_OFF, label)
+            end
+            types[#types + 1] = label
+        end
+        lines[#lines + 1] = string.format(self.L.SPELL_LINE,
+            tostring(def.name or "?"), tostring(def.id), action,
+            #types > 0 and table.concat(types, ", ") or self.L.SPELL_NO_TYPE)
+    end
+    return lines
+end
+
+function NS:PrintSpellReport()
+    local lines = self:BuildSpellReport()
+    if #lines == 0 then
+        self:Print(self.L.SPELLS_NONE)
+        return
+    end
+    self:Print(self.L.SPELLS_TITLE)
+    for _, line in ipairs(lines) do self:Print(line) end
+end
