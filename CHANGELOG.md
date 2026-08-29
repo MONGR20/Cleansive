@@ -6,6 +6,13 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.6.6
+
+- **Le son d'alerte se choisit parmi les sons du jeu**, par `/cleansive sound`. Les identifiants sont LUS dans `SOUNDKIT` au moment ou on en a besoin, jamais recopies : un identifiant invente ne leve pas, il ne joue rien — et une alerte silencieuse serait pire que le son juge trop aigu, qui etait la demande d'origine. Un son que votre client ne connait pas disparait donc de la liste, et un choix devenu introuvable retombe sur le fichier livre.
+- **Une limite dite plutot que decouverte.** Le registre d'alertes de Blizzard ne prend qu'un fichier son, et un son integre du jeu s'adresse par identifiant : les afflictions que le client protege gardent donc le son livre. L'addon le dit au moment du choix, une fois, plutot que de laisser decouvrir deux sons differents.
+- **Le reglage n'a pas encore de bouton.** Les pages de reglages sont pleines : la page General n'a plus une seule rangee libre, et la page Apparence n'a accueilli sa quatrieme qu'en rendant huit pixels sur le cadre d'apercu. Ajouter un controle de plus demande d'abord de rendre les pages defilantes.
+- Tests : 1 239 a 1 255.
+
 ## 1.6.5
 
 - **La couleur de classe sur les cases au repos.** Demande d'un joueur : reconnaitre qui est qui sans lire un nom, que les petites cases ne peuvent de toute facon pas afficher. Nouvelle option sur la page Apparence, **eteinte par defaut**. Une case affligee n'est jamais concernee : sa couleur dit le type de dissipation, et c'est la seule raison d'etre de la grille. La couleur est dessinee a l'opacite de repos que vous avez choisie — montez-la si vous voulez que les classes ressortent.

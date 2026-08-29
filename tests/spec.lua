@@ -5648,7 +5648,7 @@ do
     -- une qui porte du personnel, c'est ici que ca casse.
     local allowed = {}
     for _, key in ipairs({
-        "enabled", "locked", "showPets", "showFocus", "showNames", "classColorCells", "showTooltips",
+        "enabled", "locked", "showPets", "showFocus", "showNames", "classColorCells", "alertSound", "showTooltips",
         "sound", "failureSound", "showCooldown", "showDuration", "showStacks",
         "showClickHints", "autoHide", "afflictedOnly", "groupManualTypes",
         "showSolo", "showParty", "showRaid", "controlWarning",
@@ -5740,6 +5740,92 @@ do
         truthy(trouble:find("diag copy", 1, true),
             "depannage : et la commande a lancer avant est nommee en " .. language)
     end
+end
+
+--------------------------------------------------------------------------
+-- 1.6.6 : choisir le son d'alerte parmi les sons du jeu
+--
+-- Demande d'un joueur : il trouve l'alerte livree trop aigue. Les identifiants
+-- sont lus dans SOUNDKIT au moment ou on en a besoin, jamais recopies en dur :
+-- un identifiant invente ne leve pas, il ne joue rien -- et une alerte
+-- silencieuse serait pire que le son juge trop aigu.
+--------------------------------------------------------------------------
+do
+    freshProfile("PALADIN")
+    knowSpells(4987)
+    NS:UpdateSpells()
+    NS.db.sound = true
+    NS.enabled = true
+    NS.testMode = false
+    NS.gridManuallyHidden = false
+
+    local realFile, realKit = PlaySoundFile, PlaySound
+    local playedFile, playedKit
+    _G.PlaySoundFile = function(file) playedFile = file return true end
+    _G.PlaySound = function(kit) playedKit = kit return true end
+
+    -- Le bouchon ne connait que deux de ces sons : la liste doit refuser les
+    -- autres plutot que d'offrir un choix qui ne jouerait rien.
+    local offered = {}
+    for _, entry in ipairs(NS:AvailableAlertSounds()) do offered[entry.key] = true end
+    truthy(offered.DEFAULT, "son : le fichier livre est toujours propose")
+    truthy(offered.RAID_WARNING, "son : un son que le client connait est propose")
+    falsy(offered.READY_CHECK, "son : un son que ce client ignore n'est PAS propose")
+    falsy(offered.ALARM, "son : ni celui-la")
+
+    -- Par defaut, c'est le fichier livre.
+    NS.db.alertSound = "DEFAULT"
+    falsy(NS:AlertSoundKit(), "son : par defaut, aucun identifiant, donc le fichier")
+    playedFile, playedKit = nil, nil
+    NS:PlayAfflictionAlert(true)
+    eq(playedFile, NS.afflictionSoundFile, "son : et c'est bien le fichier qui est joue")
+    falsy(playedKit, "son : sans passer par un identifiant")
+
+    -- Un son choisi se joue par son identifiant, lu chez le client.
+    truthy(NS:SetAlertSound("RAID_WARNING"), "son : le choix est accepte")
+    -- Verifier contre SOUNDKIT.RAID_WARNING ne prouvait rien : recopier 8959 en
+    -- dur donnait la meme reponse, et l'injection restait verte. La valeur est
+    -- donc changee ICI : seule une lecture au moment de l'appel peut suivre.
+    local trueKit = SOUNDKIT.RAID_WARNING
+    SOUNDKIT.RAID_WARNING = 424242
+    eq(NS:AlertSoundKit(), 424242,
+        "son : l'identifiant est LU chez le client, pas recopie en dur")
+    SOUNDKIT.RAID_WARNING = trueKit
+    playedFile, playedKit = nil, nil
+    NS:PlayAfflictionAlert(true)
+    eq(playedKit, SOUNDKIT.RAID_WARNING, "son : c'est lui qui est joue")
+    falsy(playedFile, "son : le fichier n'est plus joue par-dessus")
+
+    -- Un choix devenu introuvable -- profil venu d'un client qui connaissait ce
+    -- son -- doit retomber sur le fichier, jamais sur le silence.
+    NS.db.alertSound = "READY_CHECK"
+    falsy(NS:AlertSoundKit(), "son : un choix introuvable ne rend aucun identifiant")
+    playedFile, playedKit = nil, nil
+    NS:PlayAfflictionAlert(true)
+    eq(playedFile, NS.afflictionSoundFile, "son : il retombe sur le fichier livre")
+
+    -- Et si le client refuse de jouer l'identifiant, le fichier prend le relais.
+    NS.db.alertSound = "RAID_WARNING"
+    _G.PlaySound = function() return false end
+    playedFile = nil
+    NS:PlayAfflictionAlert(true)
+    eq(playedFile, NS.afflictionSoundFile, "son : un identifiant refuse retombe sur le fichier")
+
+    -- La commande accepte le nom en minuscules et refuse ce qui n'existe pas.
+    _G.PlaySound = function(kit) playedKit = kit return true end
+    NS.db.alertSound = "DEFAULT"
+    NS:HandleSlash("sound raid_warning")
+    eq(NS.db.alertSound, "RAID_WARNING", "son : la commande accepte le nom en minuscules")
+    NS:HandleSlash("sound pasunson")
+    eq(NS.db.alertSound, "RAID_WARNING", "son : un nom inconnu ne change rien")
+
+    -- La reparation d'une valeur abimee n'est pas re-testee ici : le reglage
+    -- est declare dans TRANSFER_FIELDS, et un test existant verifie qu'AUCUN
+    -- reglage transferable n'echappe a la reparation. Le redire ici serait une
+    -- assertion qui ne peut pas tomber.
+
+    _G.PlaySoundFile, _G.PlaySound = realFile, realKit
+    NS.db.alertSound = "DEFAULT"
 end
 
 --------------------------------------------------------------------------

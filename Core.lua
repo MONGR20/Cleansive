@@ -112,6 +112,7 @@ local defaults = {
     showFocus = true,
     showNames = false,
     classColorCells = false,
+    alertSound = "DEFAULT",
     showTooltips = true,
     sound = true,
     soundChannel = "Master",
@@ -474,6 +475,71 @@ function NS:UpdateCooldownOverlayVisibility(combatOverride)
     overlay:SetShown(visible and true or false)
 end
 
+-- Les sons integres sont lus dans SOUNDKIT AU MOMENT ou on en a besoin, jamais
+-- recopies en dur. Un identifiant invente ne leve pas : il ne joue rien. Une
+-- alerte silencieuse serait pire que le son juge trop aigu, qui est la demande
+-- d'origine. Un son que ce client ne connait pas disparait donc de la liste.
+NS.ALERT_SOUNDS = {
+    { key = "DEFAULT" },
+    { key = "RAID_WARNING", kit = "RAID_WARNING" },
+    { key = "READY_CHECK", kit = "READY_CHECK" },
+    { key = "QUEST_FAILED", kit = "IG_QUEST_FAILED" },
+    { key = "ALARM", kit = "ALARM_CLOCK_WARNING_3" },
+}
+
+function NS:AvailableAlertSounds()
+    local list = {}
+    for _, entry in ipairs(self.ALERT_SOUNDS) do
+        if not entry.kit then
+            list[#list + 1] = entry
+        elseif type(SOUNDKIT) == "table" and type(SOUNDKIT[entry.kit]) == "number" then
+            list[#list + 1] = entry
+        end
+    end
+    return list
+end
+
+-- nil signifie « le fichier livre ». Un choix devenu introuvable -- profil
+-- importe d'un client qui connaissait ce son, ou nom retire par Blizzard --
+-- retombe sur ce fichier plutot que de se taire.
+function NS:AlertSoundKit()
+    local chosen = self.db and self.db.alertSound
+    if not chosen or chosen == "DEFAULT" then return nil end
+    for _, entry in ipairs(self:AvailableAlertSounds()) do
+        if entry.key == chosen and entry.kit then return SOUNDKIT[entry.kit] end
+    end
+    return nil
+end
+
+function NS:SetAlertSound(key)
+    for _, entry in ipairs(self:AvailableAlertSounds()) do
+        if entry.key == key then
+            self.db.alertSound = key
+            self:Print(self.L.ALERT_SOUND_SET, self.L["ALERT_SOUND_" .. key] or key)
+            -- Le registre natif ne prend qu'un NOM DE FICHIER : un son integre
+            -- s'adresse par identifiant et ne peut pas y entrer. Les afflictions
+            -- que Blizzard protege gardent donc le son livre, et il vaut mieux
+            -- le dire une fois que de laisser decouvrir deux sons differents.
+            if key ~= "DEFAULT" and self:IsNativeAuraSoundAvailable() then
+                self:Print(self.L.ALERT_SOUND_NATIVE_NOTE)
+            end
+            self:PlayAfflictionAlert(true)
+            if self.RefreshOptions then self:RefreshOptions() end
+            return true
+        end
+    end
+    return false
+end
+
+function NS:PrintAlertSounds()
+    local current = self.db and self.db.alertSound or "DEFAULT"
+    for _, entry in ipairs(self:AvailableAlertSounds()) do
+        local name = self.L["ALERT_SOUND_" .. entry.key] or entry.key
+        self:Print(string.format("%s%s  -  /cleansive sound %s",
+            entry.key == current and "> " or "   ", name, string.lower(entry.key)))
+    end
+end
+
 function NS:PlayAfflictionAlert(preview)
     if not self.db or not self.db.sound or not self.enabled then return false end
     -- Une alerte d'essai est un geste du joueur : elle se joue toujours. Une
@@ -487,7 +553,12 @@ function NS:PlayAfflictionAlert(preview)
     self.lastAfflictionSound = now
 
     local played = false
-    if PlaySoundFile then
+    local kit = self:AlertSoundKit()
+    if kit and PlaySound then
+        local ok, willPlay = pcall(PlaySound, kit, self.db.soundChannel or "Master")
+        played = ok and willPlay ~= false
+    end
+    if not played and PlaySoundFile then
         local ok, willPlay = pcall(PlaySoundFile, self.afflictionSoundFile, self.db.soundChannel or "Master")
         played = ok and willPlay ~= false
     end
@@ -905,6 +976,10 @@ function NS:HandleSlash(message)
         self:SetEnabled(false)
     elseif command == "soundtest" then
         self:PlayAfflictionAlert(true)
+    elseif command == "sound" then
+        if rest == "" or not self:SetAlertSound(string.upper(rest)) then
+            self:PrintAlertSounds()
+        end
     elseif command == "alerts" then
         if rest == "clear" then self:ClearAlertDecisions() else self:PrintAlertDecisions() end
     elseif command == "coverage" then
