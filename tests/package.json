@@ -1,0 +1,13 @@
+{
+  "name": "cleansive-tests",
+  "private": true,
+  "version": "1.0.0",
+  "type": "commonjs",
+  "dependencies": {
+    "fengari": "^0.1.5"
+  },
+  "scripts": {
+    "test": "node run.js"
+  },
+  "description": "Tests de non-regression de l'addon Cleansive, executes dans une VM Lua (fengari)."
+}

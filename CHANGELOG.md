@@ -6,6 +6,15 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.5.65
+
+- **Le harnais de tests vit désormais dans le dépôt.** Il vivait à côté, ce qui voulait dire deux copies possibles d’une même suite — et la correction finit toujours par atterrir sur celle que personne ne lance. La CI GitHub exécute maintenant exactement la même suite que moi, sur exactement les mêmes fichiers.
+- **La chaîne de publication est coupée en deux.** Le travail de vérification ne tient **aucun** secret de publication : un test capable d’atteindre la clé CurseForge serait un test capable de la divulguer. Et rien ne peut publier sans être passé par lui — une suite rouge ne doit jamais atteindre une page de téléchargement.
+- **Un treizième contrôle statique lit le workflow lui-même** et vérifie ces deux règles. Elles sont faciles à défaire d’une ligne distraite, et invisibles une fois défaites.
+- Le contrôle d’archive lit désormais les exclusions de  au lieu d’en tenir une seconde liste à côté, qui aurait divergé au premier ajout.
+- Tests : 1127, plus un contrôle statique.
+
+
 ## 1.5.64
 
 - **Le rapport porte la révision exacte du code**, pas seulement le numéro de version : deux archives d’une même version peuvent différer, et sans la révision un signalement ne désigne aucun état du dépôt. Sur une copie de travail le champ vaut encore le jeton de l’empaqueteur — il n’est alors **pas affiché**, parce qu’un artefact de fabrication n’est pas une information.

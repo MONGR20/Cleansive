@@ -1,15 +1,15 @@
-# Publishes Cleansive to CurseForge and Wago when a version tag is pushed.
+# Verifies Cleansive, then publishes it to CurseForge and Wago on a version tag.
 #
 #   git tag -a v1.5.4 -m "Cleansive 1.5.4"
 #   git push origin v1.5.4
 #
-# The packager reads .pkgmeta at the repository root, and takes the project
-# identifiers from Cleansive/Cleansive.toc (X-Curse-Project-ID, X-Wago-ID).
-# It also rewrites ## Version to match the tag, so keep the two in step.
+# Two jobs on purpose. The first one runs the test harness and holds no
+# publishing secret at all: a test that could reach the CurseForge key would be
+# a test that could leak it. The second one publishes, and only runs when the
+# first one is green -- a red suite must never reach a download page.
 #
-# Run it by hand from the Actions tab to check the whole pipeline without
-# publishing: leave "upload" unticked and the packager builds the zip and
-# stops there.
+# Run it by hand from the Actions tab to exercise the whole pipeline without
+# publishing: leave "upload" unticked and the packager builds the zip and stops.
 
 name: Release
 
@@ -25,11 +25,38 @@ on:
         default: false
 
 permissions:
-  contents: write        # needed to attach the zip to a GitHub release
+  contents: read
 
 jobs:
-  release:
+  verify:
     runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install the harness dependencies
+        working-directory: tests
+        run: npm ci
+
+      # The harness reads the addon folder it is given. Here that is the
+      # repository root, which is also what the packager will wrap.
+      - name: Run the tests and the static checks
+        working-directory: tests
+        run: node run.js ..
+
+  publish:
+    needs: verify
+    # A manual run only publishes when the box was ticked. A tag push always
+    # does -- but still only after verify has passed.
+    if: github.event_name == 'push' || inputs.upload == true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write        # needed to attach the zip to a GitHub release
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -40,11 +67,24 @@ jobs:
 
       - name: Package and upload
         uses: BigWigsMods/packager@v2
-        # -d tells the packager to build but skip every upload. A tag push
-        # always uploads; a manual run only does when the box was ticked.
-        with:
-          args: ${{ (github.event_name == 'workflow_dispatch' && inputs.upload != true) && '-d' || '' }}
         env:
           CF_API_KEY: ${{ secrets.CF_API_KEY }}
           WAGO_API_TOKEN: ${{ secrets.WAGO_API_TOKEN }}
           GITHUB_OAUTH: ${{ secrets.GITHUB_TOKEN }}
+
+  build-only:
+    needs: verify
+    # The dry run: builds the zip and uploads nothing. It exists so the whole
+    # pipeline can be exercised on a branch, with no secret in reach.
+    if: github.event_name == 'workflow_dispatch' && inputs.upload != true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Package without uploading
+        uses: BigWigsMods/packager@v2
+        with:
+          args: -d
