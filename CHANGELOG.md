@@ -6,6 +6,14 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.5.67
+
+- **L’aperçu des réglages mentait sur deux points.** Il affichait la lettre de clic et le chiffre de recharge même quand vous les aviez coupés : il promettait une case que la vraie grille ne dessine pas. Un aperçu qui ne suit pas les réglages est pire qu’aucun aperçu, parce qu’il fait douter de la grille.
+- **Le dépannage dit de capturer le diagnostic AVANT un .** Un rechargement remet tout en place et efface justement l’état qu’on voulait montrer.
+- Un test écrit dans ce lot a été **retiré** : il vérifiait que le coin choisi de la grille ne bouge pas quand le groupe grandit, mais le harnais ne donne aucune géométrie aux cadres — rien ne pouvait déplacer l’ancre et le test passait quoi qu’on injecte. Un test qui ne peut pas rougir vaut moins que pas de test : il occupe la place de celui qui manque. Ce point rejoint les vérifications à faire en jeu.
+- Tests : 1139 à 1146.
+
+
 ## 1.5.66
 
 - **** sort le catalogue des pertes de contrôle observées en un bloc, avec le lieu et ce que vous surveillez. Copier ne vide rien : on copie avant de vider, jamais l’inverse.

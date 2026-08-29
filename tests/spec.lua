@@ -5387,6 +5387,58 @@ do
 end
 
 --------------------------------------------------------------------------
+-- 1.5.67 : verrouiller ce qui est deja juste
+--------------------------------------------------------------------------
+do
+    freshProfile("PALADIN")
+    knowSpells(4987)
+    NS:UpdateSpells()
+    NS:CreateGrid()
+
+    -- #97 (le coin choisi doit rester fixe quand le groupe grandit) a ete
+    -- ECARTE d'ici sciemment : le mock ne donne aucune geometrie aux cadres,
+    -- donc rien ne peut deplacer l'ancre et le test passait quoi qu'on injecte.
+    -- Un test qui ne peut pas rougir vaut moins que pas de test : il occupe la
+    -- place de celui qui manque. Ce point rejoint les verifications a faire en
+    -- jeu, avec les autres questions d'affichage.
+
+    ----------------------------------------------------------------------
+    -- #130 : l'apercu suit chaque reglage separement
+    ----------------------------------------------------------------------
+    NS:CreateOptions()
+    local cell = NS.uxPreview and NS.uxPreview.cells and NS.uxPreview.cells[1]
+    truthy(cell, "apercu : une case d'apercu existe dans les options")
+
+    NS.db.showClickHints = true
+    NS:RefreshCellPreview()
+    local withHints = cell.label:GetText()
+    NS.db.showClickHints = false
+    NS:RefreshCellPreview()
+    truthy(withHints ~= cell.label:GetText(),
+        "apercu : la lettre de clic suit son propre reglage")
+
+    NS.db.showCooldown = true
+    NS:RefreshCellPreview()
+    local withCooldown = cell.cooldown:GetText()
+    NS.db.showCooldown = false
+    NS:RefreshCellPreview()
+    truthy(withCooldown ~= cell.cooldown:GetText(),
+        "apercu : le chiffre de recharge suit le sien, independamment")
+    NS.db.showCooldown = true
+
+    ----------------------------------------------------------------------
+    -- #233 : dire de capturer AVANT le rechargement
+    ----------------------------------------------------------------------
+    for _, language in ipairs({ "enUS", "frFR" }) do
+        local trouble = NS.LOCALES[language].HELP_TROUBLE_TEXT
+        truthy(trouble:find("reload", 1, true) or trouble:find("rechargement", 1, true),
+            "depannage : le piege du rechargement est dit en " .. language)
+        truthy(trouble:find("diag copy", 1, true),
+            "depannage : et la commande a lancer avant est nommee en " .. language)
+    end
+end
+
+--------------------------------------------------------------------------
 -- report
 --------------------------------------------------------------------------
 local lines = {}

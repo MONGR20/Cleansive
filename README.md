@@ -1,4 +1,4 @@
-# Cleansive 1.5.66
+# Cleansive 1.5.67
 
 Cleansive is a standalone one-click cleansing addon for **World of Warcraft Retail 12.1** (`120100`). It provides a compact Decursive-style workflow with a dark, class-colored interface inspired by the clarity of Ellesmere UI. The interface follows the language of your WoW client, English or French; either can be picked from the General page at any time.
 
@@ -175,6 +175,7 @@ the reason on its own.
 
 ## Recent changes
 
+- **1.5.67** - the settings preview stops promising a click letter and a cooldown number the real grid will not draw.
 - **1.5.66** - the observed loss-of-control catalogue can be copied out, and a locked-down invariant now guards what a shared profile may carry.
 - **1.5.65** - the test harness now lives in the repository, and the release pipeline verifies before it publishes.
 - **1.5.64** - the report now carries what startup cost, which engine drives which cell, and the exact build it came from.

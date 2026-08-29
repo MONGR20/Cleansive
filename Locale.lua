@@ -201,7 +201,8 @@ A sound fires once and stays quiet as the affliction grows. That is by design: t
 Nothing happens when I click. Check that the cell carries a unit: preview cells never cast. Outside the preview, a click during combat goes through Blizzard's secure engine and cannot be intercepted.
 A setting does not apply. Combat locks the protected parts of the interface. The plate next to the grid says a change is waiting; it applies when you leave combat.
 The grid is empty. Your specialization may have no cleansing spell, which the grid says in words. Otherwise check /cleansive spells.
-Colors are wrong. Cleansive does not own the colors the protected aura engine paints. Those are Blizzard's.]],
+Colors are wrong. Cleansive does not own the colors the protected aura engine paints. Those are Blizzard's.
+Before reporting a start-up problem, run /cleansive diag copy BEFORE any /reload. Reloading puts everything back in place and erases the very state you meant to show.]],
     HELP_LICENSE = "MIT License - Copyright 2026 Ro",
     HELP_REPORT = "Report a problem. Run /cleansive diag copy first and paste the block with your report:",
     HELP_DIAG_BUTTON = "Copyable diagnostic",
@@ -587,7 +588,8 @@ Le son se déclenche une fois puis reste muet alors que l’affliction grandit. 
 Rien ne se passe quand je clique. Vérifiez que la case porte bien une unité : les cases d’aperçu ne lancent jamais rien. Hors aperçu, un clic en combat passe par le moteur sécurisé de Blizzard et ne peut pas être intercepté.
 Un réglage ne s’applique pas. Le combat verrouille les parties protégées de l’interface. La plaque à côté de la grille signale qu’un changement attend ; il s’applique à la fin du combat.
 La grille est vide. Votre spécialisation n’a peut-être aucun sort de dissipation, ce que la grille dit avec des mots. Sinon, regardez /cleansive spells.
-Les couleurs sont fausses. Cleansive ne possède pas les couleurs peintes par le moteur d’auras protégé. Elles appartiennent à Blizzard.]],
+Les couleurs sont fausses. Cleansive ne possède pas les couleurs peintes par le moteur d’auras protégé. Elles appartiennent à Blizzard.
+Avant de signaler un problème de démarrage, lancez /cleansive diag copy AVANT un /reload. Un rechargement remet tout en place et efface justement l’état que vous vouliez montrer.]],
     HELP_LICENSE = "Licence MIT - Copyright 2026 Ro",
     HELP_REPORT = "Signaler un problème. Lancez d’abord /cleansive diag copy et joignez le bloc à votre message :",
     HELP_DIAG_BUTTON = "Diagnostic copiable",

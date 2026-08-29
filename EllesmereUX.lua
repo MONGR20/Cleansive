@@ -1414,7 +1414,7 @@ function NS:RefreshCellPreview()
             cell.bg:SetColorTexture(colors[index][1], colors[index][2], colors[index][3], 0.90)
             setEdges(cell.edges, colors[index][1], colors[index][2], colors[index][3], 1)
             cell.typeMark:SetColorTexture(colors[index][1], colors[index][2], colors[index][3], 1)
-            cell.cooldown:SetText(index == 1 and "4.2" or "")
+            cell.cooldown:SetText((self.db.showCooldown and index == 1) and "4.2" or "")
             if cell.duration and cell.duration.SetCooldown then
                 local drawn = pcall(cell.duration.SetCooldown, cell.duration,
                     GetTime() - (index * 2), 18, 1)
@@ -1430,7 +1430,7 @@ function NS:RefreshCellPreview()
             if cell.duration then cell.duration:Clear() end
         end
         cell:SetSize(previewSize, previewSize)
-        cell.label:SetText(labels[index])
+        cell.label:SetText(self.db.showClickHints and labels[index] or "")
     end
     local maps = {}
     for index = 1, 3 do
