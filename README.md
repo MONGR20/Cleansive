@@ -1,4 +1,4 @@
-# Cleansive 1.5.43
+# Cleansive 1.5.46
 
 Cleansive is a standalone one-click cleansing addon for **World of Warcraft Retail 12.1** (`120100`). It provides a compact Decursive-style workflow with a dark, class-colored interface inspired by the clarity of Ellesmere UI. The interface follows the language of your WoW client, English or French; either can be picked from the General page at any time.
 
@@ -64,7 +64,7 @@ Red, blue, and orange identify the click to use. The optional L/R/C corner lette
 - `/cleansive skadd`: add the current player target to the skip list.
 - `/cleansive soundtest`: play the configured alert.
 - `/cleansive soundstatus`: show native sound-registration and performance diagnostics.
-- `/cleansive diag`: report this session's diagnostics; `diag reset` clears them.
+- `/cleansive diag`: report this session's diagnostics; `diag copy` opens a selected, copyable support report and `diag reset` clears the stored counters.
 - `/cleansive cdstatus`: show the last inspected cleansing-spell cooldown and display result.
 - `/cleansive history`: open the clickable affliction history.
 - `/cleansive setup`: reopen the setup assistant.
@@ -101,62 +101,14 @@ The hover-cleanse key also respects these restrictions: it casts through a secur
 
 ## Recent changes
 
+- **1.5.46** - a sound alert is replaced without a silent gap: the new registration is created first, and a refused replacement keeps the working one. `/cleansive diag copy` opens a selected, copyable support report.
+- **1.5.45** - a styling pass asks the client for permission before its nine calls instead of after.
+- **1.5.44** - mouse button 4 reports its own cooldown.
 - **1.5.43** - mouse buttons 4 and 5 mirror the two awkward modifier combinations.
 - **1.5.42** - the six 12.1 restriction types are recorded, and the client's own refusals are logged by name.
-- **1.5.41** - nothing visible is left behind when the client refuses a styling pass.
-- **1.5.40** - one refused call no longer takes the whole styling pass with it.
-- **1.5.39** - a failed sound registration is retried; the two status plates stack instead of overlapping.
 
 The full history, with the reasoning behind each change, is in [CHANGELOG.md](CHANGELOG.md).
-## 1.5.34 changes
 
-- The pending plate no longer appears for deferrals the game raised on its own. It announces only a change you asked for.
-
-## 1.5.33 changes
-
-- One affliction missing from the seasonal sound list was found in a recorded session and added.
-
-## 1.5.32 changes
-
-- In a raid, the cell order starts at your own group and wraps, so two dispellers no longer reach for the same cell first. The priority list still comes before it.
-
-## 1.5.31 changes
-
-- Auras that punish the dispeller carry a warning ring and a `!`. The click stays available; it just cannot be made by reflex any more.
-
-## 1.5.30 changes
-
-- The priority chevrons point in the direction they actually move things.
-- The live preview scales its whole content with the cell, so a 40 px cell no longer overlaps its own labels.
-
-## 1.5.29 changes
-
-- Every slider shows its value; opacity reads as a percentage.
-- Clearer labels for the cleanse cooldown and the sound alert limit.
-- A real empty state for the history, and pagination only when there is more than one page.
-- Drawn priority arrows with visible disabled states.
-
-## 1.5.28 changes
-
-- A change deferred by combat now shows a plate next to the grid until it is applied.
-- A specialization with no cleansing spell says so instead of showing cells that can never light up.
-
-## 1.5.27 changes
-
-- A pass that fails on both a retired and an active dispel type now names the active one in the engine message.
-
-## 1.5.26 changes
-
-- A superseded aura-engine retry timer can no longer release the guard held by a newer one.
-- A character left with no dispel type still retries the neutralisation of its retired slots.
-- Cleanup failures get their own diagnostic line instead of reporting an incomplete engine at full slot count.
-
-## 1.5.25 changes
-
-- Retries are scheduled, not merely allowed. 1.5.24 set a flag and waited for some other spell event to call the reconciliation again, so a single transient failure could leave cells on the Lua fallback for the rest of the session. A bounded timer now drives them, guarded by a generation so a change of type set cancels the pending one, and deferring to `PLAYER_REGEN_ENABLED` if it fires during combat.
-- A failed neutralisation counts. Readiness only looked at the wanted types, so a retired type left analysing auras raised no retry at all. The pass now reports two outcomes: whether the cell can use the engine, and whether the pass was complete.
-- The retry budget starts again for each new type set, and the warning prints once per generation rather than once per attempt -- four identical lines in the chat frame, where the 1.5.24 notes promised one. The slot counter adds every configured slot instead of only whole ready cells, which could report `0/246` while 164 slots were live.
-- Tests: 465 to 470. Writing the autonomous-recovery test immediately found a fifth defect of my own: the single-timer guard blocked rescheduling when the generation changed, so the stale timer no-opped and no new one was ever armed.
 ## Français
 
 Cleansive est un addon autonome de dissipation en un clic pour WoW Retail 12.1. Lors d’une nouvelle installation, l’interface suit automatiquement la langue du client WoW : français ou anglais. Vous pouvez en changer depuis la page **Général** de `/cleansive`, puis taper `/reload` pour actualiser les libellés déjà créés.

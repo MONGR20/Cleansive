@@ -247,10 +247,24 @@ function NS:RefreshAuraSoundRegistrations(reason)
 
     local startedAt = nowMilliseconds()
     local spellIDs, units, fingerprint, registrations = self:BuildAuraSoundPlan()
+
+    -- A replacement handle is normally removed immediately when its old
+    -- registration could not be retired. Keep the exceptional refusal here so
+    -- the next refresh can finish the cleanup instead of leaking a duplicate
+    -- native alert for the rest of the session.
+    self.auraSoundOrphanHandles = self.auraSoundOrphanHandles or {}
+    if self:IsNativeAuraSoundAvailable() then
+        for handle in pairs(self.auraSoundOrphanHandles) do
+            local ok, result = pcall(C_UnitAuras.RemoveAuraSound, handle)
+            if ok and result ~= false then self.auraSoundOrphanHandles[handle] = nil end
+        end
+    end
+
     local previous = self.auraSoundDiagnostics
     if fingerprint == self.auraSoundFingerprint and previous
         and previous.registered == previous.attempted then
         local handleCount = tableCount(self.auraSoundHandles)
+            + tableCount(self.auraSoundOrphanHandles)
         if handleCount == previous.registered then
             local instanceName, instanceType, instanceID = getInstanceContext()
             previous.reason = reason or previous.reason
@@ -277,6 +291,9 @@ function NS:RefreshAuraSoundRegistrations(reason)
         added = 0,
         removed = 0,
         reused = 0,
+        replaced = 0,
+        preserved = 0,
+        rolledBack = 0,
         batches = 0,
         elapsedMs = 0,
         cached = false,
@@ -297,6 +314,7 @@ function NS:RefreshAuraSoundRegistrations(reason)
         diagnostics.error = "native API unavailable"
         diagnostics.elapsedMs = nowMilliseconds() - startedAt
         diagnostics.activeHandles = tableCount(self.auraSoundHandles)
+            + tableCount(self.auraSoundOrphanHandles)
         self.auraSoundFingerprint = nil
         return 0
     end
@@ -312,58 +330,92 @@ function NS:RefreshAuraSoundRegistrations(reason)
 
     local handles = self.auraSoundHandles or {}
     local registered = self.auraSoundRegistered or {}
+    local handleChannels = self.auraSoundHandleChannels or {}
     local staleHandles = 0
-    local invalidHandles = {}
+    local replacementFailures = 0
     local currentChannel = self.db.soundChannel or "Master"
-    local rebuildAll = self.auraSoundChannel and self.auraSoundChannel ~= currentChannel
 
-    -- Keep registrations that are still valid. Group/focus changes normally
-    -- touch only one or two unit tokens instead of rebuilding unit x spell.
-    for key, handle in pairs(handles) do
-        if rebuildAll or not desired[key] then
-            local ok, result = pcall(C_UnitAuras.RemoveAuraSound, handle)
-            if ok and result ~= false then
-                handles[key] = nil
-                registered[key] = nil
-                diagnostics.removed = diagnostics.removed + 1
-            else
-                staleHandles = staleHandles + 1
-                invalidHandles[key] = true
-                diagnostics.error = ok and "sound registration removal failed" or tostring(result)
-            end
+    local pendingAdds = {}
+    local pendingRemovals = {}
+
+    for key in pairs(registered) do
+        if not handles[key] then registered[key] = nil end
+    end
+
+    -- Registrations created before this per-handle map existed all used the
+    -- session-wide channel. On a live upgrade this preserves that knowledge;
+    -- after a reload there are no native handles to migrate.
+    for key in pairs(handles) do
+        if handleChannels[key] == nil then handleChannels[key] = self.auraSoundChannel end
+        if not desired[key] then
+            pendingRemovals[#pendingRemovals + 1] = { key = key, handle = handles[key] }
         end
     end
 
-    local pendingAdds = {}
+    -- Add before remove. A group change normally reuses almost everything;
+    -- a channel change now replaces each pair transactionally. If Blizzard
+    -- temporarily refuses AddAuraSound, the old working alert remains live.
     for _, planned in ipairs(registrations) do
         local key, entry = planned.key, desired[planned.key]
-        if entry and handles[key] and not invalidHandles[key] then
+        if entry and handles[key] and handleChannels[key] == currentChannel then
             registered[key] = true
             diagnostics.registered = diagnostics.registered + 1
             diagnostics.reused = diagnostics.reused + 1
-        elseif entry and not invalidHandles[key] then
-            pendingAdds[#pendingAdds + 1] = { key = key, unit = entry.unit, spellID = entry.spellID }
+        elseif entry then
+            pendingAdds[#pendingAdds + 1] = {
+                key = key,
+                unit = entry.unit,
+                spellID = entry.spellID,
+                oldHandle = handles[key],
+            }
         end
     end
 
     self.auraSoundHandles = handles
     self.auraSoundRegistered = registered
+    self.auraSoundHandleChannels = handleChannels
 
     local trigger = Enum and Enum.UnitAuraSoundTrigger and Enum.UnitAuraSoundTrigger.Added or 0
     local nextAdd = 1
-    diagnostics.pending = #pendingAdds > 0
+    diagnostics.pending = #pendingAdds > 0 or #pendingRemovals > 0
+
+    local function removeNativeHandle(handle)
+        local ok, result = pcall(C_UnitAuras.RemoveAuraSound, handle)
+        return ok and result ~= false, ok and result or result
+    end
 
     local function finalize()
         if self.auraSoundGeneration ~= generation then return end
+
+        -- Obsolete pairs are retired only after every requested addition has
+        -- had its chance. This keeps the useful half of the registry alive
+        -- throughout a roster or filter transition.
+        for _, entry in ipairs(pendingRemovals) do
+            if handles[entry.key] == entry.handle and not desired[entry.key] then
+                local removed, failure = removeNativeHandle(entry.handle)
+                if removed then
+                    handles[entry.key] = nil
+                    registered[entry.key] = nil
+                    handleChannels[entry.key] = nil
+                    diagnostics.removed = diagnostics.removed + 1
+                else
+                    staleHandles = staleHandles + 1
+                    diagnostics.error = diagnostics.error
+                        or (failure == false and "sound registration removal failed" or tostring(failure))
+                end
+            end
+        end
+
         diagnostics.pending = false
         diagnostics.elapsedMs = math.max(0, nowMilliseconds() - startedAt)
-        diagnostics.activeHandles = tableCount(handles)
+        diagnostics.activeHandles = tableCount(handles) + tableCount(self.auraSoundOrphanHandles)
         -- Recorded here, while the group exists. The logout snapshot cannot see
         -- it: by then the player is alone and the numbers are back to one unit.
         if self.NoteSoundLoad then
             self:NoteSoundLoad(diagnostics.attempted, diagnostics.units, diagnostics.registered)
         end
-        if diagnostics.registered == diagnostics.attempted and staleHandles == 0 then
+        if diagnostics.registered == diagnostics.attempted
+            and staleHandles == 0 and replacementFailures == 0 then
             self.auraSoundFingerprint = fingerprint
             self.auraSoundChannel = currentChannel
             self.auraSoundRetries = 0
@@ -393,18 +445,55 @@ function NS:RefreshAuraSoundRegistrations(reason)
                 unitToken = entry.unit,
                 spellID = entry.spellID,
                 soundFileName = self.afflictionSoundFile,
-                outputChannel = self.db.soundChannel or "Master",
+                outputChannel = currentChannel,
             }
             local ok, handle = pcall(C_UnitAuras.AddAuraSound, trigger, info)
             if ok and type(handle) == "number" and accessible(handle) then
-                handles[entry.key] = handle
-                registered[entry.key] = true
-                diagnostics.registered = diagnostics.registered + 1
-                diagnostics.added = diagnostics.added + 1
+                if entry.oldHandle then
+                    local removed, failure = removeNativeHandle(entry.oldHandle)
+                    if removed then
+                        handles[entry.key] = handle
+                        handleChannels[entry.key] = currentChannel
+                        registered[entry.key] = true
+                        diagnostics.registered = diagnostics.registered + 1
+                        diagnostics.added = diagnostics.added + 1
+                        diagnostics.removed = diagnostics.removed + 1
+                        diagnostics.replaced = diagnostics.replaced + 1
+                    else
+                        -- The new alert must not coexist with the old one: two
+                        -- native registrations would play the sound twice.
+                        local rolledBack = removeNativeHandle(handle)
+                        if not rolledBack then self.auraSoundOrphanHandles[handle] = true end
+                        registered[entry.key] = true
+                        diagnostics.registered = diagnostics.registered + 1
+                        diagnostics.reused = diagnostics.reused + 1
+                        diagnostics.preserved = diagnostics.preserved + 1
+                        diagnostics.rolledBack = diagnostics.rolledBack + 1
+                        replacementFailures = replacementFailures + 1
+                        diagnostics.error = diagnostics.error
+                            or (failure == false and "sound registration removal failed" or tostring(failure))
+                    end
+                else
+                    handles[entry.key] = handle
+                    handleChannels[entry.key] = currentChannel
+                    registered[entry.key] = true
+                    diagnostics.registered = diagnostics.registered + 1
+                    diagnostics.added = diagnostics.added + 1
+                end
             elseif not ok then
                 diagnostics.error = tostring(handle)
             else
                 diagnostics.error = "registration returned no sound ID"
+            end
+
+            if (not ok or type(handle) ~= "number" or not accessible(handle)) and entry.oldHandle then
+                -- A refused replacement is degraded (the requested channel was
+                -- not applied) but it is not silent: the prior handle remains.
+                registered[entry.key] = true
+                diagnostics.registered = diagnostics.registered + 1
+                diagnostics.reused = diagnostics.reused + 1
+                diagnostics.preserved = diagnostics.preserved + 1
+                replacementFailures = replacementFailures + 1
             end
         end
         nextAdd = lastAdd + 1
@@ -422,6 +511,7 @@ end
 function NS:PrintAuraSoundStatus()
     local diagnostics = self.auraSoundDiagnostics or {}
     local activeHandles = tableCount(self.auraSoundHandles)
+        + tableCount(self.auraSoundOrphanHandles)
     self:Print(self.L.SOUND_STATUS,
         tonumber(diagnostics.registered) or 0,
         tonumber(diagnostics.attempted) or 0,
@@ -431,6 +521,11 @@ function NS:PrintAuraSoundStatus()
         tonumber(diagnostics.added) or 0,
         tonumber(diagnostics.removed) or 0,
         tonumber(diagnostics.reused) or 0)
+    if (tonumber(diagnostics.preserved) or 0) > 0 then
+        self:Print(self.L.SOUND_STATUS_PRESERVED,
+            tonumber(diagnostics.preserved) or 0,
+            tonumber(diagnostics.rolledBack) or 0)
+    end
     self:Print(self.L.SOUND_STATUS_PERFORMANCE,
         activeHandles,
         tonumber(diagnostics.batches) or 0,

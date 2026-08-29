@@ -698,7 +698,13 @@ function NS:HandleSlash(message)
                 tostring(status.active), tostring(status.applied), suffix)
         end
     elseif command == "diag" then
-        if rest == "reset" then NS:ResetDiagnostics() else NS:PrintDiagnostics() end
+        if rest == "reset" then
+            NS:ResetDiagnostics()
+        elseif rest == "copy" then
+            NS:ShowDiagnosticsCopy()
+        else
+            NS:PrintDiagnostics()
+        end
     elseif command == "help" then
         self:Print(self.L.HELP)
     elseif command == "ignore" then

@@ -176,9 +176,13 @@ local en = {
     DIAG_RESTRICTIONS = "Restrictions right now: %s",
     DIAG_FORBIDDEN_VISUAL = "Engine cells the client forbade us to style: %s",
     DIAG_STYLE_SKIPPED = "Styling passes deferred because restrictions forbade them: %s",
+    DIAG_COPY_TITLE = "Cleansive diagnostic report",
+    DIAG_COPY_HINT = "The report is selected. Copy it with your system shortcut, then paste it into your support post.",
+    DIAG_COPY_READY = "Diagnostic report ready to copy.",
     SOUND_STATUS_ERROR = "Last sound registration result: %s",
     SOUND_STATUS_PENDING = "Sound registrations are still being prepared in the background.",
     SOUND_STATUS_DELTA = "Last sound update: %d added, %d removed, %d reused.",
+    SOUND_STATUS_PRESERVED = "%d previous sound registrations were preserved because their replacements failed (%d rolled back).",
     SOUND_BUDGET = "Sound alert limit",
     SOUND_STATUS_CAPPED = "%d units left without a native sound: the %d registration budget was reached. Readable auras can still use the Lua fallback.",
     SOUND_STATUS_SEASON = "Spell list calibrated for season %s (%d IDs). Sounds go quiet on unlisted afflictions: update the list when a new season starts.",
@@ -226,7 +230,7 @@ local en = {
     TIP_DISPEL_TYPE = "Include %s in the priority order. Disabling it prevents Cleansive from flagging that affliction type.",
     COOLDOWN_STATUS_NONE = "No cleansing spell cooldown has been inspected yet. Click an afflicted cell, then run /cleansive cdstatus.",
     COOLDOWN_STATUS = "Cooldown: spell %s | source %s | active %s | applied %s%s",
-    HELP = "Commands: /cleansive, /cls, then show, hide, reset, test, macro, prio, pradd, skip, skadd, filters, ignore <id>, history, setup, enable, disable, soundtest, soundstatus, cdstatus, diag, or diag reset",
+    HELP = "Commands: /cleansive, /cls, then show, hide, reset, test, macro, prio, pradd, skip, skadd, filters, ignore <id>, history, setup, enable, disable, soundtest, soundstatus, cdstatus, diag, diag copy, or diag reset",
 }
 
 local fr = {
@@ -405,9 +409,13 @@ local fr = {
     DIAG_RESTRICTIONS = "Restrictions en ce moment : %s",
     DIAG_FORBIDDEN_VISUAL = "Cases du moteur que le client interdit de styler : %s",
     DIAG_STYLE_SKIPPED = "Passes de style différées faute d’autorisation : %s",
+    DIAG_COPY_TITLE = "Rapport de diagnostic Cleansive",
+    DIAG_COPY_HINT = "Le rapport est sélectionné. Copiez-le avec le raccourci de votre système, puis collez-le dans votre message d’assistance.",
+    DIAG_COPY_READY = "Rapport de diagnostic prêt à copier.",
     SOUND_STATUS_ERROR = "Dernier résultat d’enregistrement sonore : %s",
     SOUND_STATUS_PENDING = "Les enregistrements sonores sont encore en cours de préparation en arrière-plan.",
     SOUND_STATUS_DELTA = "Dernière mise à jour sonore : %d ajoutés, %d retirés, %d réutilisés.",
+    SOUND_STATUS_PRESERVED = "%d anciens enregistrements sonores ont été conservés car leur remplacement a échoué (%d annulés).",
     SOUND_BUDGET = "Limite des alertes sonores",
     SOUND_STATUS_CAPPED = "%d unités sans son natif : le budget de %d enregistrements est atteint. Les auras lisibles peuvent encore utiliser le repli Lua.",
     SOUND_STATUS_SEASON = "Liste de sorts calibrée pour la saison %s (%d identifiants). Les afflictions absentes de la liste resteront muettes : mettez cette liste à jour au début de chaque nouvelle saison.",
@@ -455,7 +463,7 @@ local fr = {
     TIP_DISPEL_TYPE = "Inclut %s dans l’ordre de priorité. Le désactiver empêche Cleansive de signaler ce type d’affliction.",
     COOLDOWN_STATUS_NONE = "Aucune recharge de sort de dissipation n’a encore été inspectée. Cliquez sur une case affectée, puis lancez /cleansive cdstatus.",
     COOLDOWN_STATUS = "Recharge : sort %s | source %s | active %s | appliquée %s%s",
-    HELP = "Commandes : /cleansive, /cls, puis show, hide, reset, test, macro, prio, pradd, skip, skadd, filters, ignore <id>, history, setup, enable, disable, soundtest, soundstatus, cdstatus, diag ou diag reset",
+    HELP = "Commandes : /cleansive, /cls, puis show, hide, reset, test, macro, prio, pradd, skip, skadd, filters, ignore <id>, history, setup, enable, disable, soundtest, soundstatus, cdstatus, diag, diag copy ou diag reset",
 }
 
 NS.LOCALES = { enUS = en, frFR = fr }

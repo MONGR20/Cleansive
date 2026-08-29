@@ -218,6 +218,12 @@ function NS:SnapshotDiagnostics()
             error = sound.error,
             pending = sound.pending,
             retries = sound.retries,
+            added = sound.added,
+            removed = sound.removed,
+            reused = sound.reused,
+            replaced = sound.replaced,
+            preserved = sound.preserved,
+            rolledBack = sound.rolledBack,
         }
     end
 end
@@ -233,6 +239,172 @@ function NS:ResetDiagnostics()
     local record = self:GetDiagnostics()
     if record and refused then record.refusedEvents = refused end
     self:Print(self.L.DIAG_CLEARED)
+end
+
+local function sortedKeys(values)
+    local keys = {}
+    for key in pairs(values or {}) do keys[#keys + 1] = tostring(key) end
+    table.sort(keys)
+    return keys
+end
+
+-- A support report must be copyable as one block. Printing twenty fragments to
+-- chat makes bug reports tedious and loses the ordering as soon as combat text
+-- arrives. Keep this deliberately plain and English so the same report can be
+-- read on CurseForge, Wago, or GitHub regardless of the player's locale.
+function NS:BuildDiagnosticsReport()
+    self:SnapshotDiagnostics()
+    local record = self:GetDiagnostics()
+    if not record then return "Cleansive diagnostics unavailable" end
+
+    local lines = {
+        "Cleansive diagnostic report",
+        "version=" .. tostring(record.version or self.version or "?"),
+        "clientLocale=" .. tostring(GetLocale and GetLocale() or "?"),
+        "restriction=" .. tostring(self:RestrictionSnapshot() or "unavailable"),
+        "enabled=" .. tostring(self.enabled == true),
+        "testMode=" .. tostring(self.testMode == true),
+    }
+
+    local engine = record.engine or {}
+    lines[#lines + 1] = string.format("engine ready=%s slots=%s/%s firstError=%s",
+        tostring(engine.readyButtons or 0), tostring(engine.added or 0),
+        tostring(engine.expected or 0), tostring(engine.firstError or "-"))
+    if engine.activeError then lines[#lines + 1] = "engineActiveError=" .. tostring(engine.activeError) end
+    if engine.retiredError then lines[#lines + 1] = "engineRetiredError=" .. tostring(engine.retiredError) end
+
+    local sound = record.sound or {}
+    local liveSound = self.auraSoundDiagnostics or sound
+    lines[#lines + 1] = string.format(
+        "sound registered=%s/%s activeHandles=%s skippedUnits=%s season=%s pending=%s retries=%s",
+        tostring(sound.registered or 0), tostring(sound.attempted or 0),
+        tostring(liveSound.activeHandles or 0), tostring(sound.skippedUnits or 0),
+        tostring(sound.season or "?"), tostring(sound.pending == true),
+        tostring(sound.retries or 0))
+    lines[#lines + 1] = string.format(
+        "soundDelta added=%s removed=%s reused=%s replaced=%s preserved=%s rolledBack=%s batches=%s elapsedMs=%s",
+        tostring(liveSound.added or 0), tostring(liveSound.removed or 0),
+        tostring(liveSound.reused or 0), tostring(liveSound.replaced or 0),
+        tostring(liveSound.preserved or 0), tostring(liveSound.rolledBack or 0),
+        tostring(liveSound.batches or 0), tostring(liveSound.elapsedMs or 0))
+    if sound.error then lines[#lines + 1] = "soundError=" .. tostring(sound.error) end
+
+    local peak = record.soundPeak
+    if type(peak) == "table" then
+        lines[#lines + 1] = string.format("soundPeak registered=%s/%s units=%s",
+            tostring(peak.registered or 0), tostring(peak.attempted or 0),
+            tostring(peak.units or 0))
+    end
+
+    local cooldown = self.cooldownDiagnostics
+    if type(cooldown) == "table" then
+        lines[#lines + 1] = string.format("cooldown spell=%s source=%s active=%s applied=%s error=%s",
+            tostring(cooldown.spellID or "-"), tostring(cooldown.source or "-"),
+            tostring(cooldown.active), tostring(cooldown.applied),
+            tostring(cooldown.error or "-"))
+    else
+        lines[#lines + 1] = "cooldown=not inspected"
+    end
+
+    for _, flag in ipairs(sortedKeys(record.pending)) do
+        local entry = record.pending[flag]
+        lines[#lines + 1] = string.format("pending %s count=%s lastCause=%s",
+            flag, tostring(entry and entry.count or 0),
+            tostring(entry and entry.lastCause or "-"))
+    end
+    for _, name in ipairs(sortedKeys(record.refusedEvents)) do
+        lines[#lines + 1] = "refusedEvent=" .. name
+    end
+    for _, func in ipairs(sortedKeys(record.forbidden)) do
+        local entry = record.forbidden[func]
+        lines[#lines + 1] = string.format("forbidden %s count=%s context=%s",
+            func, tostring(entry and entry.count or 0),
+            tostring(entry and entry.context or "-"))
+    end
+    if record.styleFailures then
+        lines[#lines + 1] = string.format("style failures=%s steps=%s error=%s",
+            tostring(record.styleFailures), tostring(record.styleSteps or record.styleFailures),
+            tostring(record.styleError or "-"))
+    end
+    if record.styleSkipped then lines[#lines + 1] = "styleSkipped=" .. tostring(record.styleSkipped) end
+    if record.forbiddenVisuals then
+        lines[#lines + 1] = "forbiddenVisuals=" .. tostring(record.forbiddenVisuals)
+    end
+    for _, context in ipairs(sortedKeys(record.styleContext)) do
+        lines[#lines + 1] = "styleContext " .. context .. " count=" .. tostring(record.styleContext[context])
+    end
+
+    return table.concat(lines, "\n")
+end
+
+function NS:ShowDiagnosticsCopy()
+    local report = self:BuildDiagnosticsReport()
+    local frame = self.diagnosticsCopyFrame
+    if not frame then
+        frame = CreateFrame("Frame", "CleansiveDiagnosticsCopyFrame", UIParent)
+        frame:SetSize(680, 460)
+        frame:SetPoint("CENTER")
+        frame:SetFrameStrata("DIALOG")
+        frame:SetClampedToScreen(true)
+        frame:EnableMouse(true)
+        frame:SetMovable(true)
+        frame:RegisterForDrag("LeftButton")
+        frame:SetScript("OnDragStart", frame.StartMoving)
+        frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
+
+        local background = frame:CreateTexture(nil, "BACKGROUND")
+        background:SetAllPoints()
+        background:SetColorTexture(0.025, 0.035, 0.045, 0.98)
+
+        local accent = frame:CreateTexture(nil, "BORDER")
+        accent:SetPoint("TOPLEFT")
+        accent:SetPoint("TOPRIGHT")
+        accent:SetHeight(2)
+        local r, g, b = 0.95, 0.45, 0.70
+        if self.GetUXAccent then r, g, b = self:GetUXAccent() end
+        accent:SetColorTexture(r, g, b, 1)
+
+        local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+        title:SetPoint("TOPLEFT", 22, -20)
+        title:SetText(self.L.DIAG_COPY_TITLE)
+        frame.title = title
+
+        local close = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
+        close:SetPoint("TOPRIGHT", -8, -8)
+
+        local hint = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        hint:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -7)
+        hint:SetText(self.L.DIAG_COPY_HINT)
+        frame.hint = hint
+
+        local scroll = CreateFrame("ScrollFrame", nil, frame, "UIPanelScrollFrameTemplate")
+        scroll:SetPoint("TOPLEFT", 22, -76)
+        scroll:SetPoint("BOTTOMRIGHT", -40, 22)
+
+        local edit = CreateFrame("EditBox", nil, scroll)
+        edit:SetMultiLine(true)
+        edit:SetAutoFocus(false)
+        edit:SetFontObject(ChatFontNormal)
+        edit:SetWidth(600)
+        edit:SetHeight(1200)
+        edit:SetTextInsets(8, 8, 8, 8)
+        edit:SetScript("OnEscapePressed", function() frame:Hide() end)
+        scroll:SetScrollChild(edit)
+
+        frame.edit = edit
+        self.diagnosticsCopyFrame = frame
+        if type(UISpecialFrames) == "table" then
+            UISpecialFrames[#UISpecialFrames + 1] = "CleansiveDiagnosticsCopyFrame"
+        end
+    end
+
+    frame.title:SetText(self.L.DIAG_COPY_TITLE)
+    frame.hint:SetText(self.L.DIAG_COPY_HINT)
+    frame.edit:SetText(report)
+    frame:Show()
+    frame.edit:SetFocus()
+    frame.edit:HighlightText()
+    self:Print(self.L.DIAG_COPY_READY)
 end
 
 function NS:PrintDiagnostics()

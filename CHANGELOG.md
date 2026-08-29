@@ -6,6 +6,15 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.5.46
+
+- **Les alertes sonores sont maintenant remplacées sans période de silence.** Lors d’un changement de canal, de groupe ou de filtre, Cleansive ajoute chaque nouvel enregistrement natif avant de retirer l’ancien. Si `C_UnitAuras.AddAuraSound` est temporairement refusé, l’ancienne alerte qui fonctionne reste active et une reprise bornée est programmée.
+- **Un remplacement sonore ne peut plus produire deux alertes durables.** Si l’ancien enregistrement refuse de se retirer après la création du nouveau, le nouveau est annulé et l’ancien est conservé. Un éventuel échec de cette annulation est mémorisé puis nettoyé au rafraîchissement suivant.
+- **Le canal réel est suivi par enregistrement.** Un changement partiellement appliqué n’est plus présenté comme une réussite globale ; `/cleansive soundstatus` indique combien d’anciens enregistrements ont été préservés et combien de remplacements ont été annulés.
+- **`/cleansive diag copy` ouvre un rapport sélectionné et copiable en un bloc.** Il rassemble version, restrictions actives, moteur d’auras, sons, recharge du sort, reports et refus utiles pour un ticket CurseForge, Wago ou GitHub.
+- Cette revue compare Cleansive à Decursive/Zhaou’s Decursive, Salve, Simple Decursive, ClickCleanse, K Decurse, LFDecurse et Decursive121Compat. Les idées ont été réimplémentées indépendamment : aucun code GPL ni « All Rights Reserved » n’a été intégré au projet MIT.
+- Tests : 743 à 756, vérifiés par réinjection.
+
 ## 1.5.45
 
 - **Cleansive ne frappe plus a une porte que le client a declaree fermee.** Le releve d'une cle mythique reelle le tranche : 480 refus de mise en forme sur 480 avec le verrou de combat BAISSE -- `lock=0|ChallengeMode,Map,Chat` 450 fois, `lock=0|Encounter,ChallengeMode,Map,Chat` 30 fois. `InCombatLockdown()` annoncait l'addon libre d'agir pendant toute la course. La passe demande desormais `C_RestrictedActions.CheckAllowProtectedFunctions(auraButton, true)` avant ses neuf operations : un appel remplace neuf refus, et la passe est comptee comme differee, pas comme un echec.
