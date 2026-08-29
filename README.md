@@ -1,4 +1,4 @@
-# Cleansive 1.6.2
+# Cleansive 1.6.3
 
 Cleansive is a standalone one-click cleansing addon for **World of Warcraft Retail 12.1** (`120100`). It provides a compact Decursive-style workflow with a dark, class-colored interface inspired by the clarity of Ellesmere UI. The interface follows the language of your WoW client, English or French; either can be picked from the General page at any time.
 
@@ -175,6 +175,7 @@ the reason on its own.
 
 ## Recent changes
 
+- **1.6.3** - nine overlapping controls fixed in the settings window, and the overlap detector that should have caught them: it silently skipped every wrapped explanation line, understood two anchor points out of nine, and never looked at the window footer.
 - **1.6.2** - three interface finishes: a TEST plate beside the grid while the preview is open, a Help page that says it continues below, and windows that rescale when the screen changes.
 - **1.6.1** - fixes from an external audit and from in-game screenshots: overlapping labels on three pages, the preview refusing to open mid-combat, and a profile repair that had fallen eight settings behind.
 - **1.6** - the version that closed the competitor review: a real preview, profile sharing, a Help page, loss-of-control watching, and a release pipeline that verifies before it publishes.

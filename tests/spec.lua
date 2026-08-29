@@ -1330,6 +1330,35 @@ do
         "recharge combat : le nombre est hors de la hierarchie securisee")
     truthy(NS.buttons[1].__template and NS.buttons[1].__template:find("Secure", 1, true),
         "recharge combat : la cellule de clic reste securisee")
+
+    -- La couche de recharge n'est qu'un DECALQUE de l'ancre securisee : chaque
+    -- voile s'ancre a un de ses COINS, avec les memes coordonnees que la case
+    -- qui s'ancre au coin de l'ancre. Si les deux cadres cessent d'avoir la
+    -- meme taille, leurs coins ne coincident plus et TOUS les voiles se
+    -- decalent de la difference. Les deux sont bien redimensionnes ensemble,
+    -- mais a deux endroits eloignes de LayoutButtons et rien ne les liait :
+    -- supprimer l'un des deux appels ne cassait aucun test. Ce n'est PAS
+    -- l'explication des coins noirs vus en jeu le 30/08 -- cette piste a ete
+    -- suivie et refutee -- c'est un invariant trouve en chemin et laisse sans
+    -- garde-fou.
+    for _, size in ipairs({ 12, 22, 40 }) do
+        NS.db.frameSize = size
+        NS:LayoutButtons()
+        eq(NS.cooldownBody.__lastSize.width, NS.gridAnchor.__lastSize.width,
+            "decalque " .. size .. " px : meme largeur que l'ancre")
+        eq(NS.cooldownBody.__lastSize.height, NS.gridAnchor.__lastSize.height,
+            "decalque " .. size .. " px : meme hauteur")
+    end
+
+    -- Et la meme pose : une taille identique ne sert a rien si les deux cadres
+    -- ne partent pas du meme point.
+    NS:RestorePosition(NS.gridAnchor, "grid")
+    local anchorPoint, cooldownPoint = NS.gridAnchor.__lastPoint, NS.cooldownBody.__lastPoint
+    eq(cooldownPoint.point, anchorPoint.point, "decalque : meme point d'ancrage")
+    eq(cooldownPoint.relativePoint, anchorPoint.relativePoint, "decalque : meme point de reference")
+    eq(cooldownPoint.x, anchorPoint.x, "decalque : meme abscisse")
+    eq(cooldownPoint.y, anchorPoint.y, "decalque : meme ordonnee")
+    NS.db.frameSize = 22
 end
 
 --------------------------------------------------------------------------
@@ -5233,8 +5262,8 @@ do
 
     NS:CreateOptions()
     NS:RefreshOptions()
-    truthy(NS.overviewProfileText:GetText():find("Ekinoks", 1, true),
-        "apercu : le profil actif est nomme en haut de la page")
+    truthy(NS.profileLabel:GetText():find("Ekinoks", 1, true),
+        "apercu : le profil actif est nomme, une seule fois, par sa carte")
     eq(NS.overviewEngineText:GetText(), NS:AuraEngineStateSentence(),
         "apercu : et l'etat du moteur y est dit en clair")
 end
@@ -5599,44 +5628,92 @@ do
     NS:UpdateSpells()
     NS:CreateOptions()
 
-    -- La zone de contenu des pages fait 550 px de haut (fenetre 700, moins
-    -- l'en-tete 88 et le pied 62).
-    local PAGE_HEIGHT = 550
+    -- La fenetre fait 820 x 700 ; la zone de contenu des pages 560 x 550
+    -- (moins la barre laterale 178, l'en-tete 88 et le pied 62).
+    local PAGE_WIDTH, PAGE_HEIGHT = 560, 550
     local LINE_HEIGHT = 14
 
-    local function rectangleOf(frame)
-        local point = rawget(frame, "__lastPoint")
-        if not point or point.relative ~= nil then return nil end
+    -- La premiere version ne comprenait que TOPLEFT et BOTTOMLEFT, et ignorait
+    -- tout ancrage relatif a un autre cadre. Elle laissait donc passer
+    -- exactement ce que les captures du 30/08 ont montre : une phrase de 560 px
+    -- posee en travers de deux interrupteurs, un bouton cale a droite sur un
+    -- texte, et le pied de fenetre que personne ne comparait a rien.
+    local X_OF = { LEFT = 0, TOPLEFT = 0, BOTTOMLEFT = 0,
+                   RIGHT = 1, TOPRIGHT = 1, BOTTOMRIGHT = 1,
+                   TOP = 0.5, BOTTOM = 0.5, CENTER = 0.5 }
+    local Y_OF = { TOP = 0, TOPLEFT = 0, TOPRIGHT = 0,
+                   BOTTOM = 1, BOTTOMLEFT = 1, BOTTOMRIGHT = 1,
+                   LEFT = 0.5, RIGHT = 0.5, CENTER = 0.5 }
+
+    -- Un texte a qui on a donne une largeur revient a la ligne. Le compter sur
+    -- une seule ligne est ce qui a laisse passer la phrase de la page General :
+    -- 501 px de texte dans une boite de 560, mais posee sur deux interrupteurs.
+    local function sizeOf(frame)
         local size = rawget(frame, "__lastSize")
-        local width = size and size.width or rawget(frame, "__width")
-        local height = size and size.height or rawget(frame, "__height")
-        if not width and frame.GetStringWidth and rawget(frame, "__text") then
-            local text = rawget(frame, "__text")
-            if text == nil or text == "" then return nil end
-            width, height = frame:GetStringWidth(), LINE_HEIGHT
-        end
-        if not width or not height or width <= 0 or height <= 0 then return nil end
-        local left, top
-        if point.point == "TOPLEFT" then
-            left, top = point.x or 0, -(point.y or 0)
-        elseif point.point == "BOTTOMLEFT" then
-            left = point.x or 0
-            top = PAGE_HEIGHT - (point.y or 0) - height
-        else
-            return nil
-        end
-        -- Un interrupteur ou un bouton n'a pas de texte propre : son libelle est
-        -- un enfant. Sans cela le rapport ne nomme que des points d'interrogation
-        -- et ne sert a rien pour corriger.
-        local label = rawget(frame, "__text")
-        if not label or label == "" then
-            for _, child in ipairs(mock.childrenOf(frame)) do
-                local childText = rawget(child, "__text")
-                if childText and childText ~= "" then label = childText break end
+        local width = (size and size.width) or rawget(frame, "__width")
+        local height = (size and size.height) or rawget(frame, "__height")
+        local text = rawget(frame, "__text")
+        if not height and text and text ~= "" and frame.GetStringWidth then
+            local stringWidth = frame:GetStringWidth()
+            if type(stringWidth) == "number" and stringWidth > 0 then
+                if width then
+                    height = math.ceil(stringWidth / width) * LINE_HEIGHT
+                else
+                    width, height = stringWidth, LINE_HEIGHT
+                end
             end
         end
-        return { left = left, top = top, right = left + width, bottom = top + height,
-                 label = string.format("%s @%d,%d", tostring(label or "?"), left, top) }
+        return width, height
+    end
+
+    local resolving, resolved = {}, {}
+    local function resolveRect(frame, root, rootRect)
+        if frame == root then return rootRect end
+        if resolved[frame] ~= nil then return resolved[frame] or nil end
+        if resolving[frame] then return nil end
+        resolving[frame] = true
+
+        local width, height = sizeOf(frame)
+        local left, right, top, bottom
+        for _, placed in ipairs(rawget(frame, "__points") or {}) do
+            local base = rootRect
+            if placed.relative ~= nil then
+                base = resolveRect(placed.relative, root, rootRect)
+            end
+            local fx, fy = X_OF[placed.relativePoint], Y_OF[placed.relativePoint]
+            local sx, sy = X_OF[placed.point], Y_OF[placed.point]
+            if base and fx and fy and sx and sy then
+                -- Les decalages du jeu comptent le y vers le HAUT ; ici le haut
+                -- de la page est zero, donc un y positif descend le rectangle.
+                local px = base.left + (base.right - base.left) * fx + (placed.x or 0)
+                local py = base.top + (base.bottom - base.top) * fy - (placed.y or 0)
+                if sx == 0 then left = px elseif sx == 1 then right = px end
+                if sy == 0 then top = py elseif sy == 1 then bottom = py end
+                if sx == 0.5 and width then left, right = px - width / 2, px + width / 2 end
+                if sy == 0.5 and height then top, bottom = py - height / 2, py + height / 2 end
+            end
+        end
+        if left and not right and width then right = left + width end
+        if right and not left and width then left = right - width end
+        if top and not bottom and height then bottom = top + height end
+        if bottom and not top and height then top = bottom - height end
+
+        local rect
+        if left and right and top and bottom and right > left and bottom > top then
+            local label = rawget(frame, "__text")
+            if not label or label == "" then
+                for _, child in ipairs(mock.childrenOf(frame)) do
+                    local childText = rawget(child, "__text")
+                    if childText and childText ~= "" then label = childText break end
+                end
+            end
+            rect = { left = left, right = right, top = top, bottom = bottom,
+                     label = string.format("%s @%.0f,%.0f %.0fx%.0f", tostring(label or "?"),
+                         left, top, right - left, bottom - top) }
+        end
+        resolving[frame] = nil
+        resolved[frame] = rect or false
+        return rect
     end
 
     local function overlaps(a, b)
@@ -5647,14 +5724,20 @@ do
     end
 
     local collisions = {}
-    for _, pageKey in ipairs({ "general", "appearance", "dispels", "history" }) do
-        local page = NS.optionsPages[pageKey]
+    -- La comparaison se fait entre freres de meme niveau, sans descendre dans
+    -- les controles. La descente a ete essayee : la largeur d'un texte est ici
+    -- ESTIMEE (nombre de caracteres x taille de police), ce qui suffit a placer
+    -- des blocs mais pas a juger l'interieur d'un interrupteur -- elle accusait
+    -- huit controles que les captures montrent parfaitement lisibles. Un
+    -- controle mesure faux qui accuse est pire qu'un controle non mesure : c'est
+    -- pourquoi tout ce qui doit etre surveille reste enfant DIRECT de sa page.
+    local function inspect(name, root, rootRect, skip)
         local rects = {}
-        for _, child in ipairs(mock.childrenOf(page)) do
+        for _, child in ipairs(mock.childrenOf(root)) do
             -- Les fonds et les traits sont poses SOUS les controles a dessein.
             local kind = rawget(child, "__type")
-            if kind ~= "Texture" and child:IsShown() then
-                local rect = rectangleOf(child)
+            if kind ~= "Texture" and child:IsShown() and not (skip and skip[child]) then
+                local rect = resolveRect(child, root, rootRect)
                 if rect then rects[#rects + 1] = rect end
             end
         end
@@ -5662,12 +5745,36 @@ do
             for j = i + 1, #rects do
                 if overlaps(rects[i], rects[j]) then
                     collisions[#collisions + 1] = string.format("%s : « %s » recouvre « %s »",
-                        pageKey, rects[i].label, rects[j].label)
+                        name, rects[i].label, rects[j].label)
                 end
             end
         end
+        return #rects
     end
 
+    local pageRect = { left = 0, top = 0, right = PAGE_WIDTH, bottom = PAGE_HEIGHT }
+    local measured = 0
+    for _, pageKey in ipairs({ "general", "appearance", "dispels", "history", "help" }) do
+        measured = measured + inspect(pageKey, NS.optionsPages[pageKey], pageRect)
+    end
+
+    -- Le pied de la fenetre n'appartient a aucune page : il n'etait donc
+    -- compare a rien, et le texte d'etat passait sous les boutons sur trois
+    -- pages sur cinq. La barre laterale et la zone de contenu sont ecartees :
+    -- ce sont les grandes zones qui contiennent tout le reste.
+    local windowRect = { left = 0, top = 0, right = 820, bottom = 700 }
+    local zones = {}
+    for _, child in ipairs(mock.childrenOf(NS.optionsFrame)) do
+        local _, height = sizeOf(child)
+        if (height or 0) > 300 then zones[child] = true end
+        for _, page in pairs(NS.optionsPages) do
+            if child == page then zones[child] = true end
+        end
+    end
+    measured = measured + inspect("fenetre", NS.optionsFrame, windowRect, zones)
+
+    truthy(measured > 100,
+        "mise en page : les controles sont bien mesures, pas ecartes en silence")
     eq(table.concat(collisions, " | "), "",
         "mise en page : aucun controle n'en recouvre un autre")
 end

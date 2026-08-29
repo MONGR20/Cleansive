@@ -801,13 +801,13 @@ function NS:CreateOptions()
     self.optionsPages.general = general
     self.optionChecks = {}
 
-    local overviewProfile = text(general, "", 11, C.dim)
-    overviewProfile:SetPoint("BOTTOMLEFT", 0, 34)
-    overviewProfile:SetWidth(560)
-    overviewProfile:SetJustifyH("LEFT")
-    self.overviewProfileText = overviewProfile
+    -- Ces deux phrases etaient posees en bas de page, PAR-DESSUS la carte de
+    -- profil : quatre textes pour trois lignes de place. La premiere repetait
+    -- mot pour mot ce que la carte annonce deja, elle a disparu ; les deux
+    -- autres sont maintenant posees au-dessus de la carte, et restent enfants
+    -- DIRECTS de la page pour que le controle de recouvrement les voie.
     local overviewEngine = text(general, "", 10, C.dim)
-    overviewEngine:SetPoint("BOTTOMLEFT", 0, 16)
+    overviewEngine:SetPoint("TOPLEFT", 0, -472)
     overviewEngine:SetWidth(560)
     overviewEngine:SetJustifyH("LEFT")
     self.overviewEngineText = overviewEngine
@@ -844,8 +844,10 @@ function NS:CreateOptions()
     end, self.L.TIP_SOUND)
     self.optionChecks[#self.optionChecks + 1] = toggle(general, self.L.FAIL_SOUND, 0, -224, 275, "failureSound", nil, self.L.TIP_FAILURE_SOUND)
     self.soundDependentControls = {}
+    -- Posee a -196, cette phrase de 560 px traversait « Afficher les infobulles »
+    -- ET « Alerte sonore d'affliction ». Elle rejoint les lignes d'etat du bas.
     local soundState = text(general, "", 10, C.dim)
-    soundState:SetPoint("TOPLEFT", 0, -196)
+    soundState:SetPoint("TOPLEFT", 0, -490)
     soundState:SetWidth(560)
     soundState:SetJustifyH("LEFT")
     self.soundStateText = soundState
@@ -858,13 +860,14 @@ function NS:CreateOptions()
     soundStatus:SetScript("OnClick", function() self:PrintAuraSoundStatus() end)
     self.soundDependentControls[#self.soundDependentControls + 1] = soundStatus
 
+    -- Descendu a -386, « Afficher en raid » tombait sur « Filtres » et « Macro ».
     local visibilityLabel = text(general, self.L.SHOW_WHERE, 12, C.dim)
-    visibilityLabel:SetPoint("TOPLEFT", 300, -300)
-    self.optionChecks[#self.optionChecks + 1] = toggle(general, self.L.SHOW_SOLO, 300, -318, 265,
+    visibilityLabel:SetPoint("TOPLEFT", 300, -288)
+    self.optionChecks[#self.optionChecks + 1] = toggle(general, self.L.SHOW_SOLO, 300, -306, 265,
         "showSolo", function() self:UpdateGridVisibilityDriver() end, self.L.TIP_SHOW_CONTEXT)
-    self.optionChecks[#self.optionChecks + 1] = toggle(general, self.L.SHOW_PARTY, 300, -352, 265,
+    self.optionChecks[#self.optionChecks + 1] = toggle(general, self.L.SHOW_PARTY, 300, -340, 265,
         "showParty", function() self:UpdateGridVisibilityDriver() end, self.L.TIP_SHOW_CONTEXT)
-    self.optionChecks[#self.optionChecks + 1] = toggle(general, self.L.SHOW_RAID, 300, -386, 265,
+    self.optionChecks[#self.optionChecks + 1] = toggle(general, self.L.SHOW_RAID, 300, -374, 265,
         "showRaid", function() self:UpdateGridVisibilityDriver() end, self.L.TIP_SHOW_CONTEXT)
 
     self.optionSliders[#self.optionSliders + 1] = slider(general, self.L.BLACKLIST, 0, -266, 265, 0, 15, 1, "blacklistTime", "%d s", nil, self.L.TIP_BLACKLIST)
@@ -963,21 +966,23 @@ function NS:CreateOptions()
     end)
 
     local info = CreateFrame("Frame", nil, general)
-    info:SetSize(560, 60)
-    info:SetPoint("TOPLEFT", 0, -486)
+    info:SetSize(560, 40)
+    info:SetPoint("TOPLEFT", 0, -510)
     local infoBg = solid(info, "BACKGROUND", C.control[1], C.control[2], C.control[3], 0.42)
     infoBg:SetAllPoints()
     border(info, 0.08)
     local ar, ag, ab = accent()
     local dot = solid(info, "ARTWORK", ar, ag, ab, 1)
     dot:SetSize(7, 7)
-    dot:SetPoint("TOPLEFT", 16, -18)
+    dot:SetPoint("LEFT", 16, 0)
     local infoTitle = text(info, self.L.ACTIVE_PROFILE, 13, C.text)
     infoTitle:SetPoint("LEFT", dot, "RIGHT", 9, 0)
+    -- Le nom du profil passe sur la meme ligne que son titre : la carte tient
+    -- alors en une rangee, et les deux phrases d'etat ont la place au-dessus.
     local infoText = text(info, "", 11, C.dim)
-    infoText:SetPoint("TOPLEFT", 16, -40)
-    infoText:SetWidth(528)
-    infoText:SetJustifyH("LEFT")
+    infoText:SetPoint("RIGHT", -16, 0)
+    infoText:SetWidth(230)
+    infoText:SetJustifyH("RIGHT")
     self.profileLabel = infoText
 
     local appearance = CreateFrame("Frame", nil, content)
@@ -1185,9 +1190,12 @@ function NS:CreateOptions()
     self.optionsPages.history = history
     self.auraHistoryPage = history
     section(history, self.L.HISTORY, -2)
+    -- Posee a -28 sur 420 px de large, cette phrase passait sous le bouton
+    -- « Copier cette liste ». Elle descend sous la rangee de boutons, ou elle
+    -- dispose de toute la largeur.
     local historyInfo = text(history, self.L.HISTORY_HELP, 11, C.dim)
-    historyInfo:SetPoint("TOPLEFT", 0, -28)
-    historyInfo:SetWidth(420)
+    historyInfo:SetPoint("TOPLEFT", 0, -56)
+    historyInfo:SetWidth(560)
     historyInfo:SetJustifyH("LEFT")
     local clearHistory = button(history, self.L.HISTORY_CLEAR, 116, 26)
     clearHistory:SetPoint("TOPRIGHT", 0, -22)
@@ -1203,7 +1211,7 @@ function NS:CreateOptions()
     for index = 1, 11 do
         local row = CreateFrame("Frame", nil, history)
         row:SetSize(560, 32)
-        row:SetPoint("TOPLEFT", 0, -78 - ((index - 1) * 35))
+        row:SetPoint("TOPLEFT", 0, -96 - ((index - 1) * 35))
         local rowBg = solid(row, "BACKGROUND", 0, 0, 0, index % 2 == 0 and 0.20 or 0.10)
         rowBg:SetAllPoints()
         row.label = text(row, "", 11, C.text)
@@ -1217,8 +1225,8 @@ function NS:CreateOptions()
     -- Une seule phrase en haut d'une zone vide de 400 px se lisait comme une
     -- page qui n'avait pas fini de charger. Un vrai etat vide, centre.
     local emptyState = CreateFrame("Frame", nil, history)
-    emptyState:SetPoint("TOPLEFT", 0, -120)
-    emptyState:SetPoint("TOPRIGHT", 0, -120)
+    emptyState:SetPoint("TOPLEFT", 0, -136)
+    emptyState:SetPoint("TOPRIGHT", 0, -136)
     emptyState:SetHeight(120)
     local ar, ag, ab = accent()
     local emptyMark = solid(emptyState, "ARTWORK", ar, ag, ab, 1)
@@ -1253,11 +1261,14 @@ function NS:CreateOptions()
     end)
 
     local footerLine = solid(frame, "BORDER", 1, 1, 1, 0.06)
-    footerLine:SetPoint("BOTTOMLEFT", 179, 54)
-    footerLine:SetPoint("BOTTOMRIGHT", -1, 54)
+    footerLine:SetPoint("BOTTOMLEFT", 179, 62)
+    footerLine:SetPoint("BOTTOMRIGHT", -1, 62)
     footerLine:SetHeight(1)
+    -- Sur la meme rangee que les boutons, cette phrase passait sous
+    -- « Reinitialiser cette page » et « Mode test » : trois pages sur cinq.
+    -- Elle prend la ligne libre au-dessus d'eux.
     local footerText = text(frame, self.L.STATUS_READY, 10, C.dim)
-    footerText:SetPoint("BOTTOMLEFT", 205, 22)
+    footerText:SetPoint("BOTTOMLEFT", 205, 46)
     footerText:SetWidth(420)
     footerText:SetJustifyH("LEFT")
     self.optionsStatusText = footerText
@@ -1531,10 +1542,6 @@ function NS:RefreshOptions()
     if self.nameWidthNote then
         local wanted = self.db.showNames and not self:CellShowsNames()
         self.nameWidthNote:SetText(wanted and string.format(self.L.NAME_TOO_SMALL, 16) or "")
-    end
-    if self.overviewProfileText then
-        self.overviewProfileText:SetText(string.format(self.L.OVERVIEW_PROFILE,
-            self:GetActiveProfileLabel()))
     end
     if self.overviewEngineText then
         self.overviewEngineText:SetText(self:AuraEngineStateSentence())

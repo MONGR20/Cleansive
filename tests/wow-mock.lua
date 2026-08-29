@@ -128,8 +128,19 @@ local function newFrame(name)
         else
             relative, relativePoint, x, y = a, b, c, d
         end
-        rawset(s, "__lastPoint", { point = point, relative = relative,
-            relativePoint = relativePoint, x = x, y = y })
+        local placed = { point = point, relative = relative,
+            relativePoint = relativePoint, x = x, y = y }
+        rawset(s, "__lastPoint", placed)
+        -- Un cadre epingle par deux coins n'a qu'une seule des deux poses dans
+        -- __lastPoint : sa largeur reelle vient de la paire. Les garder toutes
+        -- est la seule facon de reconstituer un rectangle.
+        local points = rawget(s, "__points")
+        if not points then points = {} rawset(s, "__points", points) end
+        points[#points + 1] = placed
+    end)
+    rawset(f, "ClearAllPoints", function(s)
+        rawset(s, "__points", {})
+        rawset(s, "__lastPoint", nil)
     end)
     -- Un objet interdit n'est pas une fonction protegee : toute methode
     -- appelee dessus leve une erreur Lua ordinaire, sans ADDON_ACTION_*.

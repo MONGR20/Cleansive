@@ -6,6 +6,17 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.6.3
+
+Correctifs de mise en page releves sur captures en jeu, et reparation de
+l'outil qui aurait du les trouver avant vous.
+
+- **Neuf recouvrements corriges dans la fenetre de reglages.** Une phrase de 560 px passait en travers de deux interrupteurs ; le bloc « Ou la grille apparait » mordait sur les boutons d'outils rapides ; la description de l'Historique passait sous « Copier cette liste » ; le texte d'etat du pied passait sous « Reinitialiser cette page » et « Mode test », sur trois pages sur cinq. Et en bas de la page General, quatre textes se disputaient trois lignes : le resume de profil repetait mot pour mot ce que la carte posee dessus annoncait deja — il a disparu, l'information reste, dite une seule fois.
+- **Le detecteur de recouvrement avait deux angles morts, et c'est le vrai defaut.** Il ecartait en silence tout texte a qui on avait donne une largeur sans hauteur — c'est-a-dire toutes les phrases d'explication, celles qui reviennent a la ligne. Il ne comprenait que deux ancrages sur neuf et aucun ancrage relatif a un autre cadre. Et il ne comparait que les pages, jamais le pied de la fenetre, qui n'appartient a aucune d'elles. Il resout desormais la geometrie pour de bon : les neuf ancrages, les chaines d'ancrages relatifs, la hauteur reelle d'un texte qui revient a la ligne, et le pied de fenetre. Les neuf recouvrements sont tombes du premier coup.
+- **Ce que le detecteur ne fera pas.** La descente a l'interieur des controles a ete essayee puis retiree : la largeur d'un texte y est estimee, pas mesuree, et cette estimation accusait huit controles que les captures montrent parfaitement lisibles. Un controle mesure faux qui accuse est pire qu'un controle non mesure. Tout ce qui doit etre surveille reste donc enfant direct de sa page.
+- Un invariant trouve en chemin est desormais garde : la couche de recharge doit avoir exactement la taille de l'ancre securisee qu'elle decalque, sans quoi tous les voiles se decalent. Les deux tailles etaient posees a deux endroits eloignes, sans rien pour les lier.
+- Tests : 1 208 a 1 219.
+
 ## 1.6.2
 
 Trois finitions d’interface relevees par l’audit de la 1.6.
