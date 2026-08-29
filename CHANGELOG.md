@@ -6,6 +6,14 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.5.43
+
+- **Les boutons souris 4 et 5 sont pris en charge.** Rien de neuf n'y est lie : le bouton 4 lance la troisieme dissipation, deja disponible sur Ctrl + clic gauche, et le bouton 5 pose la focalisation, deja sur Ctrl + clic milieu. Les deux combinaisons les plus penibles a faire en plein combat sont simplement accessibles au pouce. Une souris sans ces boutons ne perd rien, et aucune assignation existante ne bouge. L'infobulle de la grille les decrit, en anglais comme en francais.
+
+*La correspondance est fixe : Cleansive detecte les sorts, il ne propose pas de remapper les touches. Un veritable remappage est un autre chantier, avec son ecran de configuration.*
+
+- Tests : 702 a 713.
+
 ## 1.5.42
 
 Cette version ne change aucun comportement. Elle ajoute deux relevés destinés à trancher une hypothèse sur le refus de mise en forme, ouverte depuis la 1.5.40.

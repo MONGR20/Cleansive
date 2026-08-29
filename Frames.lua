@@ -1059,6 +1059,21 @@ function NS:ApplySecureBindings()
         target:SetAttribute("ctrl-spell1", threeName)
         target:SetAttribute("type3", "target")
         target:SetAttribute("ctrl-type3", "focus")
+
+        -- The two awkward combinations, mirrored onto the thumb buttons for
+        -- players whose mouse has them. Nothing new is bound: button 4 is the
+        -- third cleanse, already on Ctrl + left, and button 5 sets focus,
+        -- already on Ctrl + middle. A mouse without them loses nothing.
+        -- The wildcards are set for the same reason as buttons 1 and 2 above:
+        -- the unit template can supply its own default and 12.1 would fall
+        -- back to it.
+        target:SetAttribute("type4", threeName and "spell" or "none")
+        target:SetAttribute("spell4", threeName)
+        target:SetAttribute("*type4", threeName and "spell" or "none")
+        target:SetAttribute("*spell4", threeName)
+
+        target:SetAttribute("type5", "focus")
+        target:SetAttribute("*type5", "focus")
         end
     end
     self:ConfigurePriorityDispelButton()
@@ -1939,6 +1954,7 @@ function NS:ShowButtonTooltip(button)
     end
     GameTooltip:AddLine(self.L.TARGET, 0.65, 0.65, 0.65)
     GameTooltip:AddLine(self.L.FOCUS_BIND, 0.65, 0.65, 0.65)
+    GameTooltip:AddLine(self.L.THUMB_BIND, 0.65, 0.65, 0.65)
     GameTooltip:Show()
 end
 
