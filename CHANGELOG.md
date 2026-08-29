@@ -6,6 +6,12 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.5.61
+
+- **Sortir du combat n’est pas sortir de la rencontre.** Un changement de spécialisation en plein combat laissait une reconstruction du moteur d’auras en attente, rejouée au premier répit — c’est-à-dire potentiellement entre deux vagues d’un boss. Un emplacement d’aura ne se retire jamais : reconstruire au milieu d’une rencontre coûte des emplacements définitifs pour deux secondes de calme. Le travail attend maintenant `ENCOUNTER_END`. Hors rencontre, la fin de combat suffit toujours — il ne faut pas attendre un signal qui ne viendra jamais en monde ouvert.
+- **La page Général s’ouvre sur l’essentiel** : le profil actif, et l’état du moteur d’auras protégé en une phrase — non utilisé, pas encore en place, en attente d’un moment calme, incomplet, ou pilotant toutes les cases.
+- Tests : 1059 à 1082.
+
 ## 1.5.60
 
 - **Glisser un curseur de taille ne replace plus la grille à chaque cran.** Un glissement complet déclenchait des dizaines de repositionnements de 82 cases dont un seul comptait. Seul le dernier s’applique désormais. L’aperçu des options, lui, reste immédiat : c’est celui que vous regardez pendant le geste.

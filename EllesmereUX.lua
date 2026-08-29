@@ -758,6 +758,17 @@ function NS:CreateOptions()
     self.optionsPages.general = general
     self.optionChecks = {}
 
+    local overviewProfile = text(general, "", 11, C.dim)
+    overviewProfile:SetPoint("BOTTOMLEFT", 0, 34)
+    overviewProfile:SetWidth(560)
+    overviewProfile:SetJustifyH("LEFT")
+    self.overviewProfileText = overviewProfile
+    local overviewEngine = text(general, "", 10, C.dim)
+    overviewEngine:SetPoint("BOTTOMLEFT", 0, 16)
+    overviewEngine:SetWidth(560)
+    overviewEngine:SetJustifyH("LEFT")
+    self.overviewEngineText = overviewEngine
+
     section(general, localized("Fonctionnement", "Behavior"), -2)
     self.optionChecks[#self.optionChecks + 1] = toggle(general, localized("Addon actif", "Addon enabled"), 0, -28, 275, "enabled", function(value) self:SetEnabled(value) end, self.L.TIP_ENABLED)
     self.optionChecks[#self.optionChecks + 1] = toggle(general, self.L.LOCK, 300, -28, 275, "locked", function()
@@ -1450,6 +1461,13 @@ function NS:RefreshOptions()
     if self.nameWidthNote then
         local wanted = self.db.showNames and not self:CellShowsNames()
         self.nameWidthNote:SetText(wanted and string.format(self.L.NAME_TOO_SMALL, 16) or "")
+    end
+    if self.overviewProfileText then
+        self.overviewProfileText:SetText(string.format(self.L.OVERVIEW_PROFILE,
+            self:GetActiveProfileLabel()))
+    end
+    if self.overviewEngineText then
+        self.overviewEngineText:SetText(self:AuraEngineStateSentence())
     end
     if self.soundStateText then
         self.soundStateText:SetText(self:AuraSoundStateSentence())

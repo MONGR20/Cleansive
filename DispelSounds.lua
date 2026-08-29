@@ -614,3 +614,20 @@ end
 function NS:AuraSoundStateSentence()
     return self.L["SOUND_STATE_" .. self:AuraSoundState()] or self.L.SOUND_STATE_IDLE
 end
+
+-- Meme principe que pour le son : une conclusion, pas une suite de nombres.
+function NS:AuraEngineState()
+    if not self.engineAuraMode then return "OFF" end
+    local diagnostics = self.auraContainerDiagnostics
+    if type(diagnostics) ~= "table" then return "IDLE" end
+    if self.pendingAuraEngineRebuild then return "PENDING" end
+    if (tonumber(diagnostics.added) or 0) < (tonumber(diagnostics.expected) or 0)
+        or diagnostics.firstError then
+        return "DEGRADED"
+    end
+    return "ACTIVE"
+end
+
+function NS:AuraEngineStateSentence()
+    return self.L["ENGINE_STATE_" .. self:AuraEngineState()] or self.L.ENGINE_STATE_IDLE
+end

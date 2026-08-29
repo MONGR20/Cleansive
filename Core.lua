@@ -691,7 +691,8 @@ function NS:FlushCombatUpdates()
     if needsSpells or needsRoster then self:ApplySecureBindings() end
     -- A specialization change during combat cannot rebuild the engine
     -- slots; replay it now so the type set is not left stale.
-    if self.pendingAuraEngineRebuild and self.RefreshAuraEngineTypes then
+    if self.pendingAuraEngineRebuild and self.RefreshAuraEngineTypes
+        and not self.encounterActive then
         self:RefreshAuraEngineTypes()
     end
     self.pendingAuraFilters = false
@@ -888,6 +889,7 @@ local EVENT_NAMES = {
     -- marked HasRestrictions, and the static check verifies that against
     -- Blizzard's own definitions rather than against this comment.
     "LOSS_OF_CONTROL_ADDED", "LOSS_OF_CONTROL_UPDATE",
+    "ENCOUNTER_START", "ENCOUNTER_END",
     "ADDON_ACTION_FORBIDDEN", "ADDON_ACTION_BLOCKED",
     -- The only signal that a restriction has lifted. Without it, work deferred
     -- because the client refused permission would wait for an unrelated event:
@@ -933,6 +935,19 @@ events:SetScript("OnEvent", function(_, event, ...)
     if event == "ADDON_ACTION_FORBIDDEN" or event == "ADDON_ACTION_BLOCKED" then
         local culprit, func = ...
         if NS.NoteForbiddenAction then NS:NoteForbiddenAction(culprit, func) end
+        NS.pendingNoticeSuppressed, NS.currentEvent = nil, nil
+        return
+    end
+
+    if event == "ENCOUNTER_START" then
+        NS.encounterActive = true
+        NS.pendingNoticeSuppressed, NS.currentEvent = nil, nil
+        return
+    elseif event == "ENCOUNTER_END" then
+        NS.encounterActive = false
+        -- La rencontre est finie : c'est maintenant que le travail garde en
+        -- reserve peut etre rejoue sans rien casser au milieu d'un combat.
+        NS:OnCombatEnded()
         NS.pendingNoticeSuppressed, NS.currentEvent = nil, nil
         return
     end
