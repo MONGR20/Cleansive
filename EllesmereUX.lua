@@ -295,8 +295,18 @@ local function section(parent, value, y)
     return label
 end
 
+local optionRegistry = {}
+
+local function registerOption(control, parent, label, helpText)
+    optionRegistry[#optionRegistry + 1] = {
+        control = control, parent = parent, label = label, help = helpText,
+    }
+    return control
+end
+
 local function toggle(parent, value, x, y, width, key, callback, helpText)
     local row = CreateFrame("Button", nil, parent)
+    registerOption(row, parent, value, helpText)
     row:SetSize(width or 250, 34)
     row:SetPoint("TOPLEFT", x, y)
     row.key = key
@@ -362,6 +372,7 @@ local sliderCount = 0
 local function slider(parent, value, x, y, width, minValue, maxValue, step, key, format, callback, helpText, display)
     sliderCount = sliderCount + 1
     local control = CreateFrame("Slider", "CleansiveUXSlider" .. sliderCount, parent)
+    registerOption(control, parent, value, helpText)
     -- 30 px de cadre pour une barre de 4 et un curseur de 18 : le bas du cadre
     -- descendait sous le libelle du curseur suivant et ne laissait que 9 px
     -- avant « Outils rapides ». 22 garde 2 px de marge autour du curseur et
@@ -675,6 +686,48 @@ function NS:CreateOptions()
         local pageKey = key
         control:SetScript("OnClick", function() self:ShowOptionsPage(pageKey) end)
     end
+
+    -- Une zone de recherche dans la barre laterale, au-dessus des pages :
+    -- c'est la que le joueur cherche deja quand il ne sait pas ou aller.
+    local searchBox = CreateFrame("EditBox", nil, sidebar)
+    searchBox:SetSize(152, 24)
+    searchBox:SetPoint("TOPLEFT", 18, -66)
+    searchBox:SetAutoFocus(false)
+    searchBox:SetFontObject(ChatFontNormal)
+    searchBox:SetTextInsets(6, 6, 0, 0)
+    local searchBg = solid(sidebar, "BACKGROUND", 1, 1, 1, 0.05)
+    searchBg:SetPoint("TOPLEFT", searchBox, "TOPLEFT", 0, 0)
+    searchBg:SetPoint("BOTTOMRIGHT", searchBox, "BOTTOMRIGHT", 0, 0)
+    local searchHint = text(sidebar, self.L.SEARCH_PLACEHOLDER, 11, C.dim)
+    searchHint:SetPoint("LEFT", searchBox, "LEFT", 7, 0)
+    self.optionsSearchBox = searchBox
+
+    local results = CreateFrame("Frame", nil, frame)
+    results:SetSize(360, 240)
+    results:SetPoint("TOPLEFT", 190, -66)
+    results:SetFrameStrata("DIALOG")
+    results:SetFrameLevel(frame:GetFrameLevel() + 20)
+    addPanelBackground(results, 0.98)
+    results:Hide()
+    results.rows = {}
+    for index = 1, 8 do
+        local row = button(results, "", 336, 26)
+        row:SetPoint("TOPLEFT", 12, -10 - ((index - 1) * 28))
+        results.rows[index] = row
+    end
+    results.empty = text(results, self.L.SEARCH_NONE, 11, C.dim)
+    results.empty:SetPoint("TOPLEFT", 14, -14)
+    self.optionsSearchResults = results
+
+    searchBox:SetScript("OnTextChanged", function(box)
+        local query = box:GetText()
+        searchHint:SetShown(query == "")
+        self:RefreshOptionsSearch(query)
+    end)
+    searchBox:SetScript("OnEscapePressed", function(box)
+        box:SetText("")
+        box:ClearFocus()
+    end)
 
     local version = text(sidebar, "v" .. self.version .. "  -  Retail 12.1", 10, C.dim)
     version:SetPoint("BOTTOMLEFT", 18, 18)
@@ -1210,6 +1263,17 @@ function NS:CreateOptions()
     transferButton:SetPoint("TOPLEFT", 204, -1034)
     transferButton:SetScript("OnClick", function() self:ShowProfileTransfer() end)
 
+    self.optionIndex = {}
+    for _, entry in ipairs(optionRegistry) do
+        for pageKey, page in pairs(self.optionsPages) do
+            if entry.parent == page then
+                self.optionIndex[#self.optionIndex + 1] = {
+                    page = pageKey, label = entry.label, help = entry.help,
+                }
+            end
+        end
+    end
+
     self:CreateListWindow()
     self:CreateFilterWindow()
     self:RefreshOptions()
@@ -1731,4 +1795,68 @@ end
 function NS:RefreshOptionsStatus()
     if not self.optionsStatusText then return end
     self.optionsStatusText:SetText(self:OptionsStatusText())
+end
+
+-- Accent-insensitive, because a player types "reglage" and the label says
+-- "réglage". Lua has no case folding for accents, so the pairs are listed.
+local SEARCH_FOLD = {
+    ["à"] = "a", ["â"] = "a", ["ä"] = "a", ["é"] = "e", ["è"] = "e", ["ê"] = "e",
+    ["ë"] = "e", ["î"] = "i", ["ï"] = "i", ["ô"] = "o", ["ö"] = "o", ["ù"] = "u",
+    ["û"] = "u", ["ü"] = "u", ["ç"] = "c", ["’"] = "'",
+}
+
+function NS:FoldForSearch(value)
+    value = string.lower(tostring(value or ""))
+    for accented, plain in pairs(SEARCH_FOLD) do
+        value = string.gsub(value, accented, plain)
+    end
+    return value
+end
+
+-- A result without its page is a dead end: the player finds the name and still
+-- does not know where to go.
+function NS:SearchOptions(query)
+    local needle = self:FoldForSearch(query)
+    if needle == "" then return {} end
+    local results = {}
+    for _, entry in ipairs(self.optionIndex or {}) do
+        local haystack = self:FoldForSearch(entry.label) .. " " .. self:FoldForSearch(entry.help)
+        if string.find(haystack, needle, 1, true) then
+            results[#results + 1] = {
+                page = entry.page,
+                label = entry.label,
+                pageLabel = self.L["PAGE_" .. string.upper(entry.page) .. "_SHORT"] or entry.page,
+            }
+        end
+        if #results >= 8 then break end
+    end
+    return results
+end
+
+function NS:RefreshOptionsSearch(query)
+    local panel = self.optionsSearchResults
+    if not panel then return end
+    if not query or query == "" then
+        panel:Hide()
+        return
+    end
+    local found = self:SearchOptions(query)
+    panel.empty:SetShown(#found == 0)
+    for index, row in ipairs(panel.rows) do
+        local entry = found[index]
+        if entry then
+            row:SetText(string.format(self.L.SEARCH_RESULT, entry.pageLabel, entry.label))
+            row:SetScript("OnClick", function()
+                self:ShowOptionsPage(entry.page)
+                if self.optionsSearchBox then
+                    self.optionsSearchBox:SetText("")
+                    self.optionsSearchBox:ClearFocus()
+                end
+            end)
+            row:Show()
+        else
+            row:Hide()
+        end
+    end
+    panel:Show()
 end

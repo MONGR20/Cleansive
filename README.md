@@ -1,4 +1,4 @@
-# Cleansive 1.5.53
+# Cleansive 1.5.54
 
 Cleansive is a standalone one-click cleansing addon for **World of Warcraft Retail 12.1** (`120100`). It provides a compact Decursive-style workflow with a dark, class-colored interface inspired by the clarity of Ellesmere UI. The interface follows the language of your WoW client, English or French; either can be picked from the General page at any time.
 
@@ -148,6 +148,7 @@ the reason on its own.
 
 ## Recent changes
 
+- **1.5.54** - a search box in the settings window finds a setting and says which page it is on.
 - **1.5.53** - the tooltip says why a cell sits where it does, and the affliction history remembers where each one was seen.
 - **1.5.52** - four starting points for the look, a reset that touches only the page you are on, and two clicks before anything is destroyed.
 - **1.5.51** - the settings window says its real state, hides what does not apply, and every window comes back where you left it.

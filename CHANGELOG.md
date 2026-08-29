@@ -6,6 +6,13 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.5.54
+
+- **Une recherche dans les réglages.** Elle ignore les accents et les majuscules — on tape « opacite » et on trouve « Opacité » — et elle cherche aussi dans les textes d’aide, parce qu’on cherche souvent par ce qu’un réglage *fait* plutôt que par son nom exact.
+- **Chaque résultat dit sur quelle page aller**, en clair, et cliquer dessus y emmène. Un résultat qui donne le nom sans le chemin est un cul-de-sac.
+- L’index est alimenté par les fabricants de contrôles eux-mêmes : une liste tenue à côté aurait divergé dès le premier réglage ajouté.
+- Tests : 943 à 964.
+
 ## 1.5.53
 
 - **L’infobulle d’une case dit pourquoi elle est là** : parce que c’est vous, parce que l’unité figure à telle position de votre liste de priorité, ou parce que c’est une case d’aperçu. L’ordre était déjà déterministe ; il n’était simplement écrit nulle part.
