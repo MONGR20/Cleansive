@@ -95,12 +95,38 @@ local function text(parent, value, size, color, layer)
     return label
 end
 
+-- La mise a l'echelle ne se faisait qu'une fois, a la creation. Changer de
+-- resolution, passer en fenetre, ou bouger l'echelle de l'interface laissait la
+-- fenetre a l'ancienne taille : sur un ecran devenu plus petit elle depassait
+-- de partout jusqu'au prochain /reload. La taille de conception est retenue sur
+-- le cadre pour que le calcul puisse etre rejoue tel quel.
 local function fitToScreen(frame, width, height)
+    if width then frame.uxDesignWidth = width end
+    if height then frame.uxDesignHeight = height end
+    width, height = frame.uxDesignWidth, frame.uxDesignHeight
+    if not (width and height) then return end
     if not UIParent or not UIParent.GetWidth or not UIParent.GetHeight then return end
     local availableWidth = math.max(1, UIParent:GetWidth() - 40)
     local availableHeight = math.max(1, UIParent:GetHeight() - 40)
     local scale = math.min(1, availableWidth / width, availableHeight / height)
+    -- Le plancher est celui de la lisibilite : en dessous, les libelles ne se
+    -- lisent plus et une fenetre illisible ne vaut pas mieux qu'une fenetre
+    -- trop grande.
     frame:SetScale(math.max(0.70, scale))
+    local windows = NS.uxWindows
+    if not windows then windows = {} NS.uxWindows = windows end
+    for _, known in ipairs(windows) do
+        if known == frame then return end
+    end
+    windows[#windows + 1] = frame
+end
+
+-- Rejoue le calcul pour chaque fenetre deja construite. Appele par les deux
+-- evenements qui changent la place disponible.
+function NS:RefitWindows()
+    for _, frame in ipairs(self.uxWindows or {}) do
+        fitToScreen(frame)
+    end
 end
 
 function NS:GetUXAccent()
@@ -562,6 +588,17 @@ local function layoutModeLabel(mode)
     if mode == "HORIZONTAL" then return NS.L.LAYOUT_HORIZONTAL end
     if mode == "VERTICAL" then return NS.L.LAYOUT_VERTICAL end
     return NS.L.LAYOUT_GRID
+end
+
+-- Une bande allumee au bas de la page serait un mensonge : elle ne parait que
+-- tant qu'il reste de la matiere sous le pli. Les 2 px de marge absorbent
+-- l'arrondi du client, qui ne rend jamais la portee au pixel pres.
+function NS:UpdateHelpScrollHint()
+    local scroll, hint = self.helpScroll, self.helpScrollHint
+    if not (scroll and hint) then return end
+    local range = scroll:GetVerticalScrollRange() or 0
+    local position = scroll:GetVerticalScroll() or 0
+    hint:SetShown(range > 0 and position < range - 2)
 end
 
 function NS:ShowOptionsPage(key)
@@ -1251,10 +1288,30 @@ function NS:CreateOptions()
 
     local helpScroll = CreateFrame("ScrollFrame", nil, help, "UIPanelScrollFrameTemplate")
     helpScroll:SetPoint("TOPLEFT", 0, -2)
-    helpScroll:SetPoint("BOTTOMRIGHT", -26, 0)
+    -- La zone s'arrete 20 px au-dessus du bas de la page : la bande d'indice
+    -- occupe cet espace et ne recouvre donc jamais une ligne de texte.
+    helpScroll:SetPoint("BOTTOMRIGHT", -26, 20)
     local helpBody = CreateFrame("Frame", nil, helpScroll)
     helpBody:SetSize(540, 1180)
     helpScroll:SetScrollChild(helpBody)
+    self.helpScroll = helpScroll
+
+    -- La page fait plus de deux ecrans, et rien ne le disait : la barre de
+    -- Blizzard se confond avec le fond sombre du panneau. La bande ne parait
+    -- que tant qu'il reste quelque chose a lire, et s'efface au bas de la page.
+    local scrollHint = CreateFrame("Frame", nil, help)
+    scrollHint:SetPoint("BOTTOMLEFT", 0, 0)
+    scrollHint:SetPoint("BOTTOMRIGHT", -26, 0)
+    scrollHint:SetHeight(18)
+    solid(scrollHint, "BACKGROUND", C.panelDeep[1], C.panelDeep[2], C.panelDeep[3], 0.92)
+    scrollHint.label = text(scrollHint, self.L.HELP_SCROLL_HINT, 10, C.dim)
+    scrollHint.label:SetPoint("LEFT", 4, 0)
+    scrollHint:Hide()
+    self.helpScrollHint = scrollHint
+
+    helpScroll:SetScript("OnVerticalScroll", function() self:UpdateHelpScrollHint() end)
+    helpScroll:SetScript("OnScrollRangeChanged", function() self:UpdateHelpScrollHint() end)
+    help:SetScript("OnShow", function() self:UpdateHelpScrollHint() end)
 
     local function helpBlock(heading, body, y)
         local title = text(helpBody, heading, 12, C.section)

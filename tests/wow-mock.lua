@@ -61,6 +61,10 @@ local function newFrame(name)
     rawset(f, "SetText", function(s, v) rawset(s, "__text", v) end)
     rawset(f, "GetText", function(s) return rawget(s, "__text") end)
     rawset(f, "SetAlpha", function(s, v) rawset(s, "__alpha", v) end)
+    -- SetScale tombait dans le stub generique : une fenetre remise a l'echelle
+    -- et une fenetre oubliee rendaient exactement la meme chose.
+    rawset(f, "SetScale", function(s, v) rawset(s, "__scale", tonumber(v) or 1) end)
+    rawset(f, "GetScale", function(s) return rawget(s, "__scale") or 1 end)
     rawset(f, "SetMouseClickEnabled", function(s, v) rawset(s, "__mouseClicks", v and true or false) end)
     rawset(f, "SetMouseMotionEnabled", function(s, v) rawset(s, "__mouseMotion", v and true or false) end)
     rawset(f, "SetScript", function(s, k, v) rawset(s, "__scripts_" .. k, v) end)
@@ -159,6 +163,17 @@ local function newFrame(name)
         end)
         return fs
     end)
+    -- Une zone de defilement tombait dans le stub generique : GetVerticalScroll
+    -- et GetVerticalScrollRange rendaient nil, donc tout code qui decide
+    -- quelque chose a partir de la position de la barre etait invisible aux
+    -- tests. __scrollRange est pose par le test : le client, lui, le calcule.
+    rawset(f, "SetVerticalScroll", function(s, value)
+        rawset(s, "__scroll", tonumber(value) or 0)
+        local handler = rawget(s, "__scripts_OnVerticalScroll")
+        if handler then handler(s, rawget(s, "__scroll")) end
+    end)
+    rawset(f, "GetVerticalScroll", function(s) return rawget(s, "__scroll") or 0 end)
+    rawset(f, "GetVerticalScrollRange", function(s) return rawget(s, "__scrollRange") or 0 end)
     rawset(f, "GetThumbTexture", function() return newFrame("thumb") end)
     return f
 end

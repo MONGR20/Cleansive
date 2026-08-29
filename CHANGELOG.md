@@ -6,6 +6,15 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.6.2
+
+Trois finitions d’interface relevees par l’audit de la 1.6.
+
+- **La grille dit elle-meme qu’elle est en apercu.** L’information ne vivait que dans la fenetre d’options : une capture d’ecran, ou un retour au clavier apres une pause, ne disait plus si les cases rouges etaient de vraies afflictions. Une plaque **TEST** parait a cote de la grille tant que l’apercu est ouvert. Elle vit sur la couche non protegee, n’entre jamais dans la hierarchie securisee et n’avale aucun clic.
+- **La page d’Aide dit qu’elle continue plus bas.** Elle fait plus de deux ecrans et la barre de defilement de Blizzard se confond avec le fond sombre du panneau : on arrivait au bas des Commandes en croyant la page finie. Une bande d’indice occupe desormais une bande reservee sous la zone de lecture — elle ne recouvre aucune ligne, et s’efface des qu’il n’y a plus rien a lire.
+- **Les fenetres se remettent a l’echelle quand l’ecran change.** Le calcul ne se faisait qu’a la creation : changer de resolution, passer en fenetre ou bouger l’echelle de l’interface laissait la fenetre a l’ancienne taille jusqu’au prochain `/reload`. `UI_SCALE_CHANGED` et `DISPLAY_SIZE_CHANGED` rejouent le calcul pour chaque fenetre. Le plancher de lisibilite de 0,70 est conserve : il ne se declenche qu’en dessous de 530 unites de hauteur utile, ce que le client ne produit pas — aucun chemin de secours n’a donc ete ajoute pour un cas que rien ne peut atteindre.
+- Tests : 1 180 a 1 208. Le harnais retient desormais l’echelle d’une fenetre et la position d’une zone de defilement, que le bouchon generique rendait indiscernables.
+
 ## 1.6.1
 
 Corrections issues d’un audit externe de la 1.6 et de captures d’écran en jeu.

@@ -2453,6 +2453,52 @@ do
     falsy(NS.noCureNotice:IsShown(), "sans dissipation : le sort qui revient le fait taire")
 end
 
+-- 1.6.2 : l'apercu ne se lisait que dans la fenetre d'options. Une capture, ou
+-- un retour au clavier apres une pause, ne disait plus si les cases rouges
+-- etaient de vraies afflictions.
+do
+    freshProfile("PALADIN")
+    knowSpells(4987)
+    NS:UpdateSpells()
+    NS:RebuildRoster()
+    mock.state.inCombat = false
+    NS.testMode = false
+    NS:RefreshAll(true)
+    falsy(NS.testNotice:IsShown(), "apercu : hors apercu, aucune plaque")
+
+    NS:ToggleTest()
+    truthy(NS.testMode, "apercu : le mode est bien actif")
+    truthy(NS.testNotice:IsShown(), "apercu : la plaque le dit a cote de la grille")
+    eq(NS.testNotice.label.__text, NS.L.TEST_BADGE,
+        "apercu : avec son libelle traduit")
+
+    -- La plaque ne doit jamais entrer dans la hierarchie securisee : elle vit
+    -- sur la couche de recharge, qui est un enfant direct d'UIParent, et elle
+    -- ne prend aucun clic.
+    eq(NS.testNotice.__parent, NS.cooldownBody,
+        "apercu : la plaque vit sur la couche non protegee")
+    falsy(NS.testNotice.__mouseClicks, "apercu : elle n'avale aucun clic")
+
+    -- Deux plaques a la fois ne doivent pas se superposer : c'est exactement
+    -- le defaut corrige sur la pile d'origine.
+    mock.state.inCombat = true
+    NS:MarkPending("pendingRoster")
+    truthy(NS.pendingIndicator:IsShown(), "apercu : la plaque d'attente s'allume aussi")
+    truthy(NS.testNotice.__lastPoint and NS.pendingIndicator.__lastPoint,
+        "apercu : les deux plaques sont posees")
+    truthy(math.abs((NS.testNotice.__lastPoint.x or 0)
+        - (NS.pendingIndicator.__lastPoint.x or 0)) > 1,
+        "apercu : elles ne sont pas dessinees au meme endroit")
+    NS.pendingRoster = false
+    mock.state.inCombat = false
+    NS:UpdatePendingIndicator()
+
+    -- L'entree en combat ferme l'apercu : la plaque part avec lui.
+    NS:EndTestModeForCombat()
+    falsy(NS.testMode, "apercu : le combat ferme l'apercu")
+    falsy(NS.testNotice:IsShown(), "apercu : et la plaque s'eteint avec lui")
+end
+
 --------------------------------------------------------------------------
 -- 1.5.29 : la fenetre d'options
 --------------------------------------------------------------------------
@@ -2615,6 +2661,50 @@ do
     NS.db.frameSize = 22
 end
 
+-- 1.6.2 : la page d'Aide fait plus de deux ecrans et rien ne le disait. La
+-- barre de Blizzard se confond avec le fond sombre du panneau : le joueur
+-- arrivait au bas des « Commandes » et croyait la page finie.
+do
+    local scroll, hint = NS.helpScroll, NS.helpScrollHint
+    truthy(scroll and hint, "aide : la zone de defilement et sa bande existent")
+
+    -- La bande occupe une bande reservee SOUS la zone de lecture : si la zone
+    -- descendait jusqu'au bas de la page, la bande couvrirait une ligne.
+    local point, _, _, _, y = scroll:GetPoint(1)
+    eq(point, "BOTTOMRIGHT", "aide : le dernier ancrage de la zone est son bas")
+    truthy((y or 0) >= 18,
+        "aide : la zone de lecture s'arrete au-dessus de la bande")
+
+    -- Une page qui tient a l'ecran n'a rien a annoncer.
+    scroll.__scrollRange = 0
+    NS:UpdateHelpScrollHint()
+    falsy(hint:IsShown(), "aide : une page qui tient en entier ne dit rien")
+
+    scroll.__scrollRange = 660
+    NS:UpdateHelpScrollHint()
+    truthy(hint:IsShown(), "aide : une page plus longue que l'ecran l'annonce")
+    eq(hint.label.__text, NS.L.HELP_SCROLL_HINT,
+        "aide : avec son libelle traduit")
+
+    -- Descendre jusqu'en bas doit l'eteindre, et par le seul cablage de la
+    -- molette : le test n'appelle pas la mise a jour lui-meme.
+    scroll:SetVerticalScroll(660)
+    falsy(hint:IsShown(), "aide : arrive en bas, elle s'efface")
+    scroll:SetVerticalScroll(0)
+    truthy(hint:IsShown(), "aide : et revient des qu'on remonte")
+
+    -- La longueur de la page depend du texte : la ligne de version, un libelle
+    -- traduit plus long, et la portee change sans que la molette bouge. Ouvrir
+    -- la page doit donc reposer la question, sinon la bande reste allumee sur
+    -- une page qui tient desormais a l'ecran.
+    truthy(hint:IsShown(), "aide : la bande est allumee avant le changement")
+    scroll.__scrollRange = 0
+    NS:ShowOptionsPage("general")
+    NS:ShowOptionsPage("help")
+    falsy(hint:IsShown(), "aide : rouvrir la page eteint une bande devenue fausse")
+    scroll:SetVerticalScroll(0)
+end
+
 --------------------------------------------------------------------------
 -- 1.5.38 : aucun emplacement ne peut reposer sur un filtre par identifiant
 --------------------------------------------------------------------------
@@ -2735,6 +2825,48 @@ do
         "inscription : mais le reste s'inscrit toujours")
 
     mock.state.refusedEvents = {}
+end
+
+-- 1.6.2 : la mise a l'echelle des fenetres ne se faisait qu'a la creation.
+-- Changer de resolution, passer en fenetre ou bouger l'echelle de l'interface
+-- laissait la fenetre a l'ancienne taille jusqu'au prochain /reload.
+do
+    freshProfile("PALADIN")
+    local frame = NS.optionsFrame
+    truthy(frame, "echelle : la fenetre d'options existe")
+
+    local fire = NS.eventFrame:GetScript("OnEvent")
+    truthy(NS.eventFrame:IsEventRegistered("UI_SCALE_CHANGED"),
+        "echelle : le changement d'echelle de l'interface est ecoute")
+    truthy(NS.eventFrame:IsEventRegistered("DISPLAY_SIZE_CHANGED"),
+        "echelle : le changement de resolution aussi")
+
+    -- Un ecran large : rien a reduire.
+    mock.state.screen = { width = 1920, height = 1080 }
+    NS:RefitWindows()
+    eq(frame:GetScale(), 1, "echelle : sur un grand ecran la fenetre garde sa taille")
+
+    -- L'ecran retrecit : c'est la hauteur qui manque en premier, 700 px de
+    -- conception pour 620 - 40 disponibles.
+    mock.state.screen = { width = 1200, height = 620 }
+    fire(NS.eventFrame, "DISPLAY_SIZE_CHANGED")
+    local expected = (620 - 40) / 700
+    truthy(math.abs(frame:GetScale() - expected) < 0.001,
+        "echelle : l'ecran retreci reduit la fenetre par le seul evenement")
+
+    -- Et l'inverse : reprendre de la place doit rendre sa taille a la fenetre.
+    mock.state.screen = { width = 1920, height = 1080 }
+    fire(NS.eventFrame, "UI_SCALE_CHANGED")
+    eq(frame:GetScale(), 1, "echelle : la place retrouvee rend sa taille a la fenetre")
+
+    -- Le plancher de lisibilite tient : sous un certain point, mieux vaut une
+    -- fenetre trop grande qu'une fenetre illisible.
+    mock.state.screen = { width = 400, height = 300 }
+    NS:RefitWindows()
+    eq(frame:GetScale(), 0.70, "echelle : le plancher de lisibilite n'est pas franchi")
+
+    mock.state.screen = { width = 1920, height = 1080 }
+    NS:RefitWindows()
 end
 
 do

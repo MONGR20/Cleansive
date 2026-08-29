@@ -921,6 +921,10 @@ local EVENT_NAMES = {
     "UNIT_CONNECTION", "UNIT_ENTERED_VEHICLE", "UNIT_EXITED_VEHICLE", "PLAYER_FOCUS_CHANGED", "SPELLS_CHANGED", "SPELL_UPDATE_COOLDOWN", "SPELL_UPDATE_CHARGES",
     "PLAYER_SPECIALIZATION_CHANGED", "TRAIT_CONFIG_UPDATED", "PLAYER_REGEN_DISABLED",
     "PLAYER_REGEN_ENABLED", "UI_ERROR_MESSAGE", "PLAYER_LOGOUT",
+    -- La place disponible a l'ecran change sans prevenir : resolution, passage
+    -- en fenetre, echelle de l'interface. Sans ces deux-la, les fenetres de
+    -- l'addon gardaient l'echelle calculee a la connexion.
+    "UI_SCALE_CHANGED", "DISPLAY_SIZE_CHANGED",
     -- Purely observational. The client names the function it refused; until
     -- now Cleansive had to infer its refusals afterwards. Neither event is
     -- marked HasRestrictions, and the static check verifies that against
@@ -1049,6 +1053,8 @@ events:SetScript("OnEvent", function(_, event, ...)
         if state == inactive and not (InCombatLockdown and InCombatLockdown()) then
             NS:OnCombatEnded()
         end
+    elseif event == "UI_SCALE_CHANGED" or event == "DISPLAY_SIZE_CHANGED" then
+        if NS.RefitWindows then NS:RefitWindows() end
     elseif event == "UI_ERROR_MESSAGE" then
         NS:OnUIError(...)
     elseif event == "PLAYER_LOGOUT" then

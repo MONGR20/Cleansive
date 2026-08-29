@@ -381,6 +381,20 @@ function NS:CreateGrid()
         GameTooltip:Show()
     end)
 
+    -- Le mode apercu se lisait uniquement dans la fenetre d'options. Une
+    -- capture d'ecran, ou un retour au clavier apres une pause, ne disait plus
+    -- si les cases rouges etaient de vraies afflictions. La plaque le dit a
+    -- cote de la grille, sur la couche non protegee : elle n'entre jamais dans
+    -- la hierarchie securisee et ne prend aucun clic.
+    self.testNotice = createStatusPlate("CleansiveTestNotice", cooldownBody)
+    self.testNotice:SetScript("OnEnter", function(frame)
+        if not self.db.showTooltips then return end
+        GameTooltip:SetOwner(frame, "ANCHOR_RIGHT")
+        GameTooltip:AddLine(self.L.TEST_BADGE_TITLE, 1, 0.82, 0.30)
+        GameTooltip:AddLine(self.L.TEST_BADGE_HINT, 1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+
     self.buttons = {}
     self.engineAuraTypes = getPotentialAuraTypes()
     self.auraContainerDiagnostics = {
@@ -2011,6 +2025,7 @@ function NS:RefreshAll(force)
     self:UpdateManualIndicator()
     self:UpdatePendingIndicator()
     self:UpdateNoCureNotice()
+    self:UpdateTestNotice()
 end
 
 function NS:ShowButtonTooltip(button)
@@ -2374,6 +2389,7 @@ function NS:LayoutStatusNotices()
     local offset = manualShown and (size + 4) or 0
 
     for _, entry in ipairs({
+        { frame = self.testNotice, text = self.L.TEST_BADGE },
         { frame = self.pendingIndicator, text = self.L.PENDING_BADGE },
         { frame = self.noCureNotice, text = self.L.NO_CURE_BADGE },
     }) do
@@ -2440,6 +2456,18 @@ function NS:UpdatePendingIndicator()
     -- blinks for one frame on every option change.
     local inCombat = InCombatLockdown and InCombatLockdown()
     if not (waiting and inCombat and self.enabled and not self.gridManuallyHidden) then
+        frame:Hide()
+        self:LayoutStatusNotices()
+        return
+    end
+    frame:Show()
+    self:LayoutStatusNotices()
+end
+
+function NS:UpdateTestNotice()
+    local frame = self.testNotice
+    if not frame then return end
+    if not (self.testMode and self.enabled and not self.gridManuallyHidden) then
         frame:Hide()
         self:LayoutStatusNotices()
         return
