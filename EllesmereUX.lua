@@ -627,8 +627,11 @@ end
 
 local function createPreview(parent)
     local preview = CreateFrame("Frame", nil, parent)
-    preview:SetSize(560, 78)
-    preview:SetPoint("TOPLEFT", 0, -428)
+    -- 78 -> 70 : les cases font 38 px et sont centrees, la boite garde donc
+    -- 16 px de marge. Les huit pixels rendus paient la quatrieme rangee de
+    -- reglages sans tasser quoi que ce soit d'autre.
+    preview:SetSize(560, 70)
+    preview:SetPoint("TOPLEFT", 0, -444)
     local bg = solid(preview, "BACKGROUND", C.panelDeep[1], C.panelDeep[2], C.panelDeep[3], 0.80)
     bg:SetAllPoints()
     border(preview, 0.08)
@@ -1017,73 +1020,84 @@ function NS:CreateOptions()
         self:UpdateAuraContainerConfiguration(true)
         self:RefreshAll(true)
     end, self.L.TIP_AFFLICTED_ONLY)
+    -- Demande d'un joueur sur le forum le 30/08/2026 : reconnaitre qui est qui
+    -- sans lire un nom, que les petites cases ne peuvent de toute facon pas
+    -- afficher. Quatrieme rangee : tout ce qui suit descend d'autant, la place
+    -- etant prise sur deux ecarts genereux plutot qu'ajoutee au bas de la page.
+    self.optionChecks[#self.optionChecks + 1] = toggle(appearance, self.L.CLASS_COLOR_CELLS, 0, -148, 275,
+        -- Pas de RefreshCellPreview ici : les quatre cases de l'apercu des
+        -- options n'ont pas d'unite, donc pas de classe. Elles montrent le
+        -- langage d'une case affligee, que ce reglage ne touche jamais.
+        "classColorCells", function() self:RefreshAll(true) end,
+        self.L.TIP_CLASS_COLOR_CELLS)
+
     for index, preset in ipairs(self.VISUAL_PRESETS) do
         local presetButton = button(appearance, self.L["PRESET_" .. preset.key], 108, 24)
-        presetButton:SetPoint("TOPLEFT", 132 + ((index - 1) * 112), -144)
+        presetButton:SetPoint("TOPLEFT", 132 + ((index - 1) * 112), -190)
         presetButton:SetScript("OnClick", function() self:ApplyVisualPreset(preset.key) end)
         attachHelp(presetButton, self.L.PRESETS, self.L.TIP_PRESETS)
     end
 
-    section(appearance, localized("Dimensions", "Dimensions"), -148)
+    section(appearance, localized("Dimensions", "Dimensions"), -194)
     -- L'apercu des options reste immediat : c'est lui que le joueur regarde
     -- pendant qu'il glisse. Seule la vraie grille attend la fin du geste.
-    self.optionSliders[#self.optionSliders + 1] = slider(appearance, self.L.SIZE, 0, -180, 265, 12, 40, 1, "frameSize", "%d px", function()
+    self.optionSliders[#self.optionSliders + 1] = slider(appearance, self.L.SIZE, 0, -226, 265, 12, 40, 1, "frameSize", "%d px", function()
         self:Debounce("layout", 0.1, function() self:LayoutButtons() end)
         self:RefreshCellPreview()
         self:RefreshOptions()
     end, self.L.TIP_SIZE)
-    self.optionSliders[#self.optionSliders + 1] = slider(appearance, self.L.SPACING, 310, -180, 265, 0, 12, 1, "spacing", "%d px",
+    self.optionSliders[#self.optionSliders + 1] = slider(appearance, self.L.SPACING, 310, -226, 265, 0, 12, 1, "spacing", "%d px",
         function() self:Debounce("layout", 0.1, function() self:LayoutButtons() end) end, self.L.TIP_SPACING)
-    self.optionSliders[#self.optionSliders + 1] = slider(appearance, self.L.COLUMNS, 0, -246, 265, 1, 20, 1, "columns", "%d",
+    self.optionSliders[#self.optionSliders + 1] = slider(appearance, self.L.COLUMNS, 0, -278, 265, 1, 20, 1, "columns", "%d",
         function() self:Debounce("layout", 0.1, function() self:LayoutButtons() end) end, self.L.TIP_COLUMNS)
-    self.optionSliders[#self.optionSliders + 1] = slider(appearance, self.L.OPACITY, 310, -246, 265, 0.05, 0.80, 0.05, "inactiveAlpha", "%d %%", function() self:RefreshAll(true) end, self.L.TIP_OPACITY,
+    self.optionSliders[#self.optionSliders + 1] = slider(appearance, self.L.OPACITY, 310, -278, 265, 0.05, 0.80, 0.05, "inactiveAlpha", "%d %%", function() self:RefreshAll(true) end, self.L.TIP_OPACITY,
         function(current) return math.floor(current * 100 + 0.5) end)
 
     local nameNote = text(appearance, "", 10, C.dim)
-    nameNote:SetPoint("TOPLEFT", 0, -294)
+    nameNote:SetPoint("TOPLEFT", 0, -324)
     nameNote:SetWidth(560)
     nameNote:SetJustifyH("LEFT")
     self.nameWidthNote = nameNote
 
     local resizeNote = text(appearance, self.L.SIZE_COMBAT_NOTE, 10, C.dim)
-    resizeNote:SetPoint("TOPLEFT", 0, -308)
+    resizeNote:SetPoint("TOPLEFT", 0, -338)
     resizeNote:SetWidth(560)
     resizeNote:SetJustifyH("LEFT")
-    section(appearance, localized("Disposition", "Layout"), -334)
+    section(appearance, localized("Disposition", "Layout"), -372)
     local growLabel = text(appearance, self.L.GROW, 13, C.text)
-    growLabel:SetPoint("TOPLEFT", 0, -364)
+    growLabel:SetPoint("TOPLEFT", 0, -399)
     local grow = button(appearance, "", 160, 28)
-    grow:SetPoint("TOPLEFT", 150, -357)
+    grow:SetPoint("TOPLEFT", 150, -392)
     grow:SetScript("OnClick", function() self:CycleGrowth() end)
     attachHelp(grow, self.L.GROW, self.L.TIP_GROW)
     self.growButton = grow
     local layoutModeTitle = text(appearance, self.L.LAYOUT_MODE, 13, C.text)
-    layoutModeTitle:SetPoint("TOPLEFT", 330, -364)
+    layoutModeTitle:SetPoint("TOPLEFT", 330, -399)
     local layoutMode = button(appearance, "", 150, 28)
-    layoutMode:SetPoint("TOPLEFT", 425, -357)
+    layoutMode:SetPoint("TOPLEFT", 425, -392)
     layoutMode:SetScript("OnClick", function() self:CycleLayoutMode() end)
     attachHelp(layoutMode, self.L.LAYOUT_MODE, self.L.TIP_LAYOUT_MODE)
     self.layoutModeButton = layoutMode
 
-    section(appearance, localized("Aperçu en direct", "Live preview"), -406)
+    section(appearance, localized("Aperçu en direct", "Live preview"), -426)
     self.uxPreview = createPreview(appearance)
 
     -- The four cells above show the cell language. They cannot show whether a
     -- twenty-man grid still fits the screen, which is the question the player
     -- actually has. These buttons answer it on the real grid.
     local previewLabel = text(appearance, self.L.PREVIEW_GROUP, 13, C.text)
-    previewLabel:SetPoint("TOPLEFT", 0, -520)
+    previewLabel:SetPoint("TOPLEFT", 0, -528)
     self.previewSizeButtons = {}
     for index, count in ipairs({ 1, 5, 10, 20, 40 }) do
         local sizeButton = button(appearance, tostring(count), 42, 26)
-        sizeButton:SetPoint("TOPLEFT", 122 + ((index - 1) * 46), -514)
+        sizeButton:SetPoint("TOPLEFT", 122 + ((index - 1) * 46), -522)
         sizeButton:SetScript("OnClick", function() self:SetTestUnits(count) end)
         attachHelp(sizeButton, self.L.PREVIEW_GROUP, self.L.TIP_PREVIEW_GROUP)
         sizeButton.previewCount = count
         self.previewSizeButtons[index] = sizeButton
     end
     local stateButton = button(appearance, "", 168, 26)
-    stateButton:SetPoint("TOPLEFT", 400, -514)
+    stateButton:SetPoint("TOPLEFT", 400, -522)
     stateButton:SetScript("OnClick", function() self:CycleTestState() end)
     attachHelp(stateButton, self.L.PREVIEW_STATE, self.L.TIP_PREVIEW_STATE)
     self.previewStateButton = stateButton

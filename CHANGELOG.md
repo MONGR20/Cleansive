@@ -6,6 +6,14 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.6.5
+
+- **La couleur de classe sur les cases au repos.** Demande d'un joueur : reconnaitre qui est qui sans lire un nom, que les petites cases ne peuvent de toute facon pas afficher. Nouvelle option sur la page Apparence, **eteinte par defaut**. Une case affligee n'est jamais concernee : sa couleur dit le type de dissipation, et c'est la seule raison d'etre de la grille. La couleur est dessinee a l'opacite de repos que vous avez choisie — montez-la si vous voulez que les classes ressortent.
+- **La palette fait autorite, jamais la couleur rendue.** Un pretre EST blanc : deduire « classe illisible » d'une couleur blanche aurait rendu tous les pretres gris. Une classe que la palette ignore, ou que le client refuse de lire — elle est secrete-capable en 12.1 — rend la case neutre, pas blanche : un blanc a 18 % ressemblerait a une classe de plus.
+- **La page Apparence a ete redistribuee** pour loger la quatrieme rangee de reglages. Les huit pixels rendus par le cadre d'apercu paient la place : rien n'a ete tasse ailleurs, et le controle de recouvrement le verifie.
+- **Le harnais repondait « blanc » a toute classe, y compris a une classe inexistante.** Impossible d'y distinguer une classe connue d'une classe illisible : tout code qui interroge la palette passait pour verifie sans l'etre. La palette du bouchon est desormais partielle mais honnete — une cle inconnue rend nil, comme chez Blizzard.
+- Tests : 1 228 a 1 239.
+
 ## 1.6.4
 
 Retour d'un joueur sur le forum, et le controle de mise en page pousse au bout.

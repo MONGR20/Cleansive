@@ -5648,7 +5648,7 @@ do
     -- une qui porte du personnel, c'est ici que ca casse.
     local allowed = {}
     for _, key in ipairs({
-        "enabled", "locked", "showPets", "showFocus", "showNames", "showTooltips",
+        "enabled", "locked", "showPets", "showFocus", "showNames", "classColorCells", "showTooltips",
         "sound", "failureSound", "showCooldown", "showDuration", "showStacks",
         "showClickHints", "autoHide", "afflictedOnly", "groupManualTypes",
         "showSolo", "showParty", "showRaid", "controlWarning",
@@ -5740,6 +5740,83 @@ do
         truthy(trouble:find("diag copy", 1, true),
             "depannage : et la commande a lancer avant est nommee en " .. language)
     end
+end
+
+--------------------------------------------------------------------------
+-- 1.6.5 : la couleur de classe sur une case au repos
+--
+-- Demande d'un joueur sur le forum le 30/08/2026 : reconnaitre qui est qui
+-- sans lire un nom, que les petites cases ne peuvent de toute facon pas
+-- afficher. La palette fait autorite, jamais la couleur rendue.
+--------------------------------------------------------------------------
+do
+    freshProfile("PALADIN")
+    knowSpells(4987)
+    NS:UpdateSpells()
+    local neutral = { 0.05, 0.07, 0.09 }
+    local function sameColor(a, b)
+        return math.abs(a[1] - b[1]) < 0.001 and math.abs(a[2] - b[2]) < 0.001
+            and math.abs(a[3] - b[3]) < 0.001
+    end
+
+    NS.db.classColorCells = false
+    truthy(sameColor(NS:RestingCellColor({ class = "PALADIN" }), neutral),
+        "classe : eteint, la case au repos reste neutre")
+
+    NS.db.classColorCells = true
+    truthy(sameColor(NS:RestingCellColor({ class = "PALADIN" }), { 0.96, 0.55, 0.73 }),
+        "classe : allume, la case prend la couleur de la palette")
+    truthy(sameColor(NS:RestingCellColor({ class = "MONK" }), { 0.00, 1.00, 0.59 }),
+        "classe : et une autre classe donne une autre couleur")
+
+    -- En 12.1 la classe est secrete-capable : le client peut refuser de la
+    -- lire. Une classe illisible doit rendre le fond NEUTRE, pas blanc : un
+    -- blanc a 18 % ressemblerait a une classe de plus.
+    truthy(sameColor(NS:RestingCellColor({ class = nil }), neutral),
+        "classe : une classe illisible rend la case neutre")
+    truthy(sameColor(NS:RestingCellColor(nil), neutral),
+        "classe : une case sans unite aussi")
+    truthy(sameColor(NS:RestingCellColor({ class = "PASUNECLASSE" }), neutral),
+        "classe : un jeton que la palette ignore aussi")
+
+    -- Et le piege inverse : un pretre EST blanc. Deduire « illisible » d'une
+    -- couleur blanche aurait rendu tous les pretres gris. C'est la palette qui
+    -- fait autorite, pas la valeur qu'elle rend.
+    truthy(sameColor(NS:RestingCellColor({ class = "PRIEST" }), { 1, 1, 1 }),
+        "classe : un pretre est legitimement blanc, pas illisible")
+
+    -- Une case affligee n'est jamais concernee : sa couleur dit le type de
+    -- dissipation, et c'est la seule raison d'etre de la grille.
+    NS:RebuildRoster()
+    local button = NS.unitToButton["player"]
+    truthy(button, "classe : une case du joueur existe")
+    -- La cle de cache doit etre effacee entre les deux mesures : sans cela on
+    -- comparerait une texture jamais repeinte avec elle-meme, et l'assertion ne
+    -- pourrait pas tomber. Verifie en reinjectant la fuite : elle tombe.
+    mock.state.debuffs.player = { debuff(1000, "Magic") }
+    button.lastVisualKey = nil
+    NS:RefreshUnit("player")
+    local afflicted = { button.background.__color[1], button.background.__color[2],
+        button.background.__color[3] }
+    NS.db.classColorCells = false
+    button.lastVisualKey = nil
+    NS:RefreshUnit("player")
+    truthy(sameColor(afflicted, button.background.__color),
+        "classe : une case affligee garde sa couleur de dissipation dans les deux cas")
+    falsy(sameColor(afflicted, { 0.96, 0.55, 0.73 }),
+        "classe : et cette couleur n'est surtout pas celle du paladin")
+
+    -- Le raccourci de cache ne doit pas figer la couleur : changer de reglage
+    -- sur une case au repos doit la repeindre.
+    mock.state.debuffs.player = {}
+    NS:RefreshUnit("player")
+    local restingOff = { button.background.__color[1], button.background.__color[2], button.background.__color[3] }
+    NS.db.classColorCells = true
+    NS:RefreshUnit("player")
+    falsy(sameColor(restingOff, button.background.__color),
+        "classe : basculer le reglage repeint bien la case, le cache ne fige rien")
+    NS.db.classColorCells = false
+    NS:RefreshUnit("player")
 end
 
 --------------------------------------------------------------------------

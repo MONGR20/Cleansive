@@ -337,7 +337,22 @@ function M.install(_G)
     _G.ReloadUI = function() end
 
     _G.DEFAULT_CHAT_FRAME = { AddMessage = function(_, msg) state.chat[#state.chat + 1] = msg end }
-    _G.RAID_CLASS_COLORS = setmetatable({}, { __index = function() return { r = 1, g = 1, b = 1, colorStr = "ffffffff" } end })
+    -- La table repondait « blanc » a TOUTE cle, y compris a une classe qui
+    -- n'existe pas : impossible de distinguer une classe connue d'une classe
+    -- illisible, et tout code qui interroge la palette pour savoir si elle
+    -- connait un jeton passait pour verifie sans l'etre. Une vraie palette,
+    -- partielle mais sans reponse universelle : une cle inconnue rend nil,
+    -- comme chez Blizzard. Un pretre est reellement blanc -- c'est ce qui
+    -- interdit de deduire « illisible » d'une couleur blanche.
+    _G.RAID_CLASS_COLORS = {
+        PALADIN = { r = 0.96, g = 0.55, b = 0.73, colorStr = "fff58cba" },
+        PRIEST  = { r = 1.00, g = 1.00, b = 1.00, colorStr = "ffffffff" },
+        DRUID   = { r = 1.00, g = 0.49, b = 0.04, colorStr = "ffff7d0a" },
+        WARRIOR = { r = 0.78, g = 0.61, b = 0.43, colorStr = "ffc79c6e" },
+        MAGE    = { r = 0.25, g = 0.78, b = 0.92, colorStr = "ff40c7eb" },
+        MONK    = { r = 0.00, g = 1.00, b = 0.59, colorStr = "ff00ff96" },
+        SHAMAN  = { r = 0.00, g = 0.44, b = 0.87, colorStr = "ff0070dd" },
+    }
 
     _G.UnitClass = function()
         if state.identityRestricted then return SECRET, SECRET end

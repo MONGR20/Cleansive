@@ -1900,11 +1900,17 @@ function NS:SetButtonState(button, aura, auraType, slot, secret, charmed)
         -- disappears. RefreshDispelCooldowns clears it once a readable zero
         -- has survived the 750 ms race window.
         local control = self:UnitWatchedControl(button.unit)
+        local resting = self:RestingCellColor(button.descriptor)
+        -- La couleur entre dans la cle : sans cela, changer de reglage ou
+        -- changer d'unite sur une case laissait le fond precedent, le raccourci
+        -- de cache concluant qu'il n'y avait rien a repeindre.
         local visualKey = "normal:" .. tostring(self.db.inactiveAlpha) .. ":"
             .. (hiddenBase and "hidden" or "shown") .. ":" .. tostring(control)
+            .. ":" .. table.concat(resting, ",")
         if button.lastVisualKey ~= visualKey then
             button.lastVisualKey = visualKey
-            button.background:SetColorTexture(0.05, 0.07, 0.09, hiddenBase and 0 or self.db.inactiveAlpha)
+            button.background:SetColorTexture(resting[1], resting[2], resting[3],
+                hiddenBase and 0 or self.db.inactiveAlpha)
             button.typeMark:SetColorTexture(0, 0, 0, 0)
             if control and not hiddenBase then
                 local color = CONTROL_COLOR
@@ -2713,6 +2719,25 @@ end
 
 -- RAID_CLASS_COLORS is a table the client owns and a class token can be secret,
 -- so both go through a guard. A missing colour is white, never an error.
+-- Le fond d'une case AU REPOS. Neutre par defaut ; a la couleur de classe si
+-- le joueur l'a demande. Une case affligee n'est jamais concernee : sa couleur
+-- dit le type de dissipation, et c'est la seule raison d'etre de la grille.
+--
+-- La palette fait autorite, pas la valeur rendue : un pretre est legitimement
+-- blanc, et refuser le blanc pour « deviner » une classe illisible aurait
+-- rendu les pretres gris. Une classe que la palette ne connait pas -- ou que
+-- le client refuse de lire, ce qui arrive en 12.1 -- rend le fond neutre.
+function NS:RestingCellColor(descriptor)
+    local neutral = { 0.05, 0.07, 0.09 }
+    if not (self.db and self.db.classColorCells) then return neutral end
+    local class = descriptor and descriptor.class
+    if type(class) ~= "string" then return neutral end
+    local palette = CUSTOM_CLASS_COLORS or RAID_CLASS_COLORS
+    local color = type(palette) == "table" and palette[class]
+    if type(color) ~= "table" or type(color.r) ~= "number" then return neutral end
+    return { color.r, color.g, color.b }
+end
+
 function NS:ClassColor(classToken)
     local palette = type(classToken) == "string" and (CUSTOM_CLASS_COLORS or RAID_CLASS_COLORS)
     local color = type(palette) == "table" and palette[classToken]

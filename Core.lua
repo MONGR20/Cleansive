@@ -111,6 +111,7 @@ local defaults = {
     showPets = true,
     showFocus = true,
     showNames = false,
+    classColorCells = false,
     showTooltips = true,
     sound = true,
     soundChannel = "Master",
