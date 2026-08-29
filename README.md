@@ -1,4 +1,4 @@
-# Cleansive 1.5.49
+# Cleansive 1.5.50
 
 Cleansive is a standalone one-click cleansing addon for **World of Warcraft Retail 12.1** (`120100`). It provides a compact Decursive-style workflow with a dark, class-colored interface inspired by the clarity of Ellesmere UI. The interface follows the language of your WoW client, English or French; either can be picked from the General page at any time.
 
@@ -50,7 +50,14 @@ Red, blue, and orange identify the click to use. The optional L/R/C corner lette
 - Wrapping grid, horizontal-fill and vertical-fill cell arrangements with independent growth direction.
 - English and French localization.
 - A guided first-time setup, preselecting the language of your WoW client.
-- Separate settings profiles for every character and specialization.
+- Separate settings profiles for every character and specialization, copyable
+  from one specialization to another.
+- Profile export and import as plain text, from **Help > Share this profile**.
+  The string is read by a key/value parser, never executed, and unknown or
+  out-of-range values are refused and named rather than silently clamped. What
+  travels is the look and the behavior; what never travels is your screen
+  position, your language, and your priority and exclusion lists -- they name
+  people.
 - Optional grouping for dispel types you can only clear with an area or
   self-only ability: one indicator with a count instead of one cell per
   member. Off by default; the per-unit protected indicator stays in place
@@ -141,6 +148,7 @@ the reason on its own.
 
 ## Recent changes
 
+- **1.5.50** - a profile can be exported as text and imported after a preview of what would change. It carries no character name, no screen position, and no player list.
 - **1.5.49** - a Help page inside the addon: every command, what to do when something looks wrong, and what Cleansive cannot do.
 - **1.5.48** - Cleansive can now say what it detected: the spells it found, why one affliction stays silent, and the order the cells are in.
 - **1.5.47** - the preview pads the grid to any size from 1 to 40, so a raid layout can be tuned without a raid. Preview cells are inert.

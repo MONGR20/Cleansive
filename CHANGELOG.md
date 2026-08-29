@@ -6,6 +6,15 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.5.50
+
+- **Un profil s’exporte et s’importe en texte**, depuis **Aide → Partager ce profil**. C’est la fonction que les concurrents mettent en avant et que Cleansive n’avait pas.
+- **L’import lit d’abord et n’écrit qu’ensuite.** Le premier clic vérifie et affiche la liste exacte de ce qui changerait, réglage par réglage, avec la valeur de départ et celle d’arrivée. Rien n’est modifié tant que vous n’avez pas cliqué une seconde fois. Un import qui s’applique au premier clic, c’est une configuration perdue sans retour — et la chaîne vient en général de quelqu’un d’autre.
+- **La validation est stricte et bavarde.** Une clé inconnue, une valeur hors bornes ou un ordre de types incomplet sont refusés *et nommés*, jamais rabotés en silence : un import à moitié appliqué qui se déclare réussi est pire qu’un refus. Le texte n’est jamais exécuté — un analyseur clé/valeur ne peut rien lancer.
+- **Ce qui ne part jamais** : votre position à l’écran (c’est celle de l’expéditeur), votre langue (elle est globale), et vos listes de priorité et d’exclusion — elles contiennent des noms de joueurs.
+- **Copier un profil vers une autre spécialisation** du même personnage, y compris une spécialisation jamais jouée.
+- Tests : 824 à 870, vérifiés par réinjection de dix défauts, dont la fuite des noms de coéquipiers et l’import qui s’applique trop tôt.
+
 ## 1.5.49
 
 - **Une page Aide dans l’addon.** Trois blocs dans une seule zone de défilement : toutes les commandes, un dépannage par symptôme, et un « À propos » avec la version, la licence et l’adresse de signalement — rendue copiable, parce qu’un addon ne peut pas ouvrir un navigateur. Le bouton « Diagnostic copiable » y ouvre directement le rapport à joindre.

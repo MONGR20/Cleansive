@@ -1135,6 +1135,10 @@ function NS:CreateOptions()
     diagButton:SetPoint("TOPLEFT", 0, -1034)
     diagButton:SetScript("OnClick", function() self:ShowDiagnosticsCopy() end)
 
+    local transferButton = button(helpBody, self.L.PROFILE_TRANSFER, 190, 28)
+    transferButton:SetPoint("TOPLEFT", 204, -1034)
+    transferButton:SetScript("OnClick", function() self:ShowProfileTransfer() end)
+
     self:CreateListWindow()
     self:CreateFilterWindow()
     self:RefreshOptions()
@@ -1508,4 +1512,126 @@ function NS:CreateFilterWindow()
         frame.listOffset = math.max(0, (frame.listOffset or 0) + #frame.rows)
         self:RefreshFilterWindow()
     end)
+end
+
+-- Read, show, then ask again. An import that lands on the first click is a
+-- configuration lost with no way back, and the string usually comes from
+-- someone else.
+function NS:ShowProfileTransfer()
+    local frame = self.profileTransferFrame
+    if not frame then
+        frame = CreateFrame("Frame", "CleansiveProfileTransferFrame", UIParent)
+        frame:SetSize(700, 520)
+        frame:SetPoint("CENTER")
+        frame:SetFrameStrata("DIALOG")
+        frame:SetClampedToScreen(true)
+        frame:EnableMouse(true)
+        frame:SetMovable(true)
+        frame:RegisterForDrag("LeftButton")
+        frame:SetScript("OnDragStart", frame.StartMoving)
+        frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
+        addPanelBackground(frame)
+
+        local accentBar = solid(frame, "BORDER", accent())
+        accentBar:SetPoint("TOPLEFT")
+        accentBar:SetPoint("TOPRIGHT")
+        accentBar:SetHeight(2)
+
+        frame.title = text(frame, self.L.PROFILE_TRANSFER, 17, C.text)
+        frame.title:SetPoint("TOPLEFT", 22, -20)
+        local close = button(frame, "×", 34, 30)
+        close:SetPoint("TOPRIGHT", -14, -13)
+        close:SetScript("OnClick", function() frame:Hide() end)
+
+        frame.exportHint = text(frame, self.L.PROFILE_EXPORT_HINT, 11, C.dim)
+        frame.exportHint:SetPoint("TOPLEFT", 22, -52)
+        frame.exportHint:SetWidth(650)
+        frame.exportHint:SetJustifyH("LEFT")
+
+        local exportScroll = CreateFrame("ScrollFrame", nil, frame, "UIPanelScrollFrameTemplate")
+        exportScroll:SetPoint("TOPLEFT", 22, -90)
+        exportScroll:SetSize(628, 92)
+        frame.exportBox = CreateFrame("EditBox", nil, exportScroll)
+        frame.exportBox:SetMultiLine(true)
+        frame.exportBox:SetAutoFocus(false)
+        frame.exportBox:SetFontObject(ChatFontNormal)
+        frame.exportBox:SetWidth(608)
+        frame.exportBox:SetHeight(400)
+        frame.exportBox:SetTextInsets(8, 8, 8, 8)
+        frame.exportBox:SetScript("OnEscapePressed", function(box) box:ClearFocus() end)
+        exportScroll:SetScrollChild(frame.exportBox)
+
+        frame.importHint = text(frame, self.L.PROFILE_IMPORT_HINT, 11, C.dim)
+        frame.importHint:SetPoint("TOPLEFT", 22, -196)
+        frame.importHint:SetWidth(650)
+        frame.importHint:SetJustifyH("LEFT")
+
+        local importScroll = CreateFrame("ScrollFrame", nil, frame, "UIPanelScrollFrameTemplate")
+        importScroll:SetPoint("TOPLEFT", 22, -228)
+        importScroll:SetSize(628, 92)
+        frame.importBox = CreateFrame("EditBox", nil, importScroll)
+        frame.importBox:SetMultiLine(true)
+        frame.importBox:SetAutoFocus(false)
+        frame.importBox:SetFontObject(ChatFontNormal)
+        frame.importBox:SetWidth(608)
+        frame.importBox:SetHeight(400)
+        frame.importBox:SetTextInsets(8, 8, 8, 8)
+        frame.importBox:SetScript("OnEscapePressed", function(box) box:ClearFocus() end)
+        importScroll:SetScrollChild(frame.importBox)
+
+        frame.result = text(frame, "", 11, C.text)
+        frame.result:SetPoint("TOPLEFT", 22, -336)
+        frame.result:SetWidth(650)
+        frame.result:SetJustifyH("LEFT")
+        frame.result:SetSpacing(2)
+
+        frame.analyze = button(frame, self.L.IMPORT_ANALYZE, 190, 28)
+        frame.analyze:SetPoint("BOTTOMLEFT", 22, 18)
+        frame.apply = button(frame, self.L.IMPORT_CONFIRM, 220, 28, true)
+        frame.apply:SetPoint("BOTTOMLEFT", 224, 18)
+
+        frame.analyze:SetScript("OnClick", function()
+            local analysis, reason = self:AnalyzeProfileImport(frame.importBox:GetText())
+            frame.pendingImport = analysis
+            if not analysis then
+                frame.result:SetText(reason or "")
+                frame.apply:Hide()
+                return
+            end
+            local lines = {}
+            for _, change in ipairs(analysis.changes) do
+                lines[#lines + 1] = string.format(self.L.IMPORT_CHANGE_LINE,
+                    change.key, change.from, change.to)
+            end
+            if #lines == 0 then lines[1] = self.L.IMPORT_NO_CHANGE end
+            if #analysis.rejected > 0 then
+                lines[#lines + 1] = string.format(self.L.IMPORT_REJECTED,
+                    table.concat(analysis.rejected, ", "))
+            end
+            frame.result:SetText(table.concat(lines, "\n"))
+            frame.apply:SetShown(#analysis.changes > 0)
+        end)
+
+        frame.apply:SetScript("OnClick", function()
+            if not frame.pendingImport then return end
+            self:ApplyProfileImport(frame.pendingImport)
+            frame.pendingImport = nil
+            frame.apply:Hide()
+            frame.exportBox:SetText(self:ExportProfile())
+            frame.result:SetText("")
+        end)
+
+        if type(UISpecialFrames) == "table" then
+            UISpecialFrames[#UISpecialFrames + 1] = "CleansiveProfileTransferFrame"
+        end
+        self.profileTransferFrame = frame
+    end
+
+    frame.exportBox:SetText(self:ExportProfile())
+    frame.importBox:SetText("")
+    frame.result:SetText("")
+    frame.pendingImport = nil
+    frame.apply:Hide()
+    frame:Show()
+    frame.exportBox:HighlightText()
 end

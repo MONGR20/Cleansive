@@ -415,3 +415,231 @@ function NS:QueueProfileSwitch()
     end
     return true
 end
+
+--------------------------------------------------------------------------
+-- Profile transfer
+--------------------------------------------------------------------------
+
+-- Only these keys travel, and only with these shapes. An import is a string a
+-- stranger wrote: nothing outside this table can enter a profile, and the text
+-- is never handed to loadstring. A key=value parser cannot execute anything.
+--
+-- Deliberately absent: positions (a screen the sender had, not the one you
+-- have), language (it is global, not per profile), and the priority and skip
+-- lists (they name the sender's guildmates, not yours).
+local TRANSFER_FIELDS = {
+    { key = "enabled", kind = "boolean" },
+    { key = "locked", kind = "boolean" },
+    { key = "showPets", kind = "boolean" },
+    { key = "showFocus", kind = "boolean" },
+    { key = "showNames", kind = "boolean" },
+    { key = "showTooltips", kind = "boolean" },
+    { key = "sound", kind = "boolean" },
+    { key = "failureSound", kind = "boolean" },
+    { key = "showCooldown", kind = "boolean" },
+    { key = "showStacks", kind = "boolean" },
+    { key = "showClickHints", kind = "boolean" },
+    { key = "autoHide", kind = "boolean" },
+    { key = "afflictedOnly", kind = "boolean" },
+    { key = "groupManualTypes", kind = "boolean" },
+    { key = "frameSize", kind = "number", min = 12, max = 40, step = 1 },
+    { key = "spacing", kind = "number", min = 0, max = 12, step = 1 },
+    { key = "columns", kind = "number", min = 1, max = 20, step = 1 },
+    { key = "blacklistTime", kind = "number", min = 0, max = 15, step = 1 },
+    { key = "soundMaxRegistrations", kind = "number", min = 500, max = 8000, step = 1 },
+    { key = "testUnits", kind = "number", min = 1, max = 40, step = 1 },
+    { key = "inactiveAlpha", kind = "number", min = 0.05, max = 0.80 },
+    { key = "grow", kind = "enum", values = { "RIGHT_DOWN", "RIGHT_UP", "LEFT_DOWN", "LEFT_UP" } },
+    { key = "layoutMode", kind = "enum", values = { "GRID", "HORIZONTAL", "VERTICAL" } },
+    { key = "soundChannel", kind = "enum", values = { "Master", "SFX", "Dialog" } },
+    { key = "testState", kind = "enum", values = { "MIXED", "ALL", "HEALTHY" } },
+    { key = "typeOrder", kind = "typelist" },
+    { key = "enabledTypes", kind = "typemap" },
+    { key = "ignoredAlways", kind = "idset" },
+    { key = "ignoredCombat", kind = "idset" },
+}
+
+local TRANSFER_PREFIX = "CLEANSIVE1"
+local VALID_TYPES = { Magic = true, Curse = true, Poison = true, Disease = true, Bleed = true, Charm = true }
+
+local function encodeValue(field, value)
+    if field.kind == "boolean" then return value and "1" or "0" end
+    if field.kind == "number" then
+        if field.step == 1 then return tostring(math.floor(value + 0.5)) end
+        return string.format("%.4f", value)
+    end
+    if field.kind == "enum" then return tostring(value) end
+    if field.kind == "typelist" then
+        local parts = {}
+        for _, dispelType in ipairs(value) do parts[#parts + 1] = dispelType end
+        return table.concat(parts, ",")
+    end
+    if field.kind == "typemap" then
+        local parts = {}
+        for dispelType in pairs(VALID_TYPES) do
+            parts[#parts + 1] = dispelType .. ":" .. (value[dispelType] == false and "0" or "1")
+        end
+        table.sort(parts)
+        return table.concat(parts, ",")
+    end
+    if field.kind == "idset" then
+        local ids = {}
+        for id in pairs(value) do
+            local number = tonumber(id)
+            if number then ids[#ids + 1] = number end
+        end
+        table.sort(ids)
+        local parts = {}
+        for index, id in ipairs(ids) do parts[index] = tostring(id) end
+        return table.concat(parts, ",")
+    end
+end
+
+-- Returns nil when the text does not describe a valid value. Silence is not an
+-- option here: a rejected field must be reported, never quietly defaulted, or
+-- an import would look like it worked and leave half the settings behind.
+local function decodeValue(field, text)
+    if field.kind == "boolean" then
+        if text == "1" then return true end
+        if text == "0" then return false end
+        return nil
+    end
+    if field.kind == "number" then
+        local number = tonumber(text)
+        if not number then return nil end
+        if number < field.min or number > field.max then return nil end
+        if field.step == 1 then number = math.floor(number + 0.5) end
+        return number
+    end
+    if field.kind == "enum" then
+        for _, candidate in ipairs(field.values) do
+            if candidate == text then return candidate end
+        end
+        return nil
+    end
+    if field.kind == "typelist" then
+        local list, seen = {}, {}
+        for part in string.gmatch(text, "[^,]+") do
+            if not VALID_TYPES[part] or seen[part] then return nil end
+            seen[part] = true
+            list[#list + 1] = part
+        end
+        -- A partial order would silently drop a type from the interface.
+        for dispelType in pairs(VALID_TYPES) do
+            if not seen[dispelType] then return nil end
+        end
+        return list
+    end
+    if field.kind == "typemap" then
+        local map = {}
+        for part in string.gmatch(text, "[^,]+") do
+            local name, state = string.match(part, "^(%a+):([01])$")
+            if not name or not VALID_TYPES[name] then return nil end
+            map[name] = state == "1"
+        end
+        for dispelType in pairs(VALID_TYPES) do
+            if map[dispelType] == nil then return nil end
+        end
+        return map
+    end
+    if field.kind == "idset" then
+        local set = {}
+        if text ~= "" then
+            for part in string.gmatch(text, "[^,]+") do
+                local id = tonumber(part)
+                if not id or id <= 0 or id ~= math.floor(id) then return nil end
+                set[id] = true
+            end
+        end
+        return set
+    end
+end
+
+function NS:ExportProfile()
+    local parts = { TRANSFER_PREFIX }
+    for _, field in ipairs(TRANSFER_FIELDS) do
+        local value = self.db and self.db[field.key]
+        if value ~= nil then
+            parts[#parts + 1] = field.key .. "=" .. encodeValue(field, value)
+        end
+    end
+    return table.concat(parts, ";")
+end
+
+-- Reads without writing. The caller shows what would change and only then asks
+-- for a second click: an import that applies on the first one is a setup lost.
+function NS:AnalyzeProfileImport(text)
+    text = type(text) == "string" and string.gsub(text, "%s", "") or ""
+    if text == "" then return nil, self.L.IMPORT_EMPTY end
+    local prefix = string.match(text, "^([^;]+);")
+    if prefix ~= TRANSFER_PREFIX then return nil, self.L.IMPORT_BAD_PREFIX end
+
+    local byKey = {}
+    for _, field in ipairs(TRANSFER_FIELDS) do byKey[field.key] = field end
+
+    local accepted, changes, rejected = {}, {}, {}
+    local seen = {}
+    for chunk in string.gmatch(string.sub(text, #prefix + 2), "[^;]+") do
+        local key, raw = string.match(chunk, "^([%a]+)=(.*)$")
+        local field = key and byKey[key]
+        if not field then
+            rejected[#rejected + 1] = key or chunk
+        elseif seen[key] then
+            rejected[#rejected + 1] = key
+        else
+            seen[key] = true
+            local value = decodeValue(field, raw)
+            if value == nil then
+                rejected[#rejected + 1] = key
+            else
+                accepted[key] = value
+                local current = self.db and self.db[field.key]
+                if encodeValue(field, value) ~= (current ~= nil and encodeValue(field, current) or nil) then
+                    changes[#changes + 1] = {
+                        key = key,
+                        from = current ~= nil and encodeValue(field, current) or "-",
+                        to = encodeValue(field, value),
+                    }
+                end
+            end
+        end
+    end
+    if not next(accepted) then return nil, self.L.IMPORT_NOTHING_VALID end
+    table.sort(changes, function(a, b) return a.key < b.key end)
+    table.sort(rejected)
+    return { accepted = accepted, changes = changes, rejected = rejected }
+end
+
+function NS:ApplyProfileImport(analysis)
+    if not analysis or not analysis.accepted or not self.db then return false end
+    for key, value in pairs(analysis.accepted) do self.db[key] = value end
+    self.enabled = self.db.enabled and true or false
+    self.deferRefreshes = true
+    self:UpdateSpells()
+    self:RebuildRoster()
+    self.deferRefreshes = false
+    self:ApplySecureBindings()
+    self:LayoutButtons()
+    self:RefreshAll(true)
+    self:UpdateGridVisibilityDriver()
+    if self.RequestAuraSoundRefresh then self:RequestAuraSoundRefresh("profile imported") end
+    if self.RefreshOptions then self:RefreshOptions() end
+    self:Print(string.format(self.L.IMPORT_APPLIED, #analysis.changes))
+    return true
+end
+
+-- Copying to another specialization of the same character. The target may not
+-- exist yet, which is the common case: you set one spec up and want the other
+-- to match before you ever play it.
+function NS:CopyProfileToSpec(specKey)
+    specKey = tostring(specKey or "")
+    if specKey == "" or specKey == tostring(self.activeSpecKey) then return false end
+    local characterKey = self.activeCharacterKey
+    local profiles = self.dbRoot and self.dbRoot.profiles
+    if not profiles or not characterKey or not profiles[characterKey] then return false end
+    local copy = deepCopy(self.db)
+    copy.positions = deepCopy(self.profileDefaults.positions)
+    profiles[characterKey][specKey] = copy
+    self:Print(string.format(self.L.PROFILE_COPIED, specKey))
+    return true
+end
