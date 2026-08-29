@@ -872,6 +872,26 @@ function NS:CreateOptions()
     section(appearance, localized("Aperçu en direct", "Live preview"), -406)
     self.uxPreview = createPreview(appearance)
 
+    -- The four cells above show the cell language. They cannot show whether a
+    -- twenty-man grid still fits the screen, which is the question the player
+    -- actually has. These buttons answer it on the real grid.
+    local previewLabel = text(appearance, self.L.PREVIEW_GROUP, 13, C.text)
+    previewLabel:SetPoint("TOPLEFT", 0, -520)
+    self.previewSizeButtons = {}
+    for index, count in ipairs({ 1, 5, 10, 20, 40 }) do
+        local sizeButton = button(appearance, tostring(count), 42, 26)
+        sizeButton:SetPoint("TOPLEFT", 122 + ((index - 1) * 46), -514)
+        sizeButton:SetScript("OnClick", function() self:SetTestUnits(count) end)
+        attachHelp(sizeButton, self.L.PREVIEW_GROUP, self.L.TIP_PREVIEW_GROUP)
+        sizeButton.previewCount = count
+        self.previewSizeButtons[index] = sizeButton
+    end
+    local stateButton = button(appearance, "", 168, 26)
+    stateButton:SetPoint("TOPLEFT", 400, -514)
+    stateButton:SetScript("OnClick", function() self:CycleTestState() end)
+    attachHelp(stateButton, self.L.PREVIEW_STATE, self.L.TIP_PREVIEW_STATE)
+    self.previewStateButton = stateButton
+
     local dispels = CreateFrame("Frame", nil, content)
     dispels:SetAllPoints()
     self.optionsPages.dispels = dispels
@@ -1159,6 +1179,15 @@ function NS:RefreshOptions()
     if self.profileLabel and self.GetActiveProfileLabel then self.profileLabel:SetText(self:GetActiveProfileLabel()) end
     if self.priorityKeyButton and not self.priorityKeyButton.capturing then
         self.priorityKeyButton:SetText(self.db.priorityKey ~= "" and self.db.priorityKey or self.L.NOT_BOUND)
+    end
+    if self.previewStateButton then
+        self.previewStateButton:SetText(self:TestStateLabel())
+    end
+    for _, sizeButton in ipairs(self.previewSizeButtons or {}) do
+        local selected = self.testMode and self.db.testUnits == sizeButton.previewCount
+        sizeButton.uxAccentButton = selected and true or false
+        local refreshStyle = sizeButton:GetScript("OnLeave")
+        if refreshStyle then refreshStyle(sizeButton) end
     end
     if self.testModeButton then
         self.testModeButton.uxAccentButton = self.testMode and true or false

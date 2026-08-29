@@ -194,6 +194,16 @@ local en = {
     COMPARTMENT_LEFT = "Left click: open options",
     COMPARTMENT_RIGHT = "Right click: enable or disable",
     TEST_AFFLICTION = "Test affliction",
+    TEST_UNIT = "Test %d",
+    TEST_OFF_COMBAT = "Combat started: the preview closed. Its cells go quiet now and disappear when you leave combat.",
+    TEST_UNITS_SET = "Preview showing %d cells.",
+    TEST_STATE_MIXED = "Some afflicted",
+    TEST_STATE_ALL = "All afflicted",
+    TEST_STATE_HEALTHY = "None afflicted",
+    PREVIEW_GROUP = "Simulated group",
+    PREVIEW_STATE = "Preview state",
+    TIP_PREVIEW_GROUP = "Pads the real grid with inert cells so you can size and place a raid layout without a raid. A preview cell never casts and is never handed to the game.",
+    TIP_PREVIEW_STATE = "Chooses how many preview cells light up. Some afflicted shows both states at once, which is what a screenshot should show.",
     PENDING_BADGE = "Pending",
     PENDING_TITLE = "Change pending",
     PENDING_HINT = "Blizzard locks this kind of change while you are fighting. Cleansive applies it the moment you leave combat -- nothing is lost.",
@@ -230,7 +240,7 @@ local en = {
     TIP_DISPEL_TYPE = "Include %s in the priority order. Disabling it prevents Cleansive from flagging that affliction type.",
     COOLDOWN_STATUS_NONE = "No cleansing spell cooldown has been inspected yet. Click an afflicted cell, then run /cleansive cdstatus.",
     COOLDOWN_STATUS = "Cooldown: spell %s | source %s | active %s | applied %s%s",
-    HELP = "Commands: /cleansive, /cls, then show, hide, reset, test, macro, prio, pradd, skip, skadd, filters, ignore <id>, history, setup, enable, disable, soundtest, soundstatus, cdstatus, diag, diag copy, or diag reset",
+    HELP = "Commands: /cleansive, /cls, then show, hide, reset, test, macro, prio, pradd, skip, skadd, filters, ignore <id>, history, setup, enable, disable, soundtest, soundstatus, cdstatus, diag, diag copy, or diag reset. /cleansive test <1-40> sizes the preview",
 }
 
 local fr = {
@@ -427,6 +437,16 @@ local fr = {
     COMPARTMENT_LEFT = "Clic gauche : ouvrir les options",
     COMPARTMENT_RIGHT = "Clic droit : activer ou désactiver",
     TEST_AFFLICTION = "Affliction de test",
+    TEST_UNIT = "Test %d",
+    TEST_OFF_COMBAT = "Le combat a commencé : l’aperçu s’est fermé. Ses cases s’éteignent tout de suite et disparaissent à la fin du combat.",
+    TEST_UNITS_SET = "Aperçu affiché sur %d cases.",
+    TEST_STATE_MIXED = "Quelques-unes atteintes",
+    TEST_STATE_ALL = "Toutes atteintes",
+    TEST_STATE_HEALTHY = "Aucune atteinte",
+    PREVIEW_GROUP = "Groupe simulé",
+    PREVIEW_STATE = "État de l’aperçu",
+    TIP_PREVIEW_GROUP = "Complète la vraie grille avec des cases inertes pour régler la taille et la position d’un raid sans être en raid. Une case d’aperçu ne lance jamais rien et n’est jamais transmise au jeu.",
+    TIP_PREVIEW_STATE = "Choisit combien de cases de l’aperçu s’allument. « Quelques-unes atteintes » montre les deux états à la fois, ce qu’une capture d’écran doit montrer.",
     PENDING_BADGE = "En attente",
     PENDING_TITLE = "Modification en attente",
     PENDING_HINT = "Blizzard verrouille ce type de modification pendant le combat. Cleansive l’applique dès que vous en sortez — rien n’est perdu.",
@@ -463,7 +483,7 @@ local fr = {
     TIP_DISPEL_TYPE = "Inclut %s dans l’ordre de priorité. Le désactiver empêche Cleansive de signaler ce type d’affliction.",
     COOLDOWN_STATUS_NONE = "Aucune recharge de sort de dissipation n’a encore été inspectée. Cliquez sur une case affectée, puis lancez /cleansive cdstatus.",
     COOLDOWN_STATUS = "Recharge : sort %s | source %s | active %s | appliquée %s%s",
-    HELP = "Commandes : /cleansive, /cls, puis show, hide, reset, test, macro, prio, pradd, skip, skadd, filters, ignore <id>, history, setup, enable, disable, soundtest, soundstatus, cdstatus, diag, diag copy ou diag reset",
+    HELP = "Commandes : /cleansive, /cls, puis show, hide, reset, test, macro, prio, pradd, skip, skadd, filters, ignore <id>, history, setup, enable, disable, soundtest, soundstatus, cdstatus, diag, diag copy ou diag reset. /cleansive test <1-40> dimensionne l’aperçu",
 }
 
 NS.LOCALES = { enUS = en, frFR = fr }

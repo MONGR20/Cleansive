@@ -1,6 +1,7 @@
 local _, NS = ...
 
 local RAID_GROUPS = 8
+local PREVIEW_MAX = 40
 
 -- Names and classes are secret-capable in Retail 12.1, so both go through the
 -- guards. An unreadable name falls back to the unit token for display and
@@ -178,6 +179,27 @@ function NS:BuildRoster()
         if a.group ~= b.group then return groupRank(a.group) < groupRank(b.group) end
         return (a.displayName or a.unit) < (b.displayName or b.unit)
     end)
+
+    -- The preview pads the roster with inert cells so a raid layout can be
+    -- tuned -- and screenshotted -- without a raid. It only ever adds: a real
+    -- unit is never displaced by a fake one. These descriptors carry a token
+    -- no unit can answer to, and the three places that would hand it to the
+    -- game (the secure attribute, the protected aura container and the native
+    -- sound registry) all refuse it on sight.
+    if self.testMode then
+        local wanted = math.max(1, math.min(PREVIEW_MAX, tonumber(self.db.testUnits) or 1))
+        for index = #descriptors + 1, wanted do
+            descriptors[#descriptors + 1] = {
+                unit = "cleansivePreview" .. index,
+                guid = "cleansive-preview-" .. index,
+                displayName = string.format(self.L.TEST_UNIT, index),
+                group = math.min(RAID_GROUPS, math.ceil(index / 5)),
+                isPlayer = true,
+                isPet = false,
+                preview = true,
+            }
+        end
+    end
     return descriptors
 end
 

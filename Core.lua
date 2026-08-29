@@ -108,6 +108,8 @@ local defaults = {
     columns = 10,
     inactiveAlpha = 0.18,
     blacklistTime = 5,
+    testUnits = 5,
+    testState = "MIXED",
     grow = "RIGHT_DOWN",
     layoutMode = "GRID",
     typeOrder = { "Magic", "Curse", "Poison", "Disease", "Bleed", "Charm" },
@@ -261,13 +263,71 @@ function NS:ToggleGridVisibility()
     end
 end
 
+local TEST_STATES = { "MIXED", "ALL", "HEALTHY" }
+
 function NS:ToggleTest()
     self.testMode = not self.testMode
+    -- The preview cells live in the roster, so the roster is what changes.
+    self:RebuildRoster()
     self:RefreshAll(true)
     self:UpdateGridVisibilityDriver()
     if self.RefreshOptions then self:RefreshOptions() end
     if self.testMode then self:PlayAfflictionAlert(true) end
     self:Print(self.testMode and self.L.TEST_ON or self.L.TEST_OFF)
+end
+
+-- Leaving the preview up into a pull would show fake afflictions over a real
+-- fight, and the secure attributes could no longer be rewritten. Close it at
+-- the pull: the cells that remain until combat ends are inert and quiet.
+function NS:EndTestModeForCombat()
+    if not self.testMode then return end
+    self.testMode = false
+    self:RebuildRoster()
+    self:RefreshAll(true)
+    self:UpdateGridVisibilityDriver()
+    if self.RefreshOptions then self:RefreshOptions() end
+    self:Print(self.L.TEST_OFF_COMBAT)
+end
+
+function NS:SetTestUnits(count)
+    count = math.max(1, math.min(40, math.floor(tonumber(count) or 1)))
+    self.db.testUnits = count
+    if not self.testMode then
+        self:ToggleTest()
+    else
+        self:RebuildRoster()
+        self:RefreshAll(true)
+        if self.RefreshOptions then self:RefreshOptions() end
+    end
+    self:Print(self.L.TEST_UNITS_SET, count)
+end
+
+function NS:SetTestState(state)
+    local wanted
+    for _, candidate in ipairs(TEST_STATES) do
+        if candidate == state then wanted = candidate end
+    end
+    if not wanted then return false end
+    self.db.testState = wanted
+    if self.testMode then self:RefreshAll(true) end
+    if self.RefreshOptions then self:RefreshOptions() end
+    return true
+end
+
+function NS:CycleTestState()
+    local current = self.db.testState or "MIXED"
+    local index = 1
+    for position, candidate in ipairs(TEST_STATES) do
+        if candidate == current then index = position end
+    end
+    self:SetTestState(TEST_STATES[(index % #TEST_STATES) + 1])
+end
+
+function NS:TestStateLabel()
+    local state = self.db and self.db.testState or "MIXED"
+    if state == "ALL" then return self.L.TEST_STATE_ALL end
+    if state == "HEALTHY" then return self.L.TEST_STATE_HEALTHY end
+    return self.L.TEST_STATE_MIXED
 end
 
 function NS:UpdateGridVisibilityDriver()
@@ -661,7 +721,14 @@ function NS:HandleSlash(message)
     elseif command == "reset" then
         self:ResetPositions()
     elseif command == "test" then
-        self:ToggleTest()
+        local count = tonumber(rest)
+        if count then
+            self:SetTestUnits(count)
+        elseif rest ~= "" and self:SetTestState(string.upper(rest)) then
+            if not self.testMode then self:ToggleTest() end
+        else
+            self:ToggleTest()
+        end
     elseif command == "macro" then
         self:CreateMouseoverMacro()
     elseif command == "prio" or command == "priority" then
@@ -814,6 +881,7 @@ events:SetScript("OnEvent", function(_, event, ...)
     elseif event == "SPELL_UPDATE_COOLDOWN" or event == "SPELL_UPDATE_CHARGES" then
         NS:RefreshDispelCooldowns()
     elseif event == "PLAYER_REGEN_DISABLED" then
+        NS:EndTestModeForCombat()
         NS:UpdateCooldownOverlayVisibility(true)
         NS:RefreshAuraCandidateFilters()
         NS:RequestAuraSoundRefresh("combat started")

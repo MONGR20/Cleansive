@@ -6,6 +6,15 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.5.47
+
+- **L’aperçu peut enfin montrer un raid.** Le mode test n’affichait que les unités réellement présentes : seul, il montrait une case. La grille se complète maintenant jusqu’au nombre demandé (1 à 40) avec des cases inertes, ce qui permet de régler la taille, l’espacement et la position d’une grille de raid — et de la prendre en capture — sans être en raid. Boutons 1 / 5 / 10 / 20 / 40 dans **Apparence → Aperçu en direct**, ou `/cleansive test 20`.
+- **Une case d’aperçu ne touche à rien de réel.** Elle ne reçoit aucune unité sécurisée, elle n’est jamais présentée au moteur d’auras protégé, et elle n’entre jamais dans le registre sonore natif. Une demande plus petite que le groupe réel n’enlève personne : l’aperçu ne fait qu’ajouter.
+- **L’aperçu n’allume plus toutes les cases d’un coup.** Par défaut la première case et une sur quatre s’allument, donc les deux états sont visibles à la fois. `/cleansive test all` et `/cleansive test healthy` forcent l’un ou l’autre.
+- **Le début du combat referme l’aperçu.** Les afflictions de test s’éteignent immédiatement et les cases inertes disparaissent à la fin du combat, quand les attributs sécurisés peuvent de nouveau être réécrits.
+- Un garde-fou écrit pendant ce travail s’est révélé inatteignable et a été retiré plutôt que gardé « au cas où ».
+- Tests : 756 à 792, vérifiés par réinjection de six défauts.
+
 ## 1.5.46
 
 - **Les alertes sonores sont maintenant remplacées sans période de silence.** Lors d’un changement de canal, de groupe ou de filtre, Cleansive ajoute chaque nouvel enregistrement natif avant de retirer l’ancien. Si `C_UnitAuras.AddAuraSound` est temporairement refusé, l’ancienne alerte qui fonctionne reste active et une reprise bornée est programmée.

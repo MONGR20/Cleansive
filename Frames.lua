@@ -1010,6 +1010,10 @@ function NS:CreateAuraContainer(button)
 end
 
 function NS:ConfigureButtonAuraContainer(button, restyle)
+    -- A preview cell has no unit the game can answer for. Asking the protected
+    -- container about it is the one thing this whole feature must never do, so
+    -- the refusal lives here rather than at each call site.
+    if button and button.preview then return end
     local container = button and button.auraContainer
     if not container then return end
 
@@ -1142,11 +1146,16 @@ function NS:AssignRosterToButtons()
             end
             button.unit = descriptor.unit
             button.descriptor = descriptor
-            button:SetAttribute("unit", descriptor.unit)
+            -- A preview cell is decoration. Giving it a secure unit would arm a
+            -- click on a unit that cannot exist, and the attribute could not be
+            -- taken back once combat starts.
+            button.preview = descriptor.preview and true or nil
+            local secureUnit = not descriptor.preview and descriptor.unit or nil
+            button:SetAttribute("unit", secureUnit)
             if button.clickLayer then
-                button.clickLayer.unit = descriptor.unit
-                button.clickLayer:SetAttribute("unit", descriptor.unit)
-                self:ApplyVehicleDriver(button.clickLayer, descriptor.unit)
+                button.clickLayer.unit = secureUnit
+                button.clickLayer:SetAttribute("unit", secureUnit)
+                self:ApplyVehicleDriver(button.clickLayer, secureUnit)
             end
             button.center:SetText("")
             button.nameText:SetText(descriptor.displayName or descriptor.unit)
@@ -1450,9 +1459,22 @@ function NS:GetAuraByIndex(unit, index)
     return nil
 end
 
+-- Colouring every cell at once reads as an emergency, not as a layout. The
+-- default lights the first cell and then every fourth one, so the preview
+-- shows both states at every group size -- including a group of one.
+function NS:PreviewCellIsAfflicted(index)
+    local state = self.db and self.db.testState or "MIXED"
+    if state == "HEALTHY" then return false end
+    if state == "ALL" then return true end
+    index = tonumber(index) or 1
+    return index == 1 or (index % 4) == 0
+end
+
 function NS:GetCurableAura(unit, includeGrouped)
     if self.testMode then
-        local slot = ((self.unitToButton[unit] and self.unitToButton[unit].index or 1) - 1) % math.max(1, #self.clickSpells) + 1
+        local cell = self.unitToButton[unit]
+        if not self:PreviewCellIsAfflicted(cell and cell.index or 1) then return nil end
+        local slot = ((cell and cell.index or 1) - 1) % math.max(1, #self.clickSpells) + 1
         local def = self.clickSpells[slot] or self.clickSpells[1]
         local auraType = def and (def.activeTypes or def.types)[1] or "Magic"
         return {

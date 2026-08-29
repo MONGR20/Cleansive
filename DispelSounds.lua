@@ -94,8 +94,10 @@ function NS:GetAuraSoundUnitTokens()
     -- pets as passengers when "Scan pets" is disabled.
     add("player")
     for _, descriptor in ipairs(self.roster or {}) do
-        local unit = self.GetDisplayUnit and self:GetDisplayUnit(descriptor.unit) or descriptor.unit
-        add(unit)
+        if not descriptor.preview then
+            local unit = self.GetDisplayUnit and self:GetDisplayUnit(descriptor.unit) or descriptor.unit
+            add(unit)
+        end
     end
     return units
 end

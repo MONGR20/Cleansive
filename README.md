@@ -1,4 +1,4 @@
-# Cleansive 1.5.46
+# Cleansive 1.5.47
 
 Cleansive is a standalone one-click cleansing addon for **World of Warcraft Retail 12.1** (`120100`). It provides a compact Decursive-style workflow with a dark, class-colored interface inspired by the clarity of Ellesmere UI. The interface follows the language of your WoW client, English or French; either can be picked from the General page at any time.
 
@@ -36,6 +36,10 @@ Red, blue, and orange identify the click to use. The optional L/R/C corner lette
 - A default raid order relative to your own group rather than an absolute
   1-to-8 order, so cleansing work spreads across dispellers on its own.
 - Permanent and combat-only aura filters.
+- A preview that pads the grid to any size from 1 to 40 with inert cells, so a
+  raid layout can be sized and placed without a raid. A preview cell carries no
+  secure unit, is never handed to the protected aura engine, and never enters
+  the native sound registry. It closes itself when combat starts.
 - Class-colored interface, test mode, dual timers (numeric cleanse cooldown plus a clockwise affliction-duration fade), stacks, tooltips, color-independent click hints, sound-channel selection, and sound diagnostics.
 - Wrapping grid, horizontal-fill and vertical-fill cell arrangements with independent growth direction.
 - English and French localization.
@@ -57,7 +61,9 @@ Red, blue, and orange identify the click to use. The optional L/R/C corner lette
 - `/cleansive hide`: hide the grid for the current session without disabling Cleansive.
 - `/cleansive enable`, `/cleansive disable`: persistently enable or disable Cleansive.
 - `/cleansive reset`: reset frame positions.
-- `/cleansive test`: toggle test mode.
+- `/cleansive test`: toggle the preview.
+- `/cleansive test <1-40>`: pad the preview to that many cells.
+- `/cleansive test mixed|all|healthy`: choose how many preview cells light up.
 - `/cleansive macro`: create or update the mouseover macro.
 - `/cleansive prio`, `/cleansive skip`, `/cleansive filters`: open management tools.
 - `/cleansive pradd`: add the current player target to the priority list.
@@ -101,6 +107,7 @@ The hover-cleanse key also respects these restrictions: it casts through a secur
 
 ## Recent changes
 
+- **1.5.47** - the preview pads the grid to any size from 1 to 40, so a raid layout can be tuned without a raid. Preview cells are inert.
 - **1.5.46** - a sound alert is replaced without a silent gap: the new registration is created first, and a refused replacement keeps the working one. `/cleansive diag copy` opens a selected, copyable support report.
 - **1.5.45** - a styling pass asks the client for permission before its nine calls instead of after.
 - **1.5.44** - mouse button 4 reports its own cooldown.
