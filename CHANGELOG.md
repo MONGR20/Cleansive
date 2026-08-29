@@ -6,6 +6,14 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.5.37
+
+- **A refused event registration is asked for once, not at every login.** The session that followed 1.5.36 raised `ADDON_ACTION_FORBIDDEN` on `Frame:RegisterEvent()` -- a dialog whose first button disables this addon. The refusal does not raise, so nothing could catch it; the frame is now asked afterwards whether the registration took, and a refusal is remembered. 1.5.36 added exactly two events, which is where the fault came from.
+- **The pending plate no longer promises a restyle the client has forbidden.** Styling the labels the protected engine owns failed 315 times in one session without a single success, and each failure was announced as if the player had asked for it: the plate stayed lit for the whole of every fight. The deferral remains -- only the promise is withdrawn. This is the same forbidden-object family as the font bug fixed in 1.5.35, reached by a different path.
+- The reason for a refused restyle is kept, not just its count. A count cannot tell a forbidden object from a nil field, and that distinction was the whole diagnosis.
+- `/cleansive diag` reports both: which event the client refused, and how many restyles it turned down with the first reason.
+- Tests: 647 to 660. `RegisterEvent` and `IsEventRegistered` were absent from the mock -- a code that verifies its own registration would have concluded that *every* event was refused, and written that down permanently.
+
 ## 1.5.36
 
 - `/cleansive diag` reports what a session leaves behind, and the same record is kept in SavedVariables. Three things earned their place, each because its absence cost an evening.

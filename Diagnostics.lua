@@ -71,6 +71,32 @@ function NS:NoteDispelledAura(spellID, name, auraType)
     record.unlisted[spellID] = { name = tostring(name or "?"), count = 1 }
 end
 
+-- The engine can refuse to let its own labels be restyled. The call is already
+-- guarded, but the reason used to be discarded: only the count survived, and a
+-- count cannot tell a forbidden object from a nil field.
+function NS:NoteStyleFailure(err)
+    local record = self:GetDiagnostics()
+    if not record then return end
+    record.styleFailures = (record.styleFailures or 0) + 1
+    if not record.styleError then record.styleError = tostring(err) end
+end
+
+-- A refused event registration does not raise: it fires ADDON_ACTION_FORBIDDEN,
+-- which shows the player a dialog whose first button disables this addon. The
+-- refusal is remembered so the attempt is made once in the addon's life rather
+-- than at every login.
+function NS:NoteRefusedEvent(name)
+    local record = self:GetDiagnostics()
+    if not record then return end
+    record.refusedEvents = type(record.refusedEvents) == "table" and record.refusedEvents or {}
+    record.refusedEvents[name] = true
+end
+
+function NS:IsEventRefused(name)
+    local record = self:GetDiagnostics()
+    return record and record.refusedEvents and record.refusedEvents[name] or false
+end
+
 function NS:OnCombatLogEvent()
     local info = C_CombatLog and C_CombatLog.GetCurrentEventInfo or CombatLogGetCurrentEventInfo
     if not info then return end
@@ -135,6 +161,14 @@ function NS:PrintDiagnostics()
         self:Print(self.L.DIAG_SOUND, tostring(sound.registered or 0),
             tostring(sound.attempted or 0), tostring(sound.skippedUnits or 0),
             tostring(sound.season or "?"))
+    end
+
+    for name in pairs(record.refusedEvents or {}) do
+        self:Print(self.L.DIAG_REFUSED, name)
+    end
+    if record.styleFailures then
+        self:Print(self.L.DIAG_STYLE, tostring(record.styleFailures),
+            tostring(record.styleError or "-"))
     end
 
     local any = false

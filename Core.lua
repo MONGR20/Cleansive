@@ -706,10 +706,25 @@ events:SetScript("OnEvent", function(_, event, ...)
             "PLAYER_ENTERING_WORLD", "GROUP_ROSTER_UPDATE", "UNIT_AURA", "UNIT_FLAGS", "UNIT_FACTION", "UNIT_PET",
             "UNIT_CONNECTION", "UNIT_ENTERED_VEHICLE", "UNIT_EXITED_VEHICLE", "PLAYER_FOCUS_CHANGED", "SPELLS_CHANGED", "SPELL_UPDATE_COOLDOWN", "SPELL_UPDATE_CHARGES",
             "PLAYER_SPECIALIZATION_CHANGED", "TRAIT_CONFIG_UPDATED", "PLAYER_REGEN_DISABLED",
-            "PLAYER_REGEN_ENABLED", "UI_ERROR_MESSAGE",
-            "COMBAT_LOG_EVENT_UNFILTERED", "PLAYER_LOGOUT",
+            "PLAYER_REGEN_ENABLED", "UI_ERROR_MESSAGE", "PLAYER_LOGOUT",
+            -- Last, as a precaution rather than a proven need: 1.5.36 added
+            -- this one and the very next session raised ADDON_ACTION_FORBIDDEN
+            -- on a registration. Whether a refusal stops the loop is unknown --
+            -- it arrives as an event, not as a raised error -- so the one event
+            -- suspected of being refused is asked for after everything else.
+            "COMBAT_LOG_EVENT_UNFILTERED",
         }) do
-            events:RegisterEvent(name)
+            -- A refusal does not raise: it shows the player a dialog whose
+            -- first button disables this addon. Nothing can be done in advance
+            -- to know, so the attempt is made once, the frame is asked whether
+            -- it took, and a refusal is remembered rather than repeated at
+            -- every login.
+            if not NS:IsEventRefused(name) then
+                events:RegisterEvent(name)
+                if events.IsEventRegistered and not events:IsEventRegistered(name) then
+                    NS:NoteRefusedEvent(name)
+                end
+            end
         end
         return
     end

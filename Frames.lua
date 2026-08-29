@@ -645,7 +645,7 @@ function NS:StyleAuraVisual(button, auraType, visual)
     -- the engine still sees something here.
     local alpha = enabled and (grouped and 0 or 0.92) or 0
 
-    local ok = pcall(function()
+    local ok, err = pcall(function()
         visual.auraButton:SetFrameLevel(level)
         if visual.auraButton.SetMouseMotionEnabled then
             visual.auraButton:SetMouseMotionEnabled(enabled and self.db.showTooltips)
@@ -687,7 +687,17 @@ function NS:StyleAuraVisual(button, auraType, visual)
         end
         if visual.labelLayer then visual.labelLayer:SetFrameLevel(level + 3) end
     end)
-    if not ok then self:MarkPending("pendingAuraStyle") end
+    -- Silent, and deliberately so. This restyles labels the protected engine
+    -- owns, and 12.1 can declare them forbidden to addon code: a real session
+    -- failed here 315 times without one attempt ever succeeding. Announcing it
+    -- lit the pending plate for the whole of every fight, about an operation
+    -- the player did not ask for and no amount of waiting will complete.
+    -- The flag still replays; only the promise is withdrawn, and the reason is
+    -- written down where it can be read afterwards.
+    if not ok then
+        self:MarkPending("pendingAuraStyle", true)
+        if self.NoteStyleFailure then self:NoteStyleFailure(err) end
+    end
 end
 
 function NS:UpdateButtonAfflictionAlert(button, aura, slot, silent)
