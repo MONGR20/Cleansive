@@ -6,6 +6,15 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.5.40
+
+- **Un refus du client n'emporte plus le reste de la mise en forme.** Le releve du 29/08/2026 montrait `Frames.lua:641: calling 'SetFrameLevel' on bad self (forbidden object)`, 315 fois en une session. `SetFrameLevel` etait la premiere ligne d'un `pcall` qui contenait toute la passe : quand le client refusait ce seul appel, le fond, la bande de type, le compteur de charges et la lettre de clic n'etaient jamais poses non plus. C'est le defaut de police de la 1.5.35 dans un autre bloc -- corrige a l'epoque seulement la ou il avait ete observe, ce qui est exactement pourquoi celui-ci a survecu. Chaque etape tient maintenant seule.
+- **Le releve dit desormais combien de la passe a ete perdu**, pas seulement qu'elle a echoue. Une etape sur neuf est une eraflure ; neuf sur neuf est toute la mise en forme. Avant, les deux etaient indiscernables -- parce qu'un seul refus les rendait identiques.
+- **Les compteurs sont ramenes a zero quand la version change.** La base du 29/08 portait 630 reports et 315 refus sans aucun moyen de savoir de quelle session ni de quelle version ils venaient : il a fallu les comparer a une copie du fichier gardee par hasard. Chaque nombre est maintenant date par la version qui l'a produit, et le releve l'imprime.
+- **Le pic sonore est retenu au moment ou il se produit.** L'instantane est pris a la deconnexion, quand le joueur est seul : 46 inscriptions pour une unite. Le donjon qu'il devait mesurer etait exactement ce qu'il ne pouvait pas voir. Le maximum d'inscriptions et d'unites est desormais releve pendant la session, et une inscription incomplete en groupe compte comme un probleme meme si la fin de session est propre.
+- Le champ mort `unlisted`, laisse par la 1.5.37, est purge des bases existantes.
+- Tests : 668 a 686. Les deux correctifs verifies par reinjection : 6 rouges avant correction, dont le cablage du pic, qu'une premiere version des tests ne couvrait pas.
+
 ## 1.5.39
 
 - **Un enregistrement sonore rate est desormais repris.** Effacer l'empreinte laissait la porte ouverte a une reprise mais ne la demandait a personne : hors combat, sans autre evenement, les sons concernes restaient absents pour le reste de la session. La reprise est bornee a deux tentatives espacees, protegee par le compteur de generation, et se tait en combat, ou la fin du combat demande deja un rafraichissement. Le commentaire qui affirmait le contraire disait faux.

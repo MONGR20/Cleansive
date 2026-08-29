@@ -351,6 +351,11 @@ function NS:RefreshAuraSoundRegistrations(reason)
         diagnostics.pending = false
         diagnostics.elapsedMs = math.max(0, nowMilliseconds() - startedAt)
         diagnostics.activeHandles = tableCount(handles)
+        -- Recorded here, while the group exists. The logout snapshot cannot see
+        -- it: by then the player is alone and the numbers are back to one unit.
+        if self.NoteSoundLoad then
+            self:NoteSoundLoad(diagnostics.attempted, diagnostics.units, diagnostics.registered)
+        end
         if diagnostics.registered == diagnostics.attempted and staleHandles == 0 then
             self.auraSoundFingerprint = fingerprint
             self.auraSoundChannel = currentChannel

@@ -637,13 +637,40 @@ function NS:StyleAuraVisual(button, auraType, visual)
     -- the engine still sees something here.
     local alpha = enabled and (grouped and 0 or 0.92) or 0
 
-    local ok, err = pcall(function()
+    local hintOffset = self:ClickHintOffset(slot, self.db.frameSize)
+    local hintShown = enabled and (slot ~= nil or manual ~= nil)
+        and self.db.showClickHints and hintOffset ~= nil
+
+    -- One refusal used to take the whole block with it. SetFrameLevel was the
+    -- first line, and a real session on 29/08/2026 had it forbidden 315 times:
+    -- the overlay, the type stripe, the stack and the click letter were never
+    -- applied either, because the client had declined an unrelated call above
+    -- them. This is the font bug of 1.5.35 in another place -- that one was
+    -- fixed only where it had been observed, which is why this one survived.
+    -- Each step now stands on its own: what the client allows is applied.
+    local failures, firstError = 0, nil
+    local function step(fn)
+        local ok, err = pcall(fn)
+        if not ok then
+            failures = failures + 1
+            firstError = firstError or err
+        end
+    end
+
+    -- The engine's own frame: the one that was refused in the field.
+    step(function()
         visual.auraButton:SetFrameLevel(level)
         if visual.auraButton.SetMouseMotionEnabled then
             visual.auraButton:SetMouseMotionEnabled(enabled and self.db.showTooltips)
         end
+    end)
+    step(function()
         visual.overlay:SetColorTexture(clickColor[1], clickColor[2], clickColor[3], alpha)
+    end)
+    step(function()
         visual.typeMark:SetColorTexture(typeColor[1], typeColor[2], typeColor[3], enabled and 1 or 0)
+    end)
+    step(function()
         visual.stack:ClearAllPoints()
         if slot == 2 then
             visual.stack:SetPoint("RIGHT", button, "RIGHT", -1, 0)
@@ -653,32 +680,39 @@ function NS:StyleAuraVisual(button, auraType, visual)
             visual.stack:SetPoint("TOPRIGHT", button, "TOPRIGHT", -1, -1)
         end
         visual.stack:SetShown(enabled and self.db.showStacks and not self:CellShowsNames())
-        if visual.unitName then
+    end)
+    if visual.unitName then
+        step(function()
             visual.unitName:SetWidth(math.max(8, self.db.frameSize - 4))
             visual.unitName:SetText(button.descriptor and button.descriptor.displayName or button.unit or "")
             visual.unitName:SetShown(enabled and self:CellShowsNames())
-        end
-        local hintOffset = self:ClickHintOffset(slot, self.db.frameSize)
-        local hintShown = enabled and (slot ~= nil or manual ~= nil)
-            and self.db.showClickHints and hintOffset ~= nil
-        if visual.clickHint then
+        end)
+    end
+    if visual.clickHint then
+        step(function()
             visual.clickHint:ClearAllPoints()
             visual.clickHint:SetPoint("TOPLEFT", button, "TOPLEFT", 2 + (hintOffset or 0), -1)
             visual.clickHint:SetText(slot and clickHint(slot) or (manual and "!" or ""))
             -- Manual abilities use an exclamation mark, never a click letter.
             visual.clickHint:SetShown(hintShown)
-        end
-        if visual.clickHintPlate then
+        end)
+    end
+    if visual.clickHintPlate then
+        step(function()
             visual.clickHintPlate:ClearAllPoints()
             visual.clickHintPlate:SetPoint("TOPLEFT", button, "TOPLEFT", 1 + (hintOffset or 0), -1)
             visual.clickHintPlate:SetShown(hintShown)
-        end
-        if visual.durationCooldown then
+        end)
+    end
+    if visual.durationCooldown then
+        step(function()
             visual.durationCooldown:SetFrameLevel(level + 1)
             visual.durationCooldown:SetDrawSwipe(enabled and true or false)
-        end
-        if visual.labelLayer then visual.labelLayer:SetFrameLevel(level + 3) end
-    end)
+        end)
+    end
+    if visual.labelLayer then
+        step(function() visual.labelLayer:SetFrameLevel(level + 3) end)
+    end
     -- Silent, and deliberately so. This restyles labels the protected engine
     -- owns, and 12.1 can declare them forbidden to addon code: a real session
     -- failed here 315 times without one attempt ever succeeding. Announcing it
@@ -686,9 +720,9 @@ function NS:StyleAuraVisual(button, auraType, visual)
     -- the player did not ask for and no amount of waiting will complete.
     -- The flag still replays; only the promise is withdrawn, and the reason is
     -- written down where it can be read afterwards.
-    if not ok then
+    if failures > 0 then
         self:MarkPending("pendingAuraStyle", true)
-        if self.NoteStyleFailure then self:NoteStyleFailure(err) end
+        if self.NoteStyleFailure then self:NoteStyleFailure(firstError, failures) end
     end
 end
 

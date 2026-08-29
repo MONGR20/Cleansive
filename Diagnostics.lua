@@ -25,6 +25,20 @@ function NS:GetDiagnostics()
         global.diagnostics = record
     end
     record.pending = type(record.pending) == "table" and record.pending or {}
+    -- A counter that never resets cannot be read. The 29/08/2026 record showed
+    -- 630 deferrals and 315 refused restyles with no way to tell which session
+    -- or which version produced them -- the only way to date them was to
+    -- compare against an older copy of the file kept by chance. Every count is
+    -- now scoped to the installed version: the numbers mean "since this
+    -- version", and the version is printed beside them.
+    if record.version and record.version ~= self.version then
+        record.pending = {}
+        record.styleFailures, record.styleError, record.styleSteps = nil, nil, nil
+        record.soundPeak = nil
+    end
+    record.version = self.version
+    -- Dead field left by 1.5.37; it never held anything a reader could use.
+    record.unlisted = nil
     return record
 end
 
@@ -46,11 +60,33 @@ end
 -- The engine can refuse to let its own labels be restyled. The call is already
 -- guarded, but the reason used to be discarded: only the count survived, and a
 -- count cannot tell a forbidden object from a nil field.
-function NS:NoteStyleFailure(err)
+-- steps says how much of the pass was lost. One refused step out of nine is a
+-- cosmetic dent; nine out of nine is the whole styling gone, and before 1.5.40
+-- the two were indistinguishable because a single refusal aborted the rest.
+function NS:NoteStyleFailure(err, steps)
     local record = self:GetDiagnostics()
     if not record then return end
     record.styleFailures = (record.styleFailures or 0) + 1
+    record.styleSteps = (record.styleSteps or 0) + (tonumber(steps) or 1)
     if not record.styleError then record.styleError = tostring(err) end
+end
+
+-- The snapshot is taken at logout, so it describes the player standing alone in
+-- a capital: 46 registrations for one unit. The dungeon it was meant to measure
+-- is exactly what it cannot see. The peak is kept as it happens instead.
+function NS:NoteSoundLoad(attempted, units, registered)
+    local record = self:GetDiagnostics()
+    if not record then return end
+    local peak = record.soundPeak
+    if type(peak) ~= "table" then
+        peak = { attempted = 0, units = 0, registered = 0 }
+        record.soundPeak = peak
+    end
+    if (tonumber(attempted) or 0) > peak.attempted then
+        peak.attempted = tonumber(attempted) or 0
+        peak.units = tonumber(units) or 0
+        peak.registered = tonumber(registered) or 0
+    end
 end
 
 -- A refused event registration does not raise: it fires ADDON_ACTION_FORBIDDEN,
@@ -86,7 +122,6 @@ end
 function NS:SnapshotDiagnostics()
     local record = self:GetDiagnostics()
     if not record then return end
-    record.version = self.version
     local engine = self.auraContainerDiagnostics
     if type(engine) == "table" then
         record.engine = {
@@ -164,6 +199,15 @@ function NS:PrintDiagnostics()
         end
     end
 
+    local peak = record.soundPeak
+    if peak and peak.attempted > 0 then
+        self:Print(self.L.DIAG_SOUND_PEAK, tostring(peak.registered or 0),
+            tostring(peak.attempted), tostring(peak.units or 0))
+        -- The peak is the only place a dungeon-sized failure can show up: the
+        -- logout snapshot has already fallen back to a single unit.
+        if (peak.registered or 0) < peak.attempted then problems = problems + 1 end
+    end
+
     for name in pairs(record.refusedEvents or {}) do
         problems = problems + 1
         self:Print(self.L.DIAG_REFUSED, name)
@@ -171,6 +215,7 @@ function NS:PrintDiagnostics()
     if record.styleFailures then
         problems = problems + 1
         self:Print(self.L.DIAG_STYLE, tostring(record.styleFailures),
+            tostring(record.styleSteps or record.styleFailures),
             tostring(record.styleError or "-"))
     end
 
@@ -184,6 +229,7 @@ function NS:PrintDiagnostics()
 
     -- A deferral is not a fault: the plate is the addon working as designed.
     -- Only the client's refusals and the engine's failures count here.
+    self:Print(self.L.DIAG_SCOPE, tostring(record.version or "?"))
     if problems == 0 then
         self:Print(self.L.DIAG_HEALTHY)
     else
