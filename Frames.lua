@@ -1198,6 +1198,12 @@ function NS:ApplySecureBindings()
         local bindings = self:ClickBindings()
         local names = { oneName, twoName, threeName }
         local used = {}
+        -- La carte EFFECTIVE des gestes : les combinaisons reglees, plus le
+        -- miroir du bouton de pouce. C'est elle que le registre interne
+        -- interroge -- il deduisait le sort d'une liste ecrite en dur, et
+        -- nommait donc le mauvais des qu'une combinaison etait deplacee.
+        local effective = {}
+        for slot = 1, 3 do effective[bindings[slot]] = slot end
         -- Ce qui etait pose la fois d'avant et ne l'est plus doit etre DESARME.
         -- Sans cela, deplacer une dissipation de Ctrl + gauche vers Maj + droit
         -- laissait Ctrl + gauche lancer encore le sort : deux combinaisons pour
@@ -1247,6 +1253,7 @@ function NS:ApplySecureBindings()
         -- gagne. Poser le miroir par-dessus aurait ecrase le reglage qu'on
         -- vient de lui accorder.
         if not used["4"] then
+            effective["4"] = 3
             target:SetAttribute("type4", threeName and "spell" or "none")
             target:SetAttribute("spell4", threeName)
             target:SetAttribute("*type4", threeName and "spell" or "none")
@@ -1259,8 +1266,17 @@ function NS:ApplySecureBindings()
         end
     end
     -- Retenu APRES la boucle : ce qui vient d'etre pose sera ce qu'il faudra
-    -- desarmer la prochaine fois.
+    -- desarmer la prochaine fois, et c'est aussi ce que le registre interne
+    -- doit lire pour nommer le bon sort.
     self.appliedClickBindings = self:ClickBindings()
+    local effective = {}
+    for slot = 1, 3 do effective[self.appliedClickBindings[slot]] = slot end
+    local mirrored = true
+    for slot = 1, 3 do
+        if self.appliedClickBindings[slot] == "4" then mirrored = false end
+    end
+    if mirrored then effective["4"] = 3 end
+    self.effectiveClickSlots = effective
     self:ConfigurePriorityDispelButton()
     self:ApplyPriorityDispelBinding(true)
 end

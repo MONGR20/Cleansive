@@ -1,4 +1,4 @@
-# Cleansive 1.6.18
+# Cleansive 1.6.19
 
 Cleansive is a standalone one-click cleansing addon for **World of Warcraft Retail 12.1** (`120100`). It provides a compact Decursive-style workflow with a dark, class-colored interface inspired by the clarity of Ellesmere UI. The interface follows the language of your WoW client, English or French; either can be picked from the General page at any time.
 
@@ -177,6 +177,7 @@ the reason on its own.
 
 ## Recent changes
 
+- **1.6.19** - after a remapped click the cell could show the wrong cooldown: the internal ledger still read the old hardcoded gestures.
 - **1.6.18** - cleanse clicks can be remapped to any mouse button with any modifiers, and nothing is written while a conflict exists.
 - **1.6.17** - per-place profile overrides: open world, dungeon, raid, PvP. They carry no settings of their own, only the name of a profile you already made.
 - **1.6.16** - the engine's frame level is only re-applied when it actually changes, which is what turned one refusal into 690 over a single key.

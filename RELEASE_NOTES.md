@@ -6,6 +6,17 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.6.19
+
+**Apres un clic remappe, la case pouvait afficher la mauvaise recharge.**
+Confirme en jeu.
+
+- Le registre interne deduisait le sort d'une liste ecrite en dur : gauche, droite, Ctrl + gauche, bouton 4. Depuis que les combinaisons se reglent (1.6.18), cette liste decrivait des gestes que le joueur avait peut-etre deplaces. Le clic securise partait correctement -- c'est le jeu qui l'execute -- mais le releve nommait un autre sort, donc la case affichait sa recharge, ou aucune.
+- Le geste est desormais traduit par la **carte effective**, celle-la meme qui pose les attributs securises, miroir du bouton de pouce compris. Une seule source : le clic et le releve ne peuvent plus diverger. C'est le point 42 de l'inventaire, « rapprocher apercu, infobulle et clic reel d'un pipeline commun », applique la ou ca comptait le plus.
+- Un geste qui n'appartient a aucune dissipation n'inscrit plus rien, au lieu de retomber sur la premiere.
+- **Le harnais cablait les trois modificateurs sur « relache ».** Tout code qui en lit un passait pour verifie sans l'etre -- c'est exactement ce qui a laisse ce defaut sortir. Ils sont pilotables, et le test rejoue le remappage comme en jeu.
+- Tests : 1 504 a 1 513.
+
 ## 1.6.18
 
 **Remappage des clics de dissipation**, avec ce qui le rend acceptable : la
@@ -67,16 +78,5 @@ questions que deux audits laissaient ouvertes.
 - Les deux garde-fous en place n'ont rien vu : `IsForbidden` repond que l'objet n'est pas **declare** interdit, et `CheckAllowProtectedFunctions` a accorde la permission. **Le seul temoin fiable est l'echec lui-meme.** Il est desormais retenu, pour cette etape seule, et n'est plus retente : 690 echecs, c'etait 690 relances inutiles. Les huit autres etapes continuent de s'appliquer -- abandonner tout le visuel aurait coute bien plus que le niveau de cadre.
 - La memoire meurt avec le visuel : une reconstruction du moteur redonne sa chance a l'objet suivant.
 - Tests : 1 433 a 1 437.
-
-## 1.6.13
-
-**Le defilement des pages de reglages ne fonctionnait pas en jeu.** Signale sur
-captures, sur la 1.6.12 publiee.
-
-- **La cause est une ligne de la 1.6.7.** Les deux scripts de la zone de defilement etaient poses avec `SetScript`, qui **remplace**. `UIPanelScrollFrameTemplate` met les siens sur ces memes evenements pour piloter sa barre : ses bornes, son curseur, sa visibilite. En les ecrasant, la barre n'etait plus jamais configuree — et la molette du modele, qui s'appuie dessus, ne deplacait plus rien. Les gestionnaires sont desormais **chaines** : celui du modele d'abord, le notre ensuite. Et une molette a nous, qui ne depend d'aucun heritage, deplace de 40 px en restant dans les bornes.
-- **Le harnais ne pouvait pas le voir, et c'est le vrai defaut.** Le bouchon ignorait qu'un modele Blizzard arrive AVEC ses scripts deja poses : ecraser l'un d'eux y passait pour anodin. Il le modelise maintenant, et un test verifie que le gestionnaire du modele est encore appele apres les notres.
-- **La bande « la page continue plus bas » recouvrait la derniere ligne** de chaque page longue. Elle etait posee dans la zone de lecture ; celle-ci s'arrete maintenant 22 px au-dessus d'elle. La hauteur reellement visible passe donc de 550 a 528 px, et les pages qui la depassent defilent — ce qu'elles sont censees faire.
-- **Le rapport de diagnostic affichait « lock=0 » puis « one » sur deux lignes.** Le separateur des restrictions etait une barre verticale : dans un texte affiche par WoW, « | » ouvre une sequence d'echappement, et « |none » se lit « |n » -- un retour a la ligne -- suivi de « one ». Le separateur est desormais une barre oblique, et un test refuse toute barre verticale dans ce releve.
-- Tests : 1 417 a 1 433.
 
 L'historique complet est dans `CHANGELOG.md`, livre avec l'addon.

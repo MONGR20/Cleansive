@@ -816,6 +816,44 @@ function NS:SetClickBinding(slot, raw)
     return true, string.format(self.L.CLICK_BINDING_SET, slot, self:DescribeClickBinding(binding))
 end
 
+-- Le nom que WoW donne a un bouton, et l'index que porte l'attribut securise.
+-- Les deux doivent parler de la meme chose, sinon le clic part correctement et
+-- le registre interne note autre chose.
+local MOUSE_BUTTON_INDEX = {
+    LeftButton = "1", RightButton = "2", MiddleButton = "3",
+    Button4 = "4", Button5 = "5",
+}
+
+-- La combinaison REELLEMENT pressee, ecrite comme celles du reglage.
+function NS:ClickBindingFromMouse(mouseButton)
+    local index = MOUSE_BUTTON_INDEX[mouseButton]
+    if not index then return nil end
+    local parts = {}
+    if IsAltKeyDown and IsAltKeyDown() then parts[#parts + 1] = "ALT" end
+    if IsControlKeyDown and IsControlKeyDown() then parts[#parts + 1] = "CTRL" end
+    if IsShiftKeyDown and IsShiftKeyDown() then parts[#parts + 1] = "SHIFT" end
+    parts[#parts + 1] = index
+    return table.concat(parts, "-")
+end
+
+-- Le numero de dissipation que ce geste declenche REELLEMENT, lu dans le meme
+-- tableau que celui qui pose les attributs securises. C'est tout l'interet :
+-- une seule source, donc le clic et le releve ne peuvent plus diverger.
+function NS:SlotForMouseClick(mouseButton)
+    local binding = self:ClickBindingFromMouse(mouseButton)
+    if not binding then return nil end
+    -- La carte effective est posee en meme temps que les attributs securises.
+    -- Tant qu'elle n'existe pas -- avant la premiere pose -- on retombe sur les
+    -- combinaisons reglees, qui en sont la partie principale.
+    local effective = self.effectiveClickSlots
+    if effective then return effective[binding] end
+    local bindings = self:ClickBindings()
+    for slot = 1, 3 do
+        if bindings[slot] == binding then return slot end
+    end
+    return nil
+end
+
 function NS:PrintClickBindings()
     local bindings = self:ClickBindings()
     for slot = 1, 3 do
@@ -926,21 +964,17 @@ end
 
 function NS:RecordSecureClick(button, mouseButton)
     if not button or not button.unit then return end
-    -- Button4 casts the third cleanse (1.5.43) but was not listed here, so the
-    -- click was performed by the game and never recorded: the cell kept the
-    -- previous spell's cooldown, or none. The secure binding and this ledger
-    -- have to name the same buttons.
-    if mouseButton and mouseButton ~= "LeftButton" and mouseButton ~= "RightButton"
-        and mouseButton ~= "Button4" then
-        return
-    end
-    local slot = 1
-    if mouseButton == "RightButton" then
-        slot = 2
-    elseif mouseButton == "Button4"
-        or (mouseButton == "LeftButton" and IsControlKeyDown and IsControlKeyDown()) then
-        slot = 3
-    end
+    -- Cette liste etait ecrite en dur : gauche, droite, Ctrl + gauche, bouton 4.
+    -- Depuis que les combinaisons se reglent (1.6.18), elle decrivait des gestes
+    -- que le joueur avait peut-etre deplaces : le sort securise partait
+    -- correctement, et le releve interne nommait un autre sort -- donc la case
+    -- affichait la mauvaise recharge, ou aucune. Signale en jeu le 30/08.
+    -- Le geste est desormais traduit par le MEME tableau que celui qui pose les
+    -- attributs securises. Une seule source : ils ne peuvent plus diverger.
+    local slot = self:SlotForMouseClick(mouseButton)
+    if not slot then return end
+    -- Un slot sans sort retombe sur le premier, exactement comme la pose des
+    -- attributs : « deux » vaut « un » quand il n'y a pas de deuxieme sort.
     if not (self.clickSpells and self.clickSpells[slot]) then slot = 1 end
     if not (self.clickSpells and self.clickSpells[slot]) then slot = nil end
 

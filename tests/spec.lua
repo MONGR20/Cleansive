@@ -6204,8 +6204,63 @@ do
     falsy(NS:AnalyzeProfileImport("CLEANSIVE1;clickBindings=1,1,2"),
         "transfert : une liste en conflit avec elle-meme aussi")
 
-    NS.db.clickBindings = { "1", "2", "CTRL-1" }
-    NS:ApplySecureBindings()
+    -- 1.6.19, CONFIRME EN JEU le 30/08 : apres un remappage, le registre
+    -- interne continuait d'identifier le sort selon les anciens gestes. La
+    -- liste etait ecrite en dur -- gauche, droite, Ctrl + gauche, bouton 4 --
+    -- alors que le clic securise, lui, partait correctement. La case affichait
+    -- donc la mauvaise recharge, ou aucune.
+    do
+        local cell = NS.buttons[1]
+        cell.unit = "player"
+        NS.db.clickBindings = { "1", "2", "CTRL-1" }
+        NS:ApplySecureBindings()
+
+        -- D'abord le comportement d'origine, qui ne doit pas bouger.
+        mock.state.modifiers = {}
+        eq(NS:SlotForMouseClick("LeftButton"), 1, "geste : le clic gauche vise le premier")
+        eq(NS:SlotForMouseClick("RightButton"), 2, "geste : le droit le deuxieme")
+        mock.state.modifiers = { CTRL = true }
+        eq(NS:SlotForMouseClick("LeftButton"), 3, "geste : Ctrl + gauche le troisieme")
+        mock.state.modifiers = {}
+        eq(NS:SlotForMouseClick("Button4"), 3, "geste : le miroir du bouton 4 aussi")
+
+        -- Puis le remappage. LE point : le releve doit suivre.
+        NS:SetClickBinding(3, "SHIFT-2")
+        mock.state.modifiers = { SHIFT = true }
+        eq(NS:SlotForMouseClick("RightButton"), 3,
+            "geste : la nouvelle combinaison vise bien la troisieme dissipation")
+        mock.state.modifiers = { CTRL = true }
+        falsy(NS:SlotForMouseClick("LeftButton"),
+            "geste : et l'ancienne ne vise plus rien -- elle ne lance plus rien non plus")
+
+        -- Et ce que le joueur voit : la recharge inscrite au registre. Il faut
+        -- un VRAI troisieme sort : sans lui, le clic lance le premier -- c'est
+        -- ce que posent les attributs -- et noter « premier » serait exact.
+        local savedSpells = NS.clickSpells[3]
+        NS.clickSpells[3] = { name = "Troisieme", secureName = "Troisieme" }
+        mock.state.modifiers = { SHIFT = true }
+        cell.cooldownSlot = nil
+        NS:RecordSecureClick(cell, "RightButton")
+        eq(cell.cooldownSlot, 3,
+            "recharge : le clic remappe inscrit la BONNE dissipation au registre")
+        mock.state.modifiers = { CTRL = true }
+        cell.cooldownSlot = nil
+        NS:RecordSecureClick(cell, "LeftButton")
+        falsy(cell.cooldownSlot,
+            "recharge : et l'ancienne combinaison n'inscrit plus rien")
+
+        NS.clickSpells[3] = savedSpells
+
+        -- Un geste qui n'appartient pas a l'addon ne doit rien inscrire.
+        mock.state.modifiers = {}
+        cell.cooldownSlot = nil
+        NS:RecordSecureClick(cell, "Button5")
+        falsy(cell.cooldownSlot, "recharge : un geste etranger n'inscrit rien")
+
+        mock.state.modifiers = {}
+        NS.db.clickBindings = { "1", "2", "CTRL-1" }
+        NS:ApplySecureBindings()
+    end
 end
 
 --------------------------------------------------------------------------

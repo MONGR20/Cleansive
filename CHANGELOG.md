@@ -6,6 +6,17 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.6.19
+
+**Apres un clic remappe, la case pouvait afficher la mauvaise recharge.**
+Confirme en jeu.
+
+- Le registre interne deduisait le sort d'une liste ecrite en dur : gauche, droite, Ctrl + gauche, bouton 4. Depuis que les combinaisons se reglent (1.6.18), cette liste decrivait des gestes que le joueur avait peut-etre deplaces. Le clic securise partait correctement -- c'est le jeu qui l'execute -- mais le releve nommait un autre sort, donc la case affichait sa recharge, ou aucune.
+- Le geste est desormais traduit par la **carte effective**, celle-la meme qui pose les attributs securises, miroir du bouton de pouce compris. Une seule source : le clic et le releve ne peuvent plus diverger. C'est le point 42 de l'inventaire, « rapprocher apercu, infobulle et clic reel d'un pipeline commun », applique la ou ca comptait le plus.
+- Un geste qui n'appartient a aucune dissipation n'inscrit plus rien, au lieu de retomber sur la premiere.
+- **Le harnais cablait les trois modificateurs sur « relache ».** Tout code qui en lit un passait pour verifie sans l'etre -- c'est exactement ce qui a laisse ce defaut sortir. Ils sont pilotables, et le test rejoue le remappage comme en jeu.
+- Tests : 1 504 a 1 513.
+
 ## 1.6.18
 
 **Remappage des clics de dissipation**, avec ce qui le rend acceptable : la

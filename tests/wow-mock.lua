@@ -242,6 +242,7 @@ state = {
     lossOfControlRestricted = false,
     tocRevision = "@project-abbreviated-hash@",
     instanceType = "none",
+    modifiers = {},
     timers = {},
 }
 M.state = state
@@ -565,7 +566,12 @@ function M.install(_G)
         return kind ~= "none", kind
     end
     _G.GetInstanceInfo = function() return "Royaumes de l'Est", "none", 0, "", 0, 0, false, 0 end
-    _G.IsControlKeyDown, _G.IsShiftKeyDown, _G.IsAltKeyDown = function() return false end, function() return false end, function() return false end
+    -- Cables en dur sur « relache » : tout code qui lit un modificateur passait
+    -- pour verifie sans l'etre, et c'est exactement ce qui a laisse le registre
+    -- des clics attribuer le mauvais sort apres un remappage.
+    _G.IsControlKeyDown = function() return state.modifiers.CTRL and true or false end
+    _G.IsShiftKeyDown = function() return state.modifiers.SHIFT and true or false end
+    _G.IsAltKeyDown = function() return state.modifiers.ALT and true or false end
 end
 
 function M.childrenOf(parent)
