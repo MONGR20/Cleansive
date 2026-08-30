@@ -405,21 +405,34 @@ end
 -- InCombatLockdown ne bascule : l'appelant sait, la fonction non.
 function NS:GridWouldBeVisible(combatOverride)
     if not self.enabled then return false end
-    -- L'apercu et la fenetre de reglages forcent l'affichage : ce que le joueur
-    -- regarde doit s'entendre.
-    if self.testMode then return true end
-    if self.optionsFrame and self.optionsFrame:IsShown() then return true end
-    if self.gridManuallyHidden then return false end
-    if not self:NeedsVisibilityDriver() then return true end
-    local allowed
-    if IsInRaid and IsInRaid() then allowed = self.db.showRaid ~= false
-    elseif IsInGroup and IsInGroup() then allowed = self.db.showParty ~= false
-    else allowed = self.db.showSolo ~= false end
-    if not allowed then return false end
     local inCombat = combatOverride
     if inCombat == nil then inCombat = InCombatLockdown and InCombatLockdown() end
-    if self.db.autoHide and not inCombat then return false end
-    return true
+
+    -- Le verdict du contexte : celui que le pilote securise applique.
+    local contextAllows = true
+    if self.gridManuallyHidden then
+        contextAllows = false
+    elseif self:NeedsVisibilityDriver() then
+        local allowed
+        if IsInRaid and IsInRaid() then allowed = self.db.showRaid ~= false
+        elseif IsInGroup and IsInGroup() then allowed = self.db.showParty ~= false
+        else allowed = self.db.showSolo ~= false end
+        if not allowed then
+            contextAllows = false
+        elseif self.db.autoHide and not inCombat then
+            contextAllows = false
+        end
+    end
+
+    -- L'apercu et la fenetre de reglages forcent l'affichage : ce que le joueur
+    -- regarde doit s'entendre. Mais seulement si le pilote peut REELLEMENT etre
+    -- relache. En combat il ne peut pas : ouvrir les options dans un raid ou la
+    -- grille est masquee par contexte faisait apparaitre la couche non protegee
+    -- SEULE -- un chiffre de recharge au-dessus de rien.
+    if self.testMode or (self.optionsFrame and self.optionsFrame:IsShown()) then
+        if contextAllows or not inCombat then return true end
+    end
+    return contextAllows
 end
 
 -- Every context allowed and no combat rule means "always": registering a

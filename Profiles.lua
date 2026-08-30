@@ -338,6 +338,39 @@ function NS:NamedProfileStore()
     if type(raw.assignments) ~= "table" then raw.assignments = {} end
     if not raw.namedStoreChecked then
         raw.namedStoreChecked = true
+        -- Les versions 1.6.9 et 1.6.10 acceptaient la barre verticale dans un
+        -- nom. La 1.6.11 la retire des saisies -- mais les noms DEJA enregistres
+        -- restaient tels quels : un bouton transmettait « Raid|Soins », la
+        -- normalisation en faisait « RaidSoins », et le profil devenait
+        -- introuvable. Utiliser, renommer et supprimer echouaient tous avec
+        -- « aucun profil de ce nom ».
+        --
+        -- La migration renomme la cle ET suit les affectations. En cas de
+        -- collision avec un nom deja pris, l'ancien est garde sous un suffixe
+        -- plutot qu'ecrase : perdre un profil pour cause de doublon serait pire
+        -- que d'en avoir deux a trier.
+        local renames = {}
+        for key, value in pairs(raw.named) do
+            if type(key) == "string" and key:find("|", 1, true) and type(value) == "table" then
+                local wanted = self:NormalizeProfileName(key) or "Profil"
+                local candidate, suffix = wanted, 2
+                while raw.named[candidate] or renames[candidate] do
+                    candidate = wanted .. " (" .. suffix .. ")"
+                    suffix = suffix + 1
+                end
+                renames[candidate] = key
+            end
+        end
+        for candidate, key in pairs(renames) do
+            raw.named[candidate], raw.named[key] = raw.named[key], nil
+            for _, specs in pairs(raw.assignments) do
+                if type(specs) == "table" then
+                    for spec, name in pairs(specs) do
+                        if name == key then specs[spec] = candidate end
+                    end
+                end
+            end
+        end
         -- P2 de l'audit : rien ne validait ce stockage entree par entree. Une
         -- cle non textuelle dans « named » remontait jusqu'au table.sort de
         -- NamedProfiles, qui leve en comparant un nombre a une chaine.
@@ -417,10 +450,11 @@ end
 -- Refuser est la seule reponse honnete. Un changement de profil a moitie
 -- applique est pire que pas de changement du tout, et c'est deja la regle
 -- retenue pour l'apercu en 1.6.1.
+-- Silencieuse : elle repond, elle n'annonce pas. Elle imprimait le refus ET le
+-- rendait a l'appelant, qui l'imprimait a son tour -- le joueur lisait deux
+-- fois la meme phrase.
 function NS:ProfileChangeBlockedByCombat()
-    if not (InCombatLockdown and InCombatLockdown()) then return false end
-    self:Print(self.L.PROFILE_COMBAT_REFUSED)
-    return true
+    return (InCombatLockdown and InCombatLockdown()) and true or false
 end
 
 function NS:CreateNamedProfile(rawName)

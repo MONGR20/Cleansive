@@ -6,6 +6,31 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.6.12
+
+**Le changelog de la 1.6.11 annoncait deux corrections qui n'existaient pas.**
+
+Mon script d'edition ecrivait le fichier APRES ses trois remplacements. Le
+troisieme est tombe sur une ancre absente, ce qui a annule les deux premiers --
+qui avaient deja affiche « ok ». J'ai cru ces « ok » et je les ai recopies dans
+le changelog. Un audit externe l'a vu ; aucun de mes 1 397 tests ne le pouvait,
+puisque les deux corrections etaient invisibles a la suite.
+
+L'outil ecrit desormais apres CHAQUE remplacement et relit le fichier sur disque
+pour confirmer. Les deux corrections sont faites, et testees :
+
+- **Au-dela de six profils, l'avertissement se pose sous la liste.** Il reutilisait le texte de la liste vide, ancre a la place de la premiere rangee : il recouvrait le premier profil, exactement quand la liste est la plus chargee.
+- **Les trois boutons qui changent un profil sont grises pendant un combat.** La logique refusait deja, donc la base n'a jamais pu etre abimee -- mais un bouton actif qui repond par un refus est une promesse non tenue.
+
+**Le reste de l'audit :**
+
+- **Les anciens noms de profils contenant une barre verticale sont migres.** Les 1.6.9 et 1.6.10 les acceptaient ; la 1.6.11 la retire des saisies mais laissait les cles enregistrees telles quelles. Un bouton transmettait « Raid|Soins », la normalisation en faisait « RaidSoins », et le profil devenait introuvable : utiliser, renommer et supprimer echouaient tous. La migration renomme la cle ET suit les affectations. En cas de collision, l'ancien est garde sous un suffixe plutot qu'ecrase -- perdre un profil pour cause de doublon serait pire que d'en avoir deux a trier.
+- **Le refus de changement de profil n'est plus imprime deux fois.** La garde annoncait le refus ET le rendait a l'appelant, qui l'annoncait a son tour.
+- **Ouvrir les reglages en combat ne fait plus apparaitre la couche non protegee seule.** La fenetre ouverte force l'affichage -- mais en combat le pilote securise ne peut pas etre relache. Dans un raid ou la grille est masquee par contexte, un chiffre de recharge se retrouvait au-dessus de rien. Les surcharges ne promettent plus que ce que le pilote peut tenir.
+- **L'apercu d'import borne la longueur de chaque valeur, pas seulement le nombre de lignes.** Un seul changement de filtre porte jusqu'a 500 identifiants de chaque cote : la ligne revenait a la ligne autant de fois qu'il fallait et repassait sous les boutons. La liste des rejets est bornee de la meme facon.
+- **Toujours ouvert et assume :** `AddAuraSound` sans garde de restriction, et le jeton de revision brut dans un ZIP construit a la main. Le premier demande une cle Mythique+ pour trancher, le second une publication par la chaine CI.
+- Tests : 1 397 a 1 417.
+
 ## 1.6.11
 
 Corrections issues d'un audit externe de la 1.6.10.
@@ -22,7 +47,8 @@ Corrections issues d'un audit externe de la 1.6.10.
 - **Un nom de profil n'est plus coupe au milieu d'un caractere accentue** : la borne comptait des octets. La barre verticale est refusee — elle separe les deux noms du renommage, et dans un texte affiche par WoW elle ouvre une sequence de mise en forme.
 - **Les listes de priorite et d'exclusion sont reparees entree par entree.** Une base contenant `priority = { 42 }` faisait lever des le premier roster. Le stockage des profils nommes est nettoye de la meme facon : une cle non textuelle remontait jusqu'au tri, qui leve en comparant un nombre a une chaine.
 - **Toute suppression d'alerte native passe par un seul endroit**, donc le compteur des alertes vivantes ne derive plus apres un nettoyage d'orphelin.
-- L'apercu d'import est borne a huit lignes suivies d'un compte : il traversait les boutons de confirmation puis sortait de la fenetre. Au-dela de six profils nommes, l'avertissement se pose SOUS la liste et non par-dessus la premiere ligne. Les deux fenetres de profils suivent la mise a l'echelle et se ferment par Echap. Le README documente `/cleansive profile` et `/cleansive sound`.
+- L'apercu d'import est borne a huit lignes suivies d'un compte. Les deux fenetres de profils suivent la mise a l'echelle et se ferment par Echap. Le README documente `/cleansive profile` et `/cleansive sound`.
+- **Correction apportee a cette entree par la 1.6.12 :** elle annoncait aussi que l'avertissement au-dela de six profils se posait sous la liste, et que les boutons de profils etaient grises en combat. **Ces deux corrections n'etaient pas dans la 1.6.11** -- un script d'edition les avait annulees en silence. Elles sont faites en 1.6.12.
 - **Non corrige, et assume :** `AddAuraSound` est toujours tente sans garde de restriction. Le risque est reel — une cle mythique garde `ChallengeMode` actif alors que `InCombatLockdown` dit non — mais toute garde que je pourrais ecrire ici couperait les alertes pendant une cle entiere dans le cas « afficher seulement en combat ». Cela demande une session en jeu pour trancher, pas une supposition de plus.
 - Tests : 1 356 a 1 397.
 

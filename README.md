@@ -1,4 +1,4 @@
-# Cleansive 1.6.11
+# Cleansive 1.6.12
 
 Cleansive is a standalone one-click cleansing addon for **World of Warcraft Retail 12.1** (`120100`). It provides a compact Decursive-style workflow with a dark, class-colored interface inspired by the clarity of Ellesmere UI. The interface follows the language of your WoW client, English or French; either can be picked from the General page at any time.
 
@@ -177,6 +177,7 @@ the reason on its own.
 
 ## Recent changes
 
+- **1.6.12** - two fixes the 1.6.11 changelog claimed but did not contain, plus the migration of old profile names containing a vertical bar.
 - **1.6.11** - external audit fixes: profile changes are refused mid-combat, a shared profile is really loaded at login, and the unprotected layer follows the same visibility rules as the grid.
 - **1.6.10** - the alert sound button is verified end to end: unwiring it now fails a test.
 - **1.6.9** - named profiles, shareable across characters and specializations. A specialization's own profile is never destroyed, so coming back to it always works.

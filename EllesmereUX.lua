@@ -2004,11 +2004,24 @@ function NS:ShowProfileManager()
             frame.rows[index] = row
         end
 
+        -- Deux messages, deux places. Celui-ci remplace une liste vide et
+        -- s'affiche donc a la place de la premiere rangee.
         frame.empty = text(frame, self.L.PROFILE_NONE, 11, C.dim)
         frame.empty:SetPoint("TOPLEFT", 22, -172)
         frame.empty:SetWidth(476)
-        frame.empty:SetHeight(14)
+        frame.empty:SetHeight(28)
         frame.empty:SetJustifyH("LEFT")
+
+        -- Celui-la parle des profils qui ne tiennent pas dans la liste : il
+        -- doit se poser SOUS la sixieme rangee. Reutiliser le meme texte le
+        -- dessinait par-dessus le premier profil, exactement quand la liste est
+        -- la plus chargee.
+        frame.overflow = text(frame, "", 11, C.dim)
+        frame.overflow:SetPoint("TOPLEFT", 22, -166 - (6 * 34) - 6)
+        frame.overflow:SetWidth(476)
+        frame.overflow:SetHeight(14)
+        frame.overflow:SetJustifyH("LEFT")
+        frame.overflow:Hide()
 
         local own = button(frame, self.L.PROFILE_USE_OWN, 220, 28)
         own:SetPoint("BOTTOMLEFT", 22, 20)
@@ -2063,15 +2076,24 @@ function NS:RefreshProfileManager()
             end)
         end
     end
-    frame.ownButton:SetEnabled(active ~= nil)
-    -- Plus de six profils est un cas que la liste ne montre pas. Le dire plutot
-    -- que de laisser croire qu'il n'y en a que six.
-    if #names > #frame.rows then
-        frame.empty:SetShown(true)
-        frame.empty:SetText(string.format(self.L.PROFILE_TOO_MANY, #names - #frame.rows))
-    else
-        frame.empty:SetText(self.L.PROFILE_NONE)
+    -- Ces trois boutons changent un profil, ce que le combat refuse. La logique
+    -- metier refuse deja, donc la base ne peut pas etre abimee -- mais laisser
+    -- un bouton actif qui repond par un refus est une promesse non tenue.
+    local fighting = InCombatLockdown and InCombatLockdown() and true or false
+    frame.ownButton:SetEnabled(active ~= nil and not fighting)
+    for index, row in ipairs(frame.rows) do
+        if names[index] then
+            row.use:SetEnabled(names[index] ~= active and not fighting)
+            row.delete:SetEnabled(not fighting)
+        end
     end
+
+    -- Plus de six profils est un cas que la liste ne montre pas. Le dire plutot
+    -- que de laisser croire qu'il n'y en a que six -- et le dire SOUS la liste.
+    if #names > #frame.rows then
+        frame.overflow:SetText(string.format(self.L.PROFILE_TOO_MANY, #names - #frame.rows))
+    end
+    frame.overflow:SetShown(#names > #frame.rows)
 end
 
 function NS:ShowProfileTransfer()
@@ -2165,12 +2187,23 @@ function NS:ShowProfileTransfer()
             -- de la fenetre. Huit lignes et un compte : le joueur doit pouvoir
             -- juger, pas tout relire -- et le bouton Appliquer doit rester
             -- visible, c'est lui qui engage.
-            local MAX_LINES = 8
+            -- Borner le NOMBRE de lignes ne suffisait pas : un seul changement
+            -- de filtre porte jusqu'a 500 identifiants de chaque cote, donc
+            -- plusieurs milliers de caracteres sur une seule ligne logique.
+            -- Le texte revenait a la ligne autant de fois qu'il fallait et
+            -- repassait sous les boutons. Chaque valeur est donc rognee, et la
+            -- liste des rejets aussi.
+            local MAX_LINES, MAX_VALUE, MAX_REJECTED = 8, 60, 12
+            local function short(value)
+                value = tostring(value)
+                if #value <= MAX_VALUE then return value end
+                return value:sub(1, MAX_VALUE) .. self.L.IMPORT_TRUNCATED
+            end
             local lines = {}
             for index, change in ipairs(analysis.changes) do
                 if index > MAX_LINES then break end
                 lines[#lines + 1] = string.format(self.L.IMPORT_CHANGE_LINE,
-                    change.key, change.from, change.to)
+                    change.key, short(change.from), short(change.to))
             end
             if #analysis.changes > MAX_LINES then
                 lines[#lines + 1] = string.format(self.L.IMPORT_MORE_CHANGES,
@@ -2178,8 +2211,17 @@ function NS:ShowProfileTransfer()
             end
             if #lines == 0 then lines[1] = self.L.IMPORT_NO_CHANGE end
             if #analysis.rejected > 0 then
-                lines[#lines + 1] = string.format(self.L.IMPORT_REJECTED,
-                    table.concat(analysis.rejected, ", "))
+                local shown = {}
+                for index, key in ipairs(analysis.rejected) do
+                    if index > MAX_REJECTED then break end
+                    shown[#shown + 1] = key
+                end
+                local text = table.concat(shown, ", ")
+                if #analysis.rejected > MAX_REJECTED then
+                    text = text .. string.format(self.L.IMPORT_MORE_REJECTED,
+                        #analysis.rejected - MAX_REJECTED)
+                end
+                lines[#lines + 1] = string.format(self.L.IMPORT_REJECTED, text)
             end
             frame.result:SetText(table.concat(lines, "\n"))
             frame.apply:SetShown(#analysis.changes > 0)

@@ -5810,6 +5810,26 @@ do
     falsy(NS.cooldownBody:IsShown(),
         "couche : entrer en raid la reevalue sans qu'on la touche")
 
+    -- Cas restant signale par l'audit : la fenetre de reglages force
+    -- l'affichage, mais en combat le pilote securise ne peut pas etre relache.
+    -- Promettre l'affichage faisait apparaitre la couche non protegee SEULE,
+    -- au-dessus d'une grille qui restait masquee.
+    NS.db.showRaid = false
+    mock.state.inRaid, mock.state.inGroup = true, true
+    mock.state.inCombat = true
+    NS.optionsFrame:Show()
+    falsy(NS:GridWouldBeVisible(),
+        "options en combat : on ne promet pas un affichage que le pilote ne peut pas tenir")
+    NS:UpdateCooldownOverlayVisibility()
+    falsy(NS.cooldownBody:IsShown(),
+        "options en combat : la couche non protegee ne parait pas seule")
+
+    -- Hors combat, la surcharge reprend tout son sens : le pilote peut relacher.
+    mock.state.inCombat = false
+    truthy(NS:GridWouldBeVisible(),
+        "options hors combat : la fenetre ouverte montre bien la grille")
+    NS.optionsFrame:Hide()
+
     NS.db.showRaid = true
     mock.state.inRaid, mock.state.inGroup = false, false
     NS:UpdateCooldownOverlayVisibility()
@@ -6113,6 +6133,74 @@ do
     window.rows[1].delete:GetScript("OnClick")(window.rows[1].delete)
     eq(#NS:NamedProfiles(), 0, "fenetre : et la liste peut se vider")
     truthy(window.empty:IsShown(), "fenetre : une liste vide le dit")
+
+    -- 1.6.12, audit du 30/08 : le changelog de la 1.6.11 annoncait ces deux
+    -- corrections. Elles n'existaient pas -- mon script d'edition ecrivait le
+    -- fichier APRES ses trois remplacements, et une ancre absente en fin de
+    -- script a tout annule alors que les deux premiers avaient dit « ok ».
+    -- Voici ce qui aurait du le voir.
+    do
+        for index = 1, 7 do NS:CreateNamedProfile("P" .. index) end
+        NS:RefreshProfileManager()
+        eq(#NS:NamedProfiles(), 7, "debordement : sept profils existent")
+        truthy(window.overflow:IsShown(), "debordement : l'avertissement parait")
+        falsy(window.empty:IsShown(),
+            "debordement : et ce n'est PAS le texte de liste vide")
+        -- Ce qui compte : il ne doit pas se dessiner sur la premiere rangee.
+        local first = window.rows[1].__lastPoint
+        local warn = window.overflow.__lastPoint
+        truthy(first and warn, "debordement : les deux sont poses")
+        truthy(warn.y < first.y - 30,
+            "debordement : il est SOUS la liste, pas par-dessus la premiere ligne")
+
+        -- Et les trois boutons qui changent un profil sont grises en combat.
+        mock.state.inCombat = true
+        NS:RefreshProfileManager()
+        falsy(window.rows[1].use:IsEnabled(), "combat : « utiliser » est grise")
+        falsy(window.rows[1].delete:IsEnabled(), "combat : « supprimer » aussi")
+        falsy(window.ownButton:IsEnabled(), "combat : « revenir au sien » aussi")
+        mock.state.inCombat = false
+        NS:RefreshProfileManager()
+        truthy(window.rows[1].delete:IsEnabled(), "hors combat : ils reviennent")
+
+        for _, name in ipairs(NS:NamedProfiles()) do NS:DeleteNamedProfile(name) end
+        NS:RefreshProfileManager()
+    end
+
+    -- Un ancien profil dont le nom contient une barre verticale : la 1.6.11 la
+    -- retirait des saisies mais laissait la cle enregistree telle quelle. Le
+    -- profil devenait introuvable -- utiliser, renommer et supprimer echouaient.
+    do
+        local raw = NS.dbRoot
+        raw.named = { ["Raid|Soins"] = { frameSize = 31 } }
+        raw.assignments = { [NS.activeCharacterKey] = { [NS.activeSpecKey] = "Raid|Soins" } }
+        raw.namedStoreChecked = nil
+        local named, assignments = NS:NamedProfileStore()
+        eq(named["Raid|Soins"], nil, "migration : l'ancienne cle a disparu")
+        truthy(named["RaidSoins"], "migration : le profil existe sous un nom utilisable")
+        eq(type(assignments[NS.activeCharacterKey]) == "table"
+            and assignments[NS.activeCharacterKey][NS.activeSpecKey] or "?", "RaidSoins",
+            "migration : et l'affectation suit")
+        eq(NS:UseNamedProfile("RaidSoins") and true or false, true,
+            "migration : il redevient utilisable")
+        eq(NS.db.frameSize, 31, "migration : avec ses reglages")
+        NS.db.frameSize = 22
+        NS:UseOwnProfile()
+
+        -- Collision : l'ancien ne doit pas ecraser celui qui porte deja ce nom.
+        raw.named = { ["A|B"] = { frameSize = 33 }, ["AB"] = { frameSize = 12 } }
+        raw.assignments, raw.namedStoreChecked = {}, nil
+        local named2 = NS:NamedProfileStore()
+        -- Repli sur chaque lecture : sans migration ces tables sont nil, et un
+        -- defaut isole emporterait la suite de la suite au lieu d'echouer seul.
+        eq(type(named2["AB"]) == "table" and named2["AB"].frameSize or 0, 12,
+            "collision : le nom deja pris n'est pas ecrase")
+        truthy(named2["AB (2)"], "collision : l'ancien est garde sous un nom distinct")
+        eq(type(named2["AB (2)"]) == "table" and named2["AB (2)"].frameSize or 0, 33,
+            "collision : avec ses propres reglages")
+        raw.named, raw.assignments = {}, {}
+    end
+
     window:Hide()
 end
 
