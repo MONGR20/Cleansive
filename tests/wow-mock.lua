@@ -256,6 +256,23 @@ function M.install(_G)
         frame.__type = frameType
         frame.__parent = parent
         frame.__template = template
+        -- Un modele Blizzard arrive AVEC ses scripts deja poses. Le bouchon les
+        -- ignorait : un SetScript de l'addon sur le meme evenement passait donc
+        -- pour anodin, alors qu'il ECRASE le gestionnaire du modele. C'est
+        -- exactement ce qui est arrive en 1.6.7 -- la barre de defilement de
+        -- UIPanelScrollFrameTemplate n'etait plus jamais configuree, et plus
+        -- rien ne defilait en jeu. Aucun test ne pouvait le voir.
+        -- Ces marqueurs ne font rien d'utile : ils existent pour qu'un test
+        -- puisse verifier qu'ils sont encore appeles.
+        if type(template) == "string" and template:find("ScrollFrame", 1, true) then
+            rawset(frame, "__templateRan", {})
+            for _, script in ipairs({ "OnVerticalScroll", "OnScrollRangeChanged", "OnMouseWheel" }) do
+                rawset(frame, "__scripts_" .. script, function(target)
+                    local ran = rawget(target, "__templateRan")
+                    if ran then ran[script] = (ran[script] or 0) + 1 end
+                end)
+            end
+        end
         if frameType == "AuraContainer" then
             state.auraEngine.created = state.auraEngine.created + 1
             local ordinal = state.auraEngine.created

@@ -6,7 +6,14 @@ local _, NS = ...
 
 -- Hauteur visible d'une page : fenetre 700, moins l'en-tete 88 et le pied 62.
 -- Une page plus courte ne defile pas ; une page plus haute defile.
-local VIEWPORT_HEIGHT = 550
+-- Hauteur reellement VISIBLE d'une page : fenetre 700, moins l'en-tete 88, le
+-- pied 62, et les 22 px reserves a la bande « la page continue plus bas ».
+-- Cette bande etait posee DANS la zone de lecture et recouvrait la derniere
+-- ligne de chaque page longue -- visible sur les captures en jeu du 30/08.
+local VIEWPORT_HEIGHT = 528
+-- Expose pour que le test parle de la MEME valeur, plutot que d'en recopier
+-- une seconde qui divergerait au premier ajustement.
+NS.OPTIONS_VIEWPORT_HEIGHT = VIEWPORT_HEIGHT
 
 local C = {
     panel = { 0.05, 0.07, 0.09 },
@@ -814,14 +821,44 @@ function NS:CreateOptions()
     -- qu'aucun controle ne depasse la hauteur declaree par sa page.
     local contentScroll = CreateFrame("ScrollFrame", nil, frame, "UIPanelScrollFrameTemplate")
     contentScroll:SetPoint("TOPLEFT", 205, -88)
-    contentScroll:SetPoint("BOTTOMRIGHT", -24, 62)
+    contentScroll:SetPoint("BOTTOMRIGHT", -24, 84)
     self.optionsScroll = contentScroll
     local content = CreateFrame("Frame", nil, contentScroll)
     content:SetSize(560, VIEWPORT_HEIGHT)
     contentScroll:SetScrollChild(content)
     self.optionsContent = content
-    contentScroll:SetScript("OnVerticalScroll", function() self:UpdateOptionsScrollHint() end)
-    contentScroll:SetScript("OnScrollRangeChanged", function() self:UpdateOptionsScrollHint() end)
+    -- LE defaut vu en jeu le 30/08 : ces deux scripts etaient poses avec
+    -- SetScript, qui REMPLACE. UIPanelScrollFrameTemplate met les siens sur ces
+    -- deux evenements pour piloter sa barre -- ses bornes, son curseur, sa
+    -- visibilite. En les ecrasant je l'ai prive de tout cela : la barre n'etait
+    -- jamais configuree, et la molette du modele, qui s'appuie dessus, ne
+    -- deplacait plus rien. Rien dans la suite ne pouvait le voir : le bouchon
+    -- n'a pas de modele Blizzard derriere.
+    --
+    -- On CHAINE : le gestionnaire du modele d'abord, le notre ensuite.
+    local function chainScript(target, name, extra)
+        local previous = target:GetScript(name)
+        target:SetScript(name, function(...)
+            if previous then previous(...) end
+            extra()
+        end)
+    end
+    chainScript(contentScroll, "OnVerticalScroll", function() self:UpdateOptionsScrollHint() end)
+    chainScript(contentScroll, "OnScrollRangeChanged", function() self:UpdateOptionsScrollHint() end)
+
+    -- Et une molette qui ne depend d'aucun modele. Trois lignes qui marchent
+    -- valent mieux qu'un heritage dont je ne peux pas verifier le detail hors
+    -- du client.
+    contentScroll:EnableMouseWheel(true)
+    chainScript(contentScroll, "OnMouseWheel", function() end)
+    local templateWheel = contentScroll:GetScript("OnMouseWheel")
+    contentScroll:SetScript("OnMouseWheel", function(target, delta)
+        if templateWheel then templateWheel(target, delta) end
+        local range = target:GetVerticalScrollRange() or 0
+        if range <= 0 then return end
+        local wanted = (target:GetVerticalScroll() or 0) - (delta * 40)
+        target:SetVerticalScroll(math.max(0, math.min(range, wanted)))
+    end)
     self.optionsPages = {}
     self.optionsPageHeights = {}
     self.optionSliders = {}
@@ -1175,6 +1212,9 @@ function NS:CreateOptions()
     local dispels = CreateFrame("Frame", nil, content)
     dispels:SetAllPoints()
     self.optionsPages.dispels = dispels
+    -- Cette page a besoin de ses 550 px : son bouton de tri est cale en bas, et
+    -- a 528 il remontait sur « Signaler racines et etourdissements ». Elle
+    -- defile donc de 22 px, ce qui ne gene rien -- sa molette est libre.
     self.optionsPageHeights.dispels = 550
     self.optionChecks[#self.optionChecks + 1] = toggle(dispels, self.L.GROUP_MANUAL, 0, -430, 560,
         "groupManualTypes", function()
@@ -1281,7 +1321,7 @@ function NS:CreateOptions()
     -- La molette de cette page sert a sa pagination : elle ne doit donc JAMAIS
     -- avoir besoin de defiler, sans quoi les deux gestes se disputeraient la
     -- meme molette. Un test tient cette contrainte.
-    self.optionsPageHeights.history = 550
+    self.optionsPageHeights.history = VIEWPORT_HEIGHT
     self.auraHistoryPage = history
     section(history, self.L.HISTORY, -2)
     -- Posee a -28 sur 420 px de large, cette phrase passait sous le bouton

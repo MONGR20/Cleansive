@@ -2742,8 +2742,54 @@ do
     -- La page Historique capte la molette pour sa pagination : elle ne doit
     -- donc JAMAIS avoir besoin de defiler, sans quoi les deux gestes se
     -- disputeraient le meme geste.
-    eq(NS.optionsPageHeights.history, 550,
-        "defilement : la page Historique tient a l'ecran, sa molette reste a sa pagination")
+    -- 1.6.13, releve EN JEU le 30/08 : plus rien ne defilait. Les deux scripts
+    -- etaient poses avec SetScript, qui REMPLACE : le gestionnaire de
+    -- UIPanelScrollFrameTemplate disparaissait, sa barre n'etait plus
+    -- configuree, et sa molette -- qui s'appuie dessus -- ne deplacait rien.
+    -- Le bouchon ignorait qu'un modele arrive avec ses scripts, donc aucun test
+    -- ne pouvait le voir. Il le modelise maintenant.
+    do
+        local ran = rawget(scroll, "__templateRan")
+        truthy(ran, "defilement : la zone est bien construite sur un modele")
+        for _, script in ipairs({ "OnVerticalScroll", "OnScrollRangeChanged", "OnMouseWheel" }) do
+            local handler = scroll:GetScript(script)
+            truthy(handler, "defilement : " .. script .. " est pose")
+            local before = ran[script] or 0
+            handler(scroll, -1)
+            truthy((ran[script] or 0) > before,
+                "defilement : " .. script .. " appelle ENCORE celui du modele")
+        end
+
+        -- Et la molette deplace reellement, en restant dans les bornes.
+        scroll.__scrollRange = 300
+        scroll:SetVerticalScroll(0)
+        scroll:GetScript("OnMouseWheel")(scroll, -1)
+        truthy(scroll:GetVerticalScroll() > 0, "molette : elle descend")
+        scroll:SetVerticalScroll(300)
+        scroll:GetScript("OnMouseWheel")(scroll, -1)
+        eq(scroll:GetVerticalScroll(), 300, "molette : elle ne depasse pas le bas")
+        scroll:SetVerticalScroll(0)
+        scroll:GetScript("OnMouseWheel")(scroll, 1)
+        eq(scroll:GetVerticalScroll(), 0, "molette : ni le haut")
+        scroll.__scrollRange = 0
+    end
+
+    -- La bande d'indice etait posee DANS la zone de lecture : elle recouvrait
+    -- la derniere ligne de chaque page longue.
+    do
+        local scrollPoint = scroll.__lastPoint
+        local hintPoint = hint.__lastPoint
+        truthy(scrollPoint and hintPoint, "bande : les deux sont poses par le bas")
+        eq(scrollPoint.point, "BOTTOMRIGHT", "bande : le dernier ancrage de la zone est son bas")
+        local hintTop = (hintPoint.y or 0) + 18
+        truthy((scrollPoint.y or 0) >= hintTop,
+            "bande : la zone de lecture s'arrete AU-DESSUS d'elle, elle ne couvre rien")
+    end
+
+    eq(NS.optionsPageHeights.history, NS.OPTIONS_VIEWPORT_HEIGHT,
+        "defilement : la page Historique tient EXACTEMENT dans la zone visible")
+    truthy(NS.optionsPageHeights.history <= NS.OPTIONS_VIEWPORT_HEIGHT,
+        "defilement : elle n'a donc jamais besoin de defiler, sa molette reste a sa pagination")
 end
 
 --------------------------------------------------------------------------
