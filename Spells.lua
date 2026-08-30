@@ -293,9 +293,8 @@ function NS:BuildSpellReport()
     for _, def in ipairs(self.knownSpells or {}) do
         local slot = slotByID[def.id]
         local action = self.L.SPELL_MANUAL
-        if slot == 1 then action = self.L.LEFT
-        elseif slot == 2 then action = self.L.RIGHT
-        elseif slot == 3 then action = self.L.CTRL_LEFT
+        local _, described = self:ClickDescription(slot)
+        if described then action = described
         elseif def.selfOnly then action = self.L.SPELL_SELF_ONLY
         elseif def.untargeted then action = self.L.SPELL_AREA
         end

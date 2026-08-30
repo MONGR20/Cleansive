@@ -14,16 +14,23 @@ local CLICK_COLORS = {
 }
 
 -- La lettre disait « G », « D » ou « C » selon le NUMERO du slot. Depuis que
--- la combinaison se regle, le numero ne dit plus rien : la lettre se deduit de
--- la combinaison reellement posee, sinon l'addon annoncerait un clic et en
--- attendrait un autre.
+-- la combinaison se regle, le numero ne dit plus rien : la lettre vient de la
+-- meme description que l'apercu, la page Dissipations et l'infobulle.
 local function clickHint(slot)
-    if not slot then return "" end
-    local bindings = NS.ClickBindings and NS:ClickBindings()
-    local binding = bindings and bindings[slot]
-    if not binding then return "" end
-    local key = "CLICK_SHORT_" .. string.gsub(binding, "%-", "_")
-    return NS.L[key] or string.sub(binding, -1)
+    if not slot or not NS.ClickDescription then return "" end
+    local _, _, short = NS:ClickDescription(slot)
+    return short or ""
+end
+
+-- La plaque sombre derriere l'indice etait CARREE : l'indice tenait sur une
+-- lettre. Une combinaison a modificateur en porte deux, trois avec deux
+-- modificateurs. La plaque suit donc le nombre de caracteres, sinon le texte
+-- deborde sur l'icone de la case.
+local function sizeHintPlate(plate, hintText, size)
+    if not plate or not plate.SetSize then return end
+    if hintText ~= nil then plate.hintChars = math.max(1, #tostring(hintText)) end
+    local chars = plate.hintChars or 1
+    return size + (chars - 1) * size * 0.62, size
 end
 
 -- Since Retail 12.1, aura data can become secret in combat. These types are
@@ -151,7 +158,9 @@ function NS:ApplyCellFonts(button)
         end
     end
     local function setPlate(region)
-        if region and region.SetSize then tryCall(region.SetSize, region, plate, plate) end
+        if region and region.SetSize then
+            tryCall(region.SetSize, region, sizeHintPlate(region, nil, plate))
+        end
     end
     setFont(button.nameText, "name")
     setFont(button.center, "stack")
@@ -802,11 +811,12 @@ function NS:StyleAuraVisual(button, auraType, visual)
             visual.unitName:SetShown(enabled and self:CellShowsNames())
         end)
     end
+    local visualHint = slot and clickHint(slot) or (manual and "!" or "")
     if visual.clickHint then
         step(function()
             visual.clickHint:ClearAllPoints()
             visual.clickHint:SetPoint("TOPLEFT", button, "TOPLEFT", 2 + (hintOffset or 0), -1)
-            visual.clickHint:SetText(slot and clickHint(slot) or (manual and "!" or ""))
+            visual.clickHint:SetText(visualHint)
             -- Manual abilities use an exclamation mark, never a click letter.
             visual.clickHint:SetShown(hintShown)
         end)
@@ -815,6 +825,8 @@ function NS:StyleAuraVisual(button, auraType, visual)
         step(function()
             visual.clickHintPlate:ClearAllPoints()
             visual.clickHintPlate:SetPoint("TOPLEFT", button, "TOPLEFT", 1 + (hintOffset or 0), -1)
+            visual.clickHintPlate:SetSize(sizeHintPlate(visual.clickHintPlate, visualHint,
+                self:CellFontSize("plate")))
             visual.clickHintPlate:SetShown(hintShown)
         end)
     end
@@ -1198,12 +1210,6 @@ function NS:ApplySecureBindings()
         local bindings = self:ClickBindings()
         local names = { oneName, twoName, threeName }
         local used = {}
-        -- La carte EFFECTIVE des gestes : les combinaisons reglees, plus le
-        -- miroir du bouton de pouce. C'est elle que le registre interne
-        -- interroge -- il deduisait le sort d'une liste ecrite en dur, et
-        -- nommait donc le mauvais des qu'une combinaison etait deplacee.
-        local effective = {}
-        for slot = 1, 3 do effective[bindings[slot]] = slot end
         -- Ce qui etait pose la fois d'avant et ne l'est plus doit etre DESARME.
         -- Sans cela, deplacer une dissipation de Ctrl + gauche vers Maj + droit
         -- laissait Ctrl + gauche lancer encore le sort : deux combinaisons pour
@@ -1253,7 +1259,6 @@ function NS:ApplySecureBindings()
         -- gagne. Poser le miroir par-dessus aurait ecrase le reglage qu'on
         -- vient de lui accorder.
         if not used["4"] then
-            effective["4"] = 3
             target:SetAttribute("type4", threeName and "spell" or "none")
             target:SetAttribute("spell4", threeName)
             target:SetAttribute("*type4", threeName and "spell" or "none")
@@ -1265,9 +1270,11 @@ function NS:ApplySecureBindings()
         end
         end
     end
-    -- Retenu APRES la boucle : ce qui vient d'etre pose sera ce qu'il faudra
-    -- desarmer la prochaine fois, et c'est aussi ce que le registre interne
-    -- doit lire pour nommer le bon sort.
+    -- Retenu APRES la boucle, UNE fois : ce qui vient d'etre pose sera ce
+    -- qu'il faudra desarmer la prochaine fois, et c'est aussi la carte
+    -- EFFECTIVE des gestes que le registre interne lit pour nommer le bon
+    -- sort. Elle etait aussi construite DANS la boucle, une table par case et
+    -- quatre-vingt-deux tables par pose, sans que personne ne les lise.
     self.appliedClickBindings = self:ClickBindings()
     local effective = {}
     for slot = 1, 3 do effective[self.appliedClickBindings[slot]] = slot end
@@ -1907,7 +1914,11 @@ function NS:SetButtonState(button, aura, auraType, slot, secret, charmed)
         button.lastClickHintText = hintText
         button.clickHint:SetText(hintText)
         button.clickHint:SetShown(hintShown)
-        if button.clickHintPlate then button.clickHintPlate:SetShown(hintShown) end
+        if button.clickHintPlate then
+            button.clickHintPlate:SetSize(sizeHintPlate(button.clickHintPlate, hintText,
+                self:CellFontSize("plate")))
+            button.clickHintPlate:SetShown(hintShown)
+        end
     end
 
     local connected = UnitIsConnected(unit)
@@ -2185,8 +2196,8 @@ function NS:ShowButtonTooltip(button)
         GameTooltip:AddLine(self.L.STATUS_NORMAL, 0.35, 0.8, 0.45)
     end
     for slot, def in ipairs(self.clickSpells or {}) do
-        local binding = slot == 1 and self.L.LEFT or (slot == 2 and self.L.RIGHT or self.L.CTRL_LEFT)
-        GameTooltip:AddLine(binding .. " : " .. def.name, 0.75, 0.90, 1)
+        local _, binding = self:ClickDescription(slot)
+        GameTooltip:AddLine((binding or "?") .. " : " .. def.name, 0.75, 0.90, 1)
     end
 
     -- On the protected path Lua never learns which aura is on the unit, so the

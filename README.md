@@ -1,4 +1,4 @@
-# Cleansive 1.6.19
+# Cleansive 1.6.20
 
 Cleansive is a standalone one-click cleansing addon for **World of Warcraft Retail 12.1** (`120100`). It provides a compact Decursive-style workflow with a dark, class-colored interface inspired by the clarity of Ellesmere UI. The interface follows the language of your WoW client, English or French; either can be picked from the General page at any time.
 
@@ -22,17 +22,32 @@ You can also open Cleansive from **Options > AddOns**, the addon compartment, or
 
 ## Controls
 
+The three cleanse clicks are yours to place. **Set up the clicks**, on the
+Dispels page, opens a window where each row listens for the combination you
+press. `/cleansive clicks 3 SHIFT-2` does the same from the chat box.
+
+By default:
+
 - Left click: first cleansing or control spell.
 - Right click: second spell.
 - Ctrl + left click: third spell.
+- Mouse button 4: third spell, as long as you have not claimed button 4 yourself.
+
+Two combinations stay with Cleansive and cannot be taken:
+
 - Middle click: target the unit.
 - Ctrl + middle click: set the unit as focus.
-- Mouse button 4: third spell, the same action as Ctrl + left click.
-- Mouse button 5: set the unit as focus, the same action as Ctrl + middle click.
-- Drag the small `C` handle to move the grid.
-- `/cleansive macro` creates a global mouseover macro. On that macro, no modifier uses the left-click spell, Shift uses the right-click spell, and Ctrl uses the Ctrl-click spell.
+- Mouse button 5 mirrors the focus click, unless you have claimed button 5.
 
-Red, blue, and orange identify the click to use. The optional L/R/C corner letters provide a color-independent cue. The thin bottom line identifies the affliction type.
+Also:
+
+- Drag the small `C` handle to move the grid.
+- `/cleansive macro` creates a global mouseover macro. On that macro, no modifier uses the first cleanse, Shift the second, and Ctrl the third.
+
+Red, blue, and orange identify the click to use. The optional corner letters
+provide a color-independent cue and follow the combination you set: a plain
+button gives one letter, a modified one gives the modifier's initial in front
+of it. The thin bottom line identifies the affliction type.
 
 ## Features
 
@@ -104,6 +119,8 @@ Red, blue, and orange identify the click to use. The optional L/R/C corner lette
 - `/cleansive control`: list the loss-of-control effects seen so far; `control <type>` starts or stops watching one; `control clear` empties the observed list without touching your choices.
 - `/cleansive setup`: reopen the setup assistant.
 - `/cleansive profile`: list the named profiles and the active one. `new <name>` creates one from your current settings, `use <name>` points this specialization at it, `own` returns to this specialization's own profile, `rename <old> | <new>`, `delete <name>`. Changing profile is refused while you are fighting: a profile switch cannot be half applied.
+- `/cleansive clicks`: print the three cleanse clicks. `clicks <1-3> <combination>` moves one, as in `clicks 3 SHIFT-2`: a mouse button from 1 to 5, with any of ALT, CTRL and SHIFT in front. A combination already taken by another cleanse, or reserved for targeting and focus, is refused whole. Remapping is refused while you are fighting, for the same reason a profile switch is.
+- `/cleansive profile env <place> <profile>`: load a named profile in one place only -- `world`, `dungeon`, `raid` or `pvp`. Leave the profile out to remove the override. `/cleansive profile lock` freezes places, so the profile no longer changes when you zone. Both are also in the profile manager window.
 - `/cleansive sound`: list the alert sounds this client actually knows, and pick one by name. Blizzard's own alert registry takes a sound file, so afflictions the client protects keep the shipped sound.
 
 When Decursive is disabled, `/dcr` and `/decursive` remain available as compatibility aliases.

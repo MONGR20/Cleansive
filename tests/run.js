@@ -166,6 +166,34 @@ const wordingOffenders = [];
 // charger entierement, et aucun test Lua ne peut le voir : la suite charge les
 // fichiers elle-meme. Vecu le 28/08/2026, ou le .toc reduit a zero octet a
 // laisse les 487 tests au vert.
+// La page Aide annonce « toutes les commandes ». Elle en oubliait huit, dont
+// les deux fonctions les plus recentes -- remappage des clics et profils par
+// lieu -- qui n'ont aucun controle graphique : un joueur qui n'a pas lu le
+// changelog ne pouvait pas les decouvrir du tout. Une promesse tenue par
+// personne se verifie donc ici, pas a la relecture.
+const helpOffenders = [];
+{
+  const core = fs.readFileSync(path.join(addon, "Core.lua"), "utf8");
+  const locale = fs.readFileSync(path.join(addon, "Locale.lua"), "utf8");
+  const verbs = new Set();
+  for (const m of core.matchAll(/command\s*==\s*"([a-z]+)"/g)) verbs.add(m[1]);
+  // Ces quatre-la sont des alias ou l'aide elle-meme ; les annoncer deux fois
+  // allongerait la page sans rien apprendre.
+  for (const alias of ["priority", "filter", "help", "cls"]) verbs.delete(alias);
+  const blocks = [...locale.matchAll(/HELP_COMMANDS_TEXT = \[\[([\s\S]*?)\]\]/g)];
+  if (blocks.length !== 2) {
+    helpOffenders.push(`${blocks.length} page(s) d'aide trouvee(s), 2 attendues (une par langue)`);
+  }
+  for (const [index, block] of blocks.entries()) {
+    const language = index === 0 ? "en" : "fr";
+    for (const verb of [...verbs].sort()) {
+      if (!new RegExp(`/cleansive[^\\n]*\\b${verb}\\b`).test(block[1])) {
+        helpOffenders.push(`${language} : « /cleansive ${verb} » existe mais l'aide ne la cite pas`);
+      }
+    }
+  }
+}
+
 const tocOffenders = [];
 {
   const tocFiles = fs.readdirSync(addon).filter(f => f.toLowerCase().endsWith(".toc"));
@@ -262,6 +290,14 @@ if (wordingOffenders.length) {
   for (const o of wordingOffenders) console.log("          " + o);
 } else {
   console.log("  ok    libelles : aucun texte ne contredit le comportement connu");
+}
+
+if (helpOffenders.length) {
+  failed += 1;
+  console.log("\n  ECHEC aide : la page annonce toutes les commandes et en oublie");
+  for (const o of helpOffenders) console.log("          " + o);
+} else {
+  console.log("  ok    aide : chaque commande du code est citee dans les deux langues");
 }
 
 if (tocOffenders.length) {

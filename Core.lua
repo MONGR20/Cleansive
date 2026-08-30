@@ -623,7 +623,11 @@ function NS:HandleProfileCommand(rest)
 
     if verb == "" or verb == "list" then
         local active = self:ActiveNamedProfile()
-        self:Print(string.format(self.L.PROFILE_ACTIVE, self:GetActiveProfileLabel()))
+        -- La commande melangeait les deux comme le faisait la fenetre : elle
+        -- annoncait un « profil actif » qui tenait compte du lieu, puis
+        -- marquait d'un chevron celui de la specialisation.
+        self:Print(string.format(self.L.PROFILE_ACTIVE_HERE, self:GetActiveProfileLabel()))
+        self:Print(string.format(self.L.PROFILE_USUAL, active or self.L.PROFILE_OWN_NAME))
         for _, name in ipairs(self:NamedProfiles()) do
             self:Print((name == active and "> " or "   ") .. name)
         end
@@ -652,11 +656,13 @@ function NS:HandleProfileCommand(rest)
         local place, target = argument:match("^(%S*)%s*(.-)$")
         ok, message = self:SetEnvironmentOverride(string.lower(place or ""), target)
     elseif verb == "lock" then
+        -- Le resultat etait jete : la commande annoncait le nouvel etat meme
+        -- quand le combat venait de refuser le changement.
         local locked = not self:EnvironmentLocked()
-        self:SetEnvironmentLocked(locked)
-        ok = true
-        message = locked and self.L.PROFILE_ENVIRONMENT_LOCKED
-            or self.L.PROFILE_ENVIRONMENT_UNLOCKED
+        local refusal
+        ok, refusal = self:SetEnvironmentLocked(locked)
+        message = ok and (locked and self.L.PROFILE_ENVIRONMENT_LOCKED
+            or self.L.PROFILE_ENVIRONMENT_UNLOCKED) or refusal
     elseif verb == "delete" then
         ok, message = self:DeleteNamedProfile(argument)
     elseif verb == "rename" then
@@ -786,7 +792,45 @@ function NS:DescribeClickBinding(binding)
         names[#names + 1] = self.L["CLICK_MODIFIER_" .. modifier] or modifier
     end
     names[#names + 1] = self.L["CLICK_BUTTON_" .. button] or button
-    return table.concat(names, " + ")
+    local described = table.concat(names, " + ")
+    -- Cette description ouvre des phrases : « Clic gauche : Purification »,
+    -- « Clic droit occupe deja... ». La majuscule appartient donc a la
+    -- description, pas a chacun de ses appelants.
+    return string.upper(string.sub(described, 1, 1)) .. string.sub(described, 2)
+end
+
+-- UNE description par clic, pour tout le monde : la case, l'apercu, la page
+-- Dissipations, l'infobulle et « /cleansive spells ». Chacun traduisait le
+-- NUMERO du slot avec sa propre table, ecrite quand les trois gestes etaient
+-- fixes. Depuis qu'ils se reglent, la moitie annoncait encore le geste
+-- d'origine : la case disait « M » et la page Dissipations « Ctrl + gauche »
+-- pour le meme sort.
+--
+-- L'indice court se construit, il ne se cherche plus dans une table : une
+-- table ne couvre que les combinaisons qu'on a pensees, et donnait la meme
+-- lettre a Ctrl + 1 et Ctrl + 2 -- deux sorts, un seul indice.
+function NS:ClickShortHint(binding)
+    local normalized = self:NormalizeClickBinding(binding)
+    if not normalized then return "" end
+    local parts = {}
+    for part in string.gmatch(normalized, "[^%-]+") do parts[#parts + 1] = part end
+    local button = table.remove(parts)
+    local short = ""
+    for _, modifier in ipairs(parts) do
+        short = short .. (self.L["CLICK_INITIAL_" .. modifier] or string.sub(modifier, 1, 1))
+    end
+    return short .. (self.L["CLICK_SHORT_" .. button] or button)
+end
+
+-- Rend la combinaison, sa description longue et son indice court. Un slot sans
+-- combinaison ne rend rien : c'est aux appelants de dire ce qu'ils affichent a
+-- la place, un tiret ou un point d'exclamation selon l'endroit.
+function NS:ClickDescription(slot)
+    slot = tonumber(slot)
+    if not slot or slot < 1 or slot > 3 then return nil end
+    local binding = self:ClickBindings()[slot]
+    if not binding then return nil end
+    return binding, self:DescribeClickBinding(binding), self:ClickShortHint(binding)
 end
 
 function NS:SetClickBinding(slot, raw)
@@ -794,6 +838,11 @@ function NS:SetClickBinding(slot, raw)
     if not slot or slot < 1 or slot > 3 then return false, self.L.CLICK_SLOT_UNKNOWN end
     local binding = self:NormalizeClickBinding(raw)
     if not binding then return false, self.L.CLICK_BINDING_INVALID end
+    -- Avant la moindre ecriture. Le combat interdit de toucher aux attributs
+    -- securises : accepter le reglage quand meme ferait afficher la nouvelle
+    -- combinaison pendant que le bouton lance encore l'ancienne, et c'est au
+    -- moment d'une dissipation urgente que le joueur s'en apercevrait.
+    if self:ProfileChangeBlockedByCombat() then return false, self.L.CLICK_COMBAT_REFUSED end
 
     local wanted = self:ClickBindings()
     wanted[slot] = binding
@@ -814,6 +863,21 @@ function NS:SetClickBinding(slot, raw)
     if self.RefreshAll then self:RefreshAll(true) end
     if self.RefreshOptions then self:RefreshOptions() end
     return true, string.format(self.L.CLICK_BINDING_SET, slot, self:DescribeClickBinding(binding))
+end
+
+-- Revenir aux trois gestes d'origine. Passer par SetClickBinding trois fois
+-- echouerait sur un conflit passager : remettre le premier sur le clic gauche
+-- pendant que le troisieme le porte encore est refuse, a juste titre. Les
+-- trois se reecrivent donc ensemble.
+function NS:ResetClickBindings()
+    if self:ProfileChangeBlockedByCombat() then return false, self.L.CLICK_COMBAT_REFUSED end
+    local defaults = {}
+    for slot = 1, 3 do defaults[slot] = self.profileDefaults.clickBindings[slot] end
+    self.db.clickBindings = defaults
+    if self.ApplySecureBindings then self:ApplySecureBindings() end
+    if self.RefreshAll then self:RefreshAll(true) end
+    if self.RefreshOptions then self:RefreshOptions() end
+    return true, self.L.CLICK_RESET_DONE
 end
 
 -- Le nom que WoW donne a un bouton, et l'index que porte l'attribut securise.

@@ -6,6 +6,48 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.6.20
+
+**Ce qu'un combat doit refuser, il doit le refuser en entier.** Quatre
+operations ecrivaient d'abord et decouvraient ensuite que le combat leur
+interdisait la suite.
+
+- **Remapper un clic** ecrivait le profil, rafraichissait les textes et repondait « c'est fait », pendant que la pose des attributs securises etait reportee a la fin du combat. Le joueur voyait la nouvelle combinaison et l'ancienne lancait encore le sort. Refuse avant la premiere ecriture.
+- **Appliquer un import** n'avait aucune garde. Un profil porte les clics, la taille, la disposition et la visibilite d'un seul coup : en combat, une partie etait differee et l'autre non, et l'addon annoncait quand meme « Profil importe ». Lire et verifier restent permis ; le bouton Appliquer se grise, avec la raison a cote, et se rallume a la fin du combat sans qu'on ait a recoller le texte.
+- **Verrouiller les lieux** posait le drapeau, puis le rechargement refusait en silence. L'etiquette cessait alors de nommer le profil dans lequel les reglages continuaient d'ecrire. Refuse en entier, et la commande imprime le vrai resultat au lieu d'annoncer le nouvel etat quoi qu'il arrive.
+- **Renommer un profil** ne suivait que les affectations. Les surcharges de lieu gardaient l'ancien nom : un pointeur mort, donc un profil que l'addon annoncait sans jamais le charger. Supprimer les parcourait deja ; les deux passent maintenant par le meme balayage.
+
+**Le geste affiche est le geste pose, partout.** Les cases lisaient la
+combinaison reelle depuis la 1.6.18. Les deux apercus, la page Dissipations,
+l'infobulle et `/cleansive spells` traduisaient encore le NUMERO du clic avec
+leur propre table : apres un remappage, la case disait une chose et la page une
+autre. Une seule description les alimente desormais tous.
+
+- L'indice court se **construit** au lieu de se chercher dans une table : l'initiale de chaque modificateur, puis la lettre du bouton. La table ne couvrait que les combinaisons qu'on avait pensees, donnait la meme lettre a Ctrl + 1 et Ctrl + 2 -- deux dissipations, un seul indice -- et rien du tout a une combinaison a deux modificateurs. La plaque sombre derriere l'indice suit sa longueur.
+- La legende des couleurs de la page Dissipations nommait les trois gestes d'origine, ecrits en dur dans les deux langues.
+
+**Deux fonctions livrees sans ecran le sont maintenant avec.**
+
+- **Regler les clics**, sur la page Dissipations : chaque rangee ecoute le geste que vous pressez, modificateurs compris. C'est le meme chemin que le clic reel, donc ce qu'elle capture est exactement ce qui partira. Un bouton remet les trois gestes d'origine, ensemble -- les reecrire un par un buterait sur un conflit passager.
+- **Les surcharges par lieu et leur verrou**, dans le gestionnaire de profils : un bouton par lieu, qui fait le tour des profils. Elles n'existaient que par `/cleansive profile env`, donc pour qui avait lu le journal des versions.
+
+**Le gestionnaire de profils dit lequel des deux profils il nomme.** Son
+etiquette tenait compte du lieu, son chevron et ses boutons non. Choisir un
+profil habituel pendant qu'une surcharge de lieu gagnait repondait « il est
+maintenant utilise » alors qu'il n'etait pas charge. Deux lignes : le profil
+charge ici, le profil habituel de la specialisation -- et le message dit quand
+la surcharge garde la main.
+
+**La page Aide annoncait toutes les commandes et en oubliait onze.** Le test
+qui surveillait cette promesse portait la liste des commandes **ecrite a la
+main** : il a vieilli exactement comme la page. La liste se derive maintenant
+de `Core.lua`, et le controle a trouve trois oublis de plus que l'audit.
+
+- Le README decrit les trois gestes comme des defauts, ce qu'ils sont depuis la 1.6.18, et documente `clicks`, `profile env` et `profile lock`.
+- `ApplySecureBindings` construisait une table par case -- quatre-vingt-deux par pose -- que personne ne lisait.
+- **Deux tests ne pouvaient rien voir.** Le detecteur de chevauchements prend une PHOTO des enfants : les deux fenetres ouvertes apres cette ligne etaient parcourues, et vides. Et le bouchon ignorait `RegisterForClicks`, donc un bouton qui n'entend que le clic gauche et un bouton qui entend les cinq rendaient la meme chose.
+- Tests : 1 513 a 1 574.
+
 ## 1.6.19
 
 **Apres un clic remappe, la case pouvait afficher la mauvaise recharge.**

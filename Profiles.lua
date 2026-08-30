@@ -511,22 +511,29 @@ function NS:DeleteNamedProfile(rawName)
     -- Et les surcharges de lieu, pour la meme raison que les affectations : un
     -- pointeur mort laisse en place ressusciterait au premier profil qui
     -- reprendrait ce nom.
+    self:ReplaceEnvironmentReferences(name, nil)
+    if wasActive then self:ReloadActiveProfile() end
+    return true, string.format(self.L.PROFILE_DELETED, name)
+end
+
+-- Les surcharges de lieu vivent dans dbRoot.environments, a trois niveaux :
+-- personnage, specialisation, lieu. Supprimer les parcourait deja, renommer
+-- non -- et une surcharge qui pointe sur un nom disparu est un profil que
+-- l'addon annonce sans jamais le charger. Un seul balayage pour les deux.
+function NS:ReplaceEnvironmentReferences(old, new)
     local raw = self.dbRoot
-    if raw and type(raw.environments) == "table" then
-        for _, character in pairs(raw.environments) do
-            if type(character) == "table" then
-                for _, specs in pairs(character) do
-                    if type(specs) == "table" then
-                        for place, assigned in pairs(specs) do
-                            if assigned == name then specs[place] = nil end
-                        end
+    if not raw or type(raw.environments) ~= "table" then return end
+    for _, character in pairs(raw.environments) do
+        if type(character) == "table" then
+            for _, specs in pairs(character) do
+                if type(specs) == "table" then
+                    for place, assigned in pairs(specs) do
+                        if assigned == old then specs[place] = new end
                     end
                 end
             end
         end
     end
-    if wasActive then self:ReloadActiveProfile() end
-    return true, string.format(self.L.PROFILE_DELETED, name)
 end
 
 function NS:RenameNamedProfile(rawOld, rawNew)
@@ -536,14 +543,43 @@ function NS:RenameNamedProfile(rawOld, rawNew)
     if not new then return false, self.L.PROFILE_NAME_INVALID end
     if new ~= old and named[new] then return false, string.format(self.L.PROFILE_NAME_TAKEN, new) end
     named[new], named[old] = named[old], nil
-    for _, character in pairs(assignments) do
-        if type(character) == "table" then
-            for spec, assigned in pairs(character) do
-                if assigned == old then character[spec] = new end
+    if new ~= old then
+        for _, character in pairs(assignments) do
+            if type(character) == "table" then
+                for spec, assigned in pairs(character) do
+                    if assigned == old then character[spec] = new end
+                end
             end
         end
+        self:ReplaceEnvironmentReferences(old, new)
     end
     return true, string.format(self.L.PROFILE_RENAMED, old, new)
+end
+
+-- Ce que le gestionnaire annoncait comme « actif » melangeait deux choses :
+-- l'etiquette tenait compte du lieu, le chevron et les boutons non. Changer de
+-- profil habituel pendant qu'une surcharge de lieu gagne repondait « X est
+-- maintenant utilise » alors que X n'etait pas charge. Cette note dit lequel
+-- des deux vient de changer.
+function NS:ActiveOverrideNote()
+    if self:EnvironmentLocked() then return nil end
+    local environment = self:CurrentEnvironment()
+    local override = self:EnvironmentOverride(environment)
+    if not override then return nil end
+    return string.format(self.L.PROFILE_OVERRIDE_WINS,
+        self.L["ENVIRONMENT_" .. string.upper(environment)] or environment, override)
+end
+
+-- Le tour des profils pour un lieu : aucun, puis chacun, puis aucun de
+-- nouveau. Un seul geste par lieu, comme le bouton du son d'alerte.
+function NS:CycleEnvironmentProfile(environment)
+    local names = self:NamedProfiles()
+    local current = self:EnvironmentOverride(environment)
+    local index = 0
+    for position, name in ipairs(names) do
+        if name == current then index = position end
+    end
+    return self:SetEnvironmentOverride(environment, names[index + 1])
 end
 
 function NS:UseNamedProfile(rawName)
@@ -557,7 +593,8 @@ function NS:UseNamedProfile(rawName)
     assignments[characterKey] = type(assignments[characterKey]) == "table" and assignments[characterKey] or {}
     assignments[characterKey][specKey] = name
     self:ReloadActiveProfile()
-    return true, string.format(self.L.PROFILE_IN_USE, name)
+    local note = self:ActiveOverrideNote()
+    return true, string.format(self.L.PROFILE_IN_USE, name) .. (note and (" " .. note) or "")
 end
 
 function NS:UseOwnProfile()
@@ -567,7 +604,8 @@ function NS:UseOwnProfile()
     local character = assignments[self.activeCharacterKey or ""]
     if type(character) == "table" then character[self.activeSpecKey or ""] = nil end
     self:ReloadActiveProfile()
-    return true, self.L.PROFILE_OWN_IN_USE
+    local note = self:ActiveOverrideNote()
+    return true, self.L.PROFILE_OWN_IN_USE .. (note and (" " .. note) or "")
 end
 
 -- Recharger n'est pas changer de specialisation : LoadCurrentProfile sort tot
@@ -723,6 +761,11 @@ end
 function NS:SetEnvironmentLocked(locked)
     local global = self.dbRoot and self.dbRoot.global
     if not global then return false end
+    -- Verrouiller change le profil actif quand une surcharge de lieu etait en
+    -- train de gagner. ReloadActiveProfile refuse en combat, et son refus
+    -- n'etait pas lu : le verrou passait, l'etiquette changeait, et self.db
+    -- continuait d'ecrire dans la table du lieu. Refuser en entier.
+    if self:ProfileChangeBlockedByCombat() then return false, self.L.PROFILE_COMBAT_REFUSED end
     global.lockEnvironment = locked and true or false
     self:ReloadActiveProfile()
     return true
@@ -1101,6 +1144,14 @@ end
 
 function NS:ApplyProfileImport(analysis)
     if not analysis or not analysis.accepted or not self.db then return false end
+    -- Avant la premiere ecriture. Un import porte les clics, la taille, la
+    -- disposition et la visibilite : en combat, une partie serait differee et
+    -- l'autre non, et l'addon annoncerait quand meme « Profil importe ». Lire
+    -- reste permis, appliquer non.
+    if self:ProfileChangeBlockedByCombat() then
+        self:Print(self.L.IMPORT_COMBAT_REFUSED)
+        return false, self.L.IMPORT_COMBAT_REFUSED
+    end
     for key, value in pairs(analysis.accepted) do self.db[key] = value end
     self.enabled = self.db.enabled and true or false
     self.deferRefreshes = true

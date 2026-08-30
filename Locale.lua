@@ -58,9 +58,6 @@ local en = {
     LAYOUT_HORIZONTAL = "Horizontal",
     LAYOUT_VERTICAL = "Vertical",
     CURE_ORDER = "Dispel priority and click mapping",
-    LEFT = "Left click",
-    RIGHT = "Right click",
-    CTRL_LEFT = "Ctrl + left click",
     TARGET = "Middle click: target",
     FOCUS_BIND = "Ctrl + middle click: focus",
     THUMB_BIND = "Mouse 4: third cleanse  -  Mouse 5: focus",
@@ -90,11 +87,13 @@ local en = {
     IMPORT_BAD_PREFIX = "This is not a Cleansive profile string.",
     IMPORT_NOTHING_VALID = "Nothing in that string could be read as a Cleansive setting.",
     IMPORT_APPLIED = "Profile imported: %d settings changed.",
+    IMPORT_COMBAT_REFUSED = "Applying a profile is refused while you are fighting. An import rewrites the clicks, the size and the layout at once, and half of that cannot be applied mid-fight. Read it now, apply it when the fight ends.",
     IMPORT_NO_CHANGE = "That profile matches the one you already use.",
     IMPORT_CHANGE_LINE = "%s: %s to %s",
     IMPORT_REJECTED = "Ignored, unreadable or unknown: %s",
     IMPORT_CONFIRM = "Apply these changes",
     IMPORT_ANALYZE = "Check this string",
+    IMPORT_COMBAT_HINT = "Not while fighting",
     PROFILE_COPIED = "Profile copied to specialization %s.",
     PROFILE_EXPORT_HINT = "Your current profile, ready to copy. It carries no character name, no position, and no player list.",
     PROFILE_IMPORT_HINT = "Paste a profile here, check it, then apply. Nothing changes until you apply.",
@@ -180,16 +179,24 @@ local en = {
     HELP_SECTION_COMMANDS = "Commands",
     HELP_SECTION_TROUBLE = "When something looks wrong",
     HELP_SECTION_ABOUT = "About",
-    HELP_COMMANDS_TEXT = [[/cleansive or /cls - open these settings.
+    HELP_COMMANDS_TEXT = [[/cleansive or /cls - open these settings. options and config do the same.
 /cleansive show, hide - show or hide the grid for this session.
 /cleansive enable, disable - turn Cleansive on or off for good.
 /cleansive reset - put the grid and the windows back where they started.
 /cleansive test - open the preview. Add a number from 1 to 40 to pad it, or mixed, all, healthy to choose how many cells light up.
 /cleansive macro - create the mouseover macro.
 /cleansive prio, skip, filters - open the priority list, the exclusion list, the affliction filters. Add clear to empty a list.
+/cleansive ignore <spell ID> - never light a cell for that affliction again.
 /cleansive pradd, skadd - add your current target to one of those lists.
 /cleansive history - the afflictions Cleansive was allowed to read.
 /cleansive spells - the cleansing spells detected, their click, and the types they cover.
+/cleansive clicks - the three cleanse clicks. Add a number and a combination to move one, as in clicks 3 SHIFT-2.
+/cleansive profile - the profiles. new, use, own, rename A | B, delete, env <place> <profile>, lock.
+/cleansive size, spacing - the cell size and the gap between cells, in pixels.
+/cleansive sound - the alert sound. Add a name to pick one.
+/cleansive alerts - why each alert did or did not fire. Add clear to empty the log.
+/cleansive coverage - which afflictions have a sound, type by type.
+/cleansive control - the crowd control seen on this character, and which types are watched.
 /cleansive order - the cell order right now, and why each cell sits there.
 /cleansive soundtest - play the alert file.
 /cleansive soundstatus - the state of the native sound registry. Add a spell ID to ask about one affliction.
@@ -264,24 +271,16 @@ Before reporting a start-up problem, run /cleansive diag copy BEFORE any /reload
     STATUS_SECURE = "Status managed by WoW's protected aura engine",
     SECRET_AURA = "Curable affliction (protected combat data)",
     NO_CURE = "No cleansing spell is currently known.",
-    CLICK_SHORT_LEFT = "L",
-    CLICK_SHORT_RIGHT = "R",
-    CLICK_SHORT_CTRL = "C",
-    -- Une lettre par combinaison : la case n'a la place que d'une seule.
+    -- Une lettre par bouton, precedee de l'initiale de chaque modificateur.
+    -- Une table de combinaisons donnait la meme lettre a Ctrl + 1 et Ctrl + 2.
     CLICK_SHORT_1 = "L",
     CLICK_SHORT_2 = "R",
     CLICK_SHORT_3 = "M",
     CLICK_SHORT_4 = "4",
     CLICK_SHORT_5 = "5",
-    CLICK_SHORT_CTRL_1 = "C",
-    CLICK_SHORT_CTRL_2 = "C",
-    CLICK_SHORT_CTRL_3 = "C",
-    CLICK_SHORT_SHIFT_1 = "S",
-    CLICK_SHORT_SHIFT_2 = "S",
-    CLICK_SHORT_SHIFT_3 = "S",
-    CLICK_SHORT_ALT_1 = "A",
-    CLICK_SHORT_ALT_2 = "A",
-    CLICK_SHORT_ALT_3 = "A",
+    CLICK_INITIAL_ALT = "A",
+    CLICK_INITIAL_CTRL = "C",
+    CLICK_INITIAL_SHIFT = "S",
     CLICK_MODIFIER_ALT = "Alt",
     CLICK_MODIFIER_CTRL = "Ctrl",
     CLICK_MODIFIER_SHIFT = "Shift",
@@ -298,6 +297,15 @@ Before reporting a start-up problem, run /cleansive diag copy BEFORE any /reload
     CLICK_BINDING_TAKEN = "%s already runs cleanse click %d. Two cleanses on one combination is a click that will not do what it says, in the middle of a fight.",
     CLICK_BINDING_RESERVED = "%s is what Cleansive uses for %s. Pick another combination.",
     CLICK_BINDING_SET = "Cleanse click %d is now %s.",
+    CLICK_COMBAT_REFUSED = "Remapping a click is refused while you are fighting. The secure button cannot be rewritten mid-fight: the addon would show the new combination while the old one still cast. Try again when the fight ends.",
+    CLICK_WINDOW = "Set up the clicks",
+    CLICK_WINDOW_TITLE = "Cleanse clicks",
+    CLICK_WINDOW_HINT = "Click the box on the right with the combination you want: the mouse button you press, with Alt, Ctrl or Shift held. Middle click and Ctrl + middle click stay with targeting and focus.",
+    CLICK_CAPTURE = "click here with it",
+    CLICK_SLOT_LABEL = "Cleanse %d",
+    CLICK_RESET = "Back to the default clicks",
+    CLICK_RESET_DONE = "Cleanse clicks back to left, right and Ctrl + left.",
+    CLICK_LEGEND = "Red: %s   -   Blue: %s   -   Orange: %s",
     CLICK_LINE = "Click %d: %s -- %s",
     CLICK_COMMAND_HINT = "/cleansive clicks <1|2|3> <combination>, for example: /cleansive clicks 3 SHIFT-2",
     UNKNOWN = "Unknown",
@@ -414,10 +422,17 @@ Before reporting a start-up problem, run /cleansive diag copy BEFORE any /reload
     PROFILE_USE_OWN = "Back to this specialization's own profile",
     PROFILE_NONE = "No named profile yet. Type a name above and create one from your current settings.",
     PROFILE_TOO_MANY = "%d more profile(s) not shown here. Use /cleansive profile to reach them.",
-    PROFILE_ACTIVE = "Active profile: %s",
     PROFILE_COMMAND_HINT = "/cleansive profile new <name>, use <name>, own, rename <old> | <new>, delete <name>, env <world|dungeon|raid|pvp> [name], lock",
     PROFILE_RENAME_HINT = "Renaming takes both names, separated by a vertical bar: /cleansive profile rename old | new",
     PROFILE_SHARED = "shared profile",
+    PROFILE_ACTIVE_HERE = "Loaded here: %s",
+    PROFILE_USUAL = "Usual profile for this specialization: %s",
+    PROFILE_OWN_NAME = "its own profile",
+    PROFILE_OVERRIDE_WINS = "The %s override (%s) still wins here.",
+    PROFILE_ENVIRONMENT_TITLE = "Per place -- click to pick the profile each place loads",
+    PROFILE_ENVIRONMENT_NONE = "none",
+    PROFILE_LOCK_PLACES = "Lock places",
+    PROFILE_UNLOCK_PLACES = "Unlock places",
     PROFILE_NAME_INVALID = "That name cannot be used. Give it at least one visible character.",
     PROFILE_NAME_TAKEN = "A profile named \"%s\" already exists.",
     PROFILE_CREATED = "Profile \"%s\" created from your current settings.",
@@ -538,9 +553,6 @@ local fr = {
     LAYOUT_HORIZONTAL = "Horizontale",
     LAYOUT_VERTICAL = "Verticale",
     CURE_ORDER = "Priorité des dissipations et clics",
-    LEFT = "Clic gauche",
-    RIGHT = "Clic droit",
-    CTRL_LEFT = "Ctrl + clic gauche",
     TARGET = "Clic milieu : cibler",
     FOCUS_BIND = "Ctrl + clic milieu : focaliser",
     THUMB_BIND = "Souris 4 : troisième dissipation  -  Souris 5 : focaliser",
@@ -570,11 +582,13 @@ local fr = {
     IMPORT_BAD_PREFIX = "Ce texte n’est pas une chaîne de profil Cleansive.",
     IMPORT_NOTHING_VALID = "Rien dans ce texte n’a pu être lu comme un réglage Cleansive.",
     IMPORT_APPLIED = "Profil importé : %d réglages modifiés.",
+    IMPORT_COMBAT_REFUSED = "Appliquer un profil est refusé pendant un combat. Un import réécrit d’un coup les clics, la taille et la disposition, et la moitié de tout cela ne peut pas être posée en plein combat. Lisez-le maintenant, appliquez-le à la fin du combat.",
     IMPORT_NO_CHANGE = "Ce profil correspond déjà à celui que vous utilisez.",
     IMPORT_CHANGE_LINE = "%s : %s vers %s",
     IMPORT_REJECTED = "Ignorés, illisibles ou inconnus : %s",
     IMPORT_CONFIRM = "Appliquer ces changements",
     IMPORT_ANALYZE = "Vérifier ce texte",
+    IMPORT_COMBAT_HINT = "Pas pendant un combat",
     PROFILE_COPIED = "Profil copié vers la spécialisation %s.",
     PROFILE_EXPORT_HINT = "Votre profil actuel, prêt à copier. Il ne contient ni nom de personnage, ni position, ni liste de joueurs.",
     PROFILE_IMPORT_HINT = "Collez un profil ici, vérifiez-le, puis appliquez. Rien ne change avant que vous appliquiez.",
@@ -660,16 +674,24 @@ local fr = {
     HELP_SECTION_COMMANDS = "Commandes",
     HELP_SECTION_TROUBLE = "Quand quelque chose cloche",
     HELP_SECTION_ABOUT = "À propos",
-    HELP_COMMANDS_TEXT = [[/cleansive ou /cls - ouvrir ces réglages.
+    HELP_COMMANDS_TEXT = [[/cleansive ou /cls - ouvrir ces réglages. options et config font la même chose.
 /cleansive show, hide - afficher ou masquer la grille pour cette session.
 /cleansive enable, disable - activer ou désactiver Cleansive durablement.
 /cleansive reset - remettre la grille et les fenêtres à leur place d’origine.
 /cleansive test - ouvrir l’aperçu. Ajoutez un nombre de 1 à 40 pour le compléter, ou mixed, all, healthy pour choisir combien de cases s’allument.
 /cleansive macro - créer la macro de survol.
 /cleansive prio, skip, filters - ouvrir la liste de priorité, la liste d’exclusion, les filtres d’affliction. Ajoutez clear pour vider une liste.
+/cleansive ignore <identifiant> - ne plus jamais allumer de case pour cette affliction.
 /cleansive pradd, skadd - ajouter votre cible actuelle à l’une de ces listes.
 /cleansive history - les afflictions que Cleansive a eu le droit de lire.
 /cleansive spells - les sorts de dissipation détectés, leur clic, et les types qu’ils couvrent.
+/cleansive clicks - les trois clics de dissipation. Ajoutez un numéro et une combinaison pour en déplacer un, par exemple clicks 3 SHIFT-2.
+/cleansive profile - les profils. new, use, own, rename A | B, delete, env <lieu> <profil>, lock.
+/cleansive size, spacing - la taille des cases et l’écart entre elles, en pixels.
+/cleansive sound - le son d’alerte. Ajoutez un nom pour en choisir un.
+/cleansive alerts - pourquoi chaque alerte s’est déclenchée ou non. Ajoutez clear pour vider le journal.
+/cleansive coverage - quelles afflictions ont un son, type par type.
+/cleansive control - les entraves vues sur ce personnage, et les types surveillés.
 /cleansive order - l’ordre des cases en ce moment, et la raison de chacune.
 /cleansive soundtest - jouer le fichier d’alerte.
 /cleansive soundstatus - l’état du registre sonore natif. Ajoutez un identifiant de sort pour interroger une affliction.
@@ -744,23 +766,14 @@ Avant de signaler un problème de démarrage, lancez /cleansive diag copy AVANT 
     STATUS_SECURE = "État géré par le moteur d’auras protégé de WoW",
     SECRET_AURA = "Affliction dissipable (donnée de combat protégée)",
     NO_CURE = "Aucun sort de dissipation n’est actuellement connu.",
-    CLICK_SHORT_LEFT = "G",
-    CLICK_SHORT_RIGHT = "D",
-    CLICK_SHORT_CTRL = "C",
     CLICK_SHORT_1 = "G",
     CLICK_SHORT_2 = "D",
     CLICK_SHORT_3 = "M",
     CLICK_SHORT_4 = "4",
     CLICK_SHORT_5 = "5",
-    CLICK_SHORT_CTRL_1 = "C",
-    CLICK_SHORT_CTRL_2 = "C",
-    CLICK_SHORT_CTRL_3 = "C",
-    CLICK_SHORT_SHIFT_1 = "S",
-    CLICK_SHORT_SHIFT_2 = "S",
-    CLICK_SHORT_SHIFT_3 = "S",
-    CLICK_SHORT_ALT_1 = "A",
-    CLICK_SHORT_ALT_2 = "A",
-    CLICK_SHORT_ALT_3 = "A",
+    CLICK_INITIAL_ALT = "A",
+    CLICK_INITIAL_CTRL = "C",
+    CLICK_INITIAL_SHIFT = "M",
     CLICK_MODIFIER_ALT = "Alt",
     CLICK_MODIFIER_CTRL = "Ctrl",
     CLICK_MODIFIER_SHIFT = "Maj",
@@ -777,6 +790,15 @@ Avant de signaler un problème de démarrage, lancez /cleansive diag copy AVANT 
     CLICK_BINDING_TAKEN = "%s porte déjà le clic de dissipation %d. Deux dissipations sur une même combinaison, c'est un clic qui ne fera pas ce qu'il annonce, en plein combat.",
     CLICK_BINDING_RESERVED = "%s est ce que Cleansive utilise pour %s. Choisissez une autre combinaison.",
     CLICK_BINDING_SET = "Le clic de dissipation %d est maintenant %s.",
+    CLICK_COMBAT_REFUSED = "Remapper un clic est refusé pendant un combat. Le bouton sécurisé ne peut pas être réécrit en plein combat : l’addon afficherait la nouvelle combinaison pendant que l’ancienne lancerait encore le sort. Réessayez à la fin du combat.",
+    CLICK_WINDOW = "Régler les clics",
+    CLICK_WINDOW_TITLE = "Clics de dissipation",
+    CLICK_WINDOW_HINT = "Cliquez dans la case de droite avec la combinaison voulue : le bouton de souris que vous pressez, avec Alt, Ctrl ou Maj enfoncé. Le clic milieu et Ctrl + clic milieu restent le ciblage et la focalisation.",
+    CLICK_CAPTURE = "cliquez ici avec",
+    CLICK_SLOT_LABEL = "Dissipation %d",
+    CLICK_RESET = "Revenir aux clics par défaut",
+    CLICK_RESET_DONE = "Clics de dissipation revenus à gauche, droit et Ctrl + gauche.",
+    CLICK_LEGEND = "Rouge : %s   -   Bleu : %s   -   Orange : %s",
     CLICK_LINE = "Clic %d : %s — %s",
     CLICK_COMMAND_HINT = "/cleansive clicks <1|2|3> <combinaison>, par exemple : /cleansive clicks 3 SHIFT-2",
     UNKNOWN = "Inconnu",
@@ -893,10 +915,17 @@ Avant de signaler un problème de démarrage, lancez /cleansive diag copy AVANT 
     PROFILE_USE_OWN = "Revenir au profil propre de cette spécialisation",
     PROFILE_NONE = "Aucun profil nommé pour l’instant. Saisissez un nom ci-dessus et créez-en un à partir de vos réglages actuels.",
     PROFILE_TOO_MANY = "%d profil(s) de plus, non montrés ici. Passez par /cleansive profile pour les atteindre.",
-    PROFILE_ACTIVE = "Profil actif : %s",
     PROFILE_COMMAND_HINT = "/cleansive profile new <nom>, use <nom>, own, rename <ancien> | <nouveau>, delete <nom>, env <world|dungeon|raid|pvp> [nom], lock",
     PROFILE_RENAME_HINT = "Renommer demande les deux noms, séparés par une barre verticale : /cleansive profile rename ancien | nouveau",
     PROFILE_SHARED = "profil partagé",
+    PROFILE_ACTIVE_HERE = "Chargé ici : %s",
+    PROFILE_USUAL = "Profil habituel de cette spécialisation : %s",
+    PROFILE_OWN_NAME = "son profil propre",
+    PROFILE_OVERRIDE_WINS = "La surcharge %s (%s) reste prioritaire ici.",
+    PROFILE_ENVIRONMENT_TITLE = "Par lieu — cliquez pour choisir le profil que chaque lieu charge",
+    PROFILE_ENVIRONMENT_NONE = "aucun",
+    PROFILE_LOCK_PLACES = "Verrouiller les lieux",
+    PROFILE_UNLOCK_PLACES = "Déverrouiller les lieux",
     PROFILE_NAME_INVALID = "Ce nom ne peut pas être utilisé. Donnez-lui au moins un caractère visible.",
     PROFILE_NAME_TAKEN = "Un profil nommé « %s » existe déjà.",
     PROFILE_CREATED = "Profil « %s » créé à partir de vos réglages actuels.",

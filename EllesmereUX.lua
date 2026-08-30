@@ -1327,8 +1327,16 @@ function NS:CreateOptions()
         self.typeRows[#self.typeRows + 1] = { frame = row, check = check, label = typeLabel, badge = clickBadge, mapping = mapping, up = up, down = down, type = auraType }
     end
 
-    local hint = text(dispels, localized("Rouge : clic gauche   -   Bleu : clic droit   -   Orange : Ctrl + clic gauche", "Red: left click   -   Blue: right click   -   Orange: Ctrl + left click"), 11, C.dim)
-    hint:SetPoint("TOPLEFT", 0, -372)
+    -- Cette legende nommait les trois gestes d'origine, en dur, dans les deux
+    -- langues. Elle est ecrite au rafraichissement, comme tout le reste.
+    self.dispelClickLegend = text(dispels, "", 11, C.dim)
+    self.dispelClickLegend:SetPoint("TOPLEFT", 0, -372)
+    self.dispelClickLegend:SetWidth(540)
+    self.dispelClickLegend:SetJustifyH("LEFT")
+
+    local configureClicks = button(dispels, self.L.CLICK_WINDOW, 200, 28)
+    configureClicks:SetPoint("TOPLEFT", 0, -398)
+    configureClicks:SetScript("OnClick", function() self:ShowClickBindings() end)
 
     local history = CreateFrame("Frame", nil, content)
     history:SetAllPoints()
@@ -1456,7 +1464,7 @@ function NS:CreateOptions()
     local help = CreateFrame("Frame", nil, content)
     help:SetAllPoints()
     self.optionsPages.help = help
-    self.optionsPageHeights.help = 1210
+    self.optionsPageHeights.help = 1320
 
     -- Cette page avait SA propre zone de defilement, imbriquee dans celle de
     -- la fenetre depuis que le contenu defile : deux barres se disputaient la
@@ -1464,7 +1472,7 @@ function NS:CreateOptions()
     -- defilement de la fenetre qui s'en occupe.
     local helpBody = CreateFrame("Frame", nil, help)
     helpBody:SetPoint("TOPLEFT", 0, -2)
-    helpBody:SetSize(540, 1180)
+    helpBody:SetSize(540, 1290)
 
     local function helpBlock(heading, body, y)
         local title = text(helpBody, heading, 12, C.section)
@@ -1482,29 +1490,32 @@ function NS:CreateOptions()
     end
 
     helpBlock(self.L.HELP_SECTION_COMMANDS, self.L.HELP_COMMANDS_TEXT, 0)
-    helpBlock(self.L.HELP_SECTION_TROUBLE, self.L.HELP_TROUBLE_TEXT, -470)
+    -- Neuf commandes de plus dans le bloc du haut : le depannage descend
+    -- d'autant, sinon les deux blocs se recouvrent. Une liste sans hauteur
+    -- posee n'est mesuree par aucun test -- elle se compte a la main.
+    helpBlock(self.L.HELP_SECTION_TROUBLE, self.L.HELP_TROUBLE_TEXT, -600)
 
     local aboutTitle = text(helpBody, self.L.HELP_SECTION_ABOUT, 12, C.section)
-    aboutTitle:SetPoint("TOPLEFT", 0, -900)
+    aboutTitle:SetPoint("TOPLEFT", 0, -990)
     local aboutLine = solid(helpBody, "ARTWORK", 1, 1, 1, 0.07)
-    aboutLine:SetPoint("TOPLEFT", 0, -918)
+    aboutLine:SetPoint("TOPLEFT", 0, -1008)
     aboutLine:SetWidth(540)
     aboutLine:SetHeight(1)
     local aboutVersion = text(helpBody, "Cleansive v" .. self.version .. "  -  Retail 12.1  -  "
         .. self.L.HELP_LICENSE, 11, C.text)
-    aboutVersion:SetPoint("TOPLEFT", 0, -930)
+    aboutVersion:SetPoint("TOPLEFT", 0, -1020)
     local credits = text(helpBody, self.L.HELP_CREDITS, 11, C.dim)
-    credits:SetPoint("TOPLEFT", 0, -1074)
+    credits:SetPoint("TOPLEFT", 0, -1164)
     credits:SetWidth(540)
     credits:SetJustifyH("LEFT")
     credits:SetSpacing(3)
     local installWarning = text(helpBody, self.L.HELP_INSTALL_WARNING, 11, C.dim)
-    installWarning:SetPoint("TOPLEFT", 0, -1134)
+    installWarning:SetPoint("TOPLEFT", 0, -1224)
     installWarning:SetWidth(540)
     installWarning:SetJustifyH("LEFT")
     installWarning:SetSpacing(3)
     local reportLabel = text(helpBody, self.L.HELP_REPORT, 11, C.dim)
-    reportLabel:SetPoint("TOPLEFT", 0, -956)
+    reportLabel:SetPoint("TOPLEFT", 0, -1046)
     reportLabel:SetWidth(540)
     reportLabel:SetJustifyH("LEFT")
 
@@ -1512,7 +1523,7 @@ function NS:CreateOptions()
     -- rendre l'adresse selectionnable pour que le joueur la copie.
     local reportBox = CreateFrame("EditBox", nil, helpBody)
     reportBox:SetSize(540, 24)
-    reportBox:SetPoint("TOPLEFT", 0, -996)
+    reportBox:SetPoint("TOPLEFT", 0, -1086)
     reportBox:SetAutoFocus(false)
     reportBox:SetFontObject(ChatFontNormal)
     reportBox:SetTextInsets(6, 6, 0, 0)
@@ -1533,11 +1544,11 @@ function NS:CreateOptions()
     reportBg:SetPoint("BOTTOMRIGHT", reportBox, "BOTTOMRIGHT", 0, 0)
 
     local diagButton = button(helpBody, self.L.HELP_DIAG_BUTTON, 190, 28)
-    diagButton:SetPoint("TOPLEFT", 0, -1034)
+    diagButton:SetPoint("TOPLEFT", 0, -1124)
     diagButton:SetScript("OnClick", function() self:ShowDiagnosticsCopy() end)
 
     local transferButton = button(helpBody, self.L.PROFILE_TRANSFER, 190, 28)
-    transferButton:SetPoint("TOPLEFT", 204, -1034)
+    transferButton:SetPoint("TOPLEFT", 204, -1124)
     transferButton:SetScript("OnClick", function() self:ShowProfileTransfer() end)
 
     self.optionIndex = {}
@@ -1570,7 +1581,12 @@ function NS:RefreshCellPreview()
     local preview = self.uxPreview
     if not preview then return end
     local colors = { { 0.92, 0.08, 0.08 }, { 0.08, 0.38, 0.96 }, { 1.00, 0.46, 0.02 } }
-    local labels = { self.L.CLICK_SHORT_LEFT, self.L.CLICK_SHORT_RIGHT, self.L.CLICK_SHORT_CTRL, "—" }
+    local labels = {}
+    for slot = 1, 3 do
+        local _, _, short = self:ClickDescription(slot)
+        labels[slot] = short or "—"
+    end
+    labels[4] = "—"
     local layoutMode = self.db.layoutMode or "GRID"
     -- Each mode caps the preview so the box cannot overflow, but the cap has
     -- to stay above the slider's lower half or the control looks broken:
@@ -1646,8 +1662,8 @@ function NS:RefreshCellPreview()
     for index = 1, 3 do
         local def = self.clickSpells and self.clickSpells[index]
         if def then
-            local click = index == 1 and self.L.LEFT or (index == 2 and self.L.RIGHT or self.L.CTRL_LEFT)
-            maps[#maps + 1] = click .. " : " .. def.name
+            local _, click = self:ClickDescription(index)
+            maps[#maps + 1] = (click or "?") .. " : " .. def.name
         end
     end
     preview.durationLegend:SetText(self.L.PREVIEW_DURATION)
@@ -1738,9 +1754,10 @@ function NS:RefreshOptions()
         local slot = self.typeToSlot and self.typeToSlot[row.type]
         local def = slot and self.clickSpells and self.clickSpells[slot]
         local manual = not def and self.manualTypeSpell and self.manualTypeSpell[row.type]
-        local click = slot == 1 and self.L.LEFT or (slot == 2 and self.L.RIGHT or (slot == 3 and self.L.CTRL_LEFT or "—"))
+        local _, click, short = self:ClickDescription(slot)
+        click = click or "—"
         local clickColor = CLICK_BADGE_COLORS[slot]
-        local shortClick = slot == 1 and self.L.CLICK_SHORT_LEFT or (slot == 2 and self.L.CLICK_SHORT_RIGHT or (slot == 3 and self.L.CLICK_SHORT_CTRL or (manual and "!" or "—")))
+        local shortClick = short or (manual and "!" or "—")
         if row.badge then
             if clickColor and def then
                 row.badge.bg:SetColorTexture(clickColor[1], clickColor[2], clickColor[3], 0.88)
@@ -1758,7 +1775,15 @@ function NS:RefreshOptions()
         setDirectionEnabled(row.down, position < #self.typeRows)
     end
 
+    if self.dispelClickLegend then
+        local _, first = self:ClickDescription(1)
+        local _, second = self:ClickDescription(2)
+        local _, third = self:ClickDescription(3)
+        self.dispelClickLegend:SetText(string.format(self.L.CLICK_LEGEND,
+            first or "—", second or "—", third or "—"))
+    end
     self:RefreshCellPreview()
+    if self.RefreshClickBindings then self:RefreshClickBindings() end
     if self.RefreshAuraHistoryPage then self:RefreshAuraHistoryPage() end
 end
 
@@ -1968,6 +1993,112 @@ function NS:CreateFilterWindow()
     end)
 end
 
+-- Le remappage des clics n'avait AUCUN controle graphique : il fallait
+-- connaitre « /cleansive clicks 3 SHIFT-2 », donc avoir lu le changelog. Une
+-- fonction qu'aucun ecran ne montre n'est pas livree.
+--
+-- Et plutot qu'une liste deroulante de combinaisons, la case ecoute le geste :
+-- le joueur presse ce qu'il veut poser, avec ses modificateurs. C'est le meme
+-- chemin que le clic reel -- ClickBindingFromMouse -- donc ce qu'il capture
+-- est exactement ce qui partira.
+function NS:ShowClickBindings()
+    local frame = self.clickBindingFrame
+    if not frame then
+        frame = CreateFrame("Frame", "CleansiveClickBindingFrame", UIParent)
+        frame:SetSize(480, 290)
+        frame:SetPoint("CENTER")
+        self:RestoreWindowPosition(frame, "clicks")
+        frame:SetFrameStrata("DIALOG")
+        frame:SetClampedToScreen(true)
+        frame:EnableMouse(true)
+        frame:SetMovable(true)
+        frame:RegisterForDrag("LeftButton")
+        frame:SetScript("OnDragStart", frame.StartMoving)
+        frame:SetScript("OnDragStop", function(moved)
+            moved:StopMovingOrSizing()
+            self:SaveWindowPosition(moved, "clicks")
+        end)
+        addPanelBackground(frame)
+
+        local accentBar = solid(frame, "BORDER", accent())
+        accentBar:SetPoint("TOPLEFT")
+        accentBar:SetPoint("TOPRIGHT")
+        accentBar:SetHeight(2)
+
+        frame.title = text(frame, self.L.CLICK_WINDOW_TITLE, 17, C.text)
+        frame.title:SetPoint("TOPLEFT", 22, -20)
+        local close = button(frame, "×", 34, 30)
+        close:SetPoint("TOPRIGHT", -14, -13)
+        close:SetScript("OnClick", function() frame:Hide() end)
+
+        frame.hint = text(frame, self.L.CLICK_WINDOW_HINT, 11, C.dim)
+        frame.hint:SetPoint("TOPLEFT", 22, -52)
+        frame.hint:SetWidth(436)
+        frame.hint:SetHeight(56)
+        frame.hint:SetJustifyH("LEFT")
+
+        frame.rows = {}
+        for slot = 1, 3 do
+            local row = CreateFrame("Frame", nil, frame)
+            row:SetSize(436, 30)
+            row:SetPoint("TOPLEFT", 22, -120 - ((slot - 1) * 36))
+            solid(row, "BACKGROUND", 0, 0, 0, slot % 2 == 0 and 0.20 or 0.10):SetAllPoints()
+            row.label = text(row, string.format(self.L.CLICK_SLOT_LABEL, slot), 12, C.text)
+            row.label:SetPoint("LEFT", 10, 0)
+            row.label:SetWidth(110)
+            row.label:SetJustifyH("LEFT")
+            row.current = text(row, "", 12, C.text)
+            row.current:SetPoint("LEFT", 128, 0)
+            row.current:SetWidth(150)
+            row.current:SetJustifyH("LEFT")
+
+            local capture = button(row, self.L.CLICK_CAPTURE, 140, 26)
+            capture:SetPoint("RIGHT", -8, 0)
+            -- « AnyUp » pour que le bouton reponde AUSSI au clic droit et aux
+            -- boutons de pouce : un bouton ordinaire n'entend que le gauche,
+            -- et deux tiers des combinaisons seraient restees inatteignables.
+            if capture.RegisterForClicks then capture:RegisterForClicks("AnyUp") end
+            capture:SetScript("OnClick", function(_, mouseButton)
+                local binding = self:ClickBindingFromMouse(mouseButton)
+                if not binding then return end
+                local _, message = self:SetClickBinding(slot, binding)
+                if message then self:Print(message) end
+                self:RefreshClickBindings()
+            end)
+            row.capture = capture
+            frame.rows[slot] = row
+        end
+
+        frame.reset = button(frame, self.L.CLICK_RESET, 240, 28)
+        frame.reset:SetPoint("BOTTOMLEFT", 22, 20)
+        frame.reset:SetScript("OnClick", function()
+            local _, message = self:ResetClickBindings()
+            if message then self:Print(message) end
+            self:RefreshClickBindings()
+        end)
+
+        fitToScreen(frame, 480, 290)
+        if type(UISpecialFrames) == "table" then
+            UISpecialFrames[#UISpecialFrames + 1] = "CleansiveClickBindingFrame"
+        end
+        self.clickBindingFrame = frame
+    end
+    self:RefreshClickBindings()
+    frame:Show()
+end
+
+function NS:RefreshClickBindings()
+    local frame = self.clickBindingFrame
+    if not frame then return end
+    local fighting = InCombatLockdown and InCombatLockdown() and true or false
+    for slot, row in ipairs(frame.rows) do
+        local _, described, short = self:ClickDescription(slot)
+        row.current:SetText(described and (short .. "   " .. described) or "—")
+        row.capture:SetEnabled(not fighting)
+    end
+    frame.reset:SetEnabled(not fighting)
+end
+
 -- Read, show, then ask again. An import that lands on the first click is a
 -- configuration lost with no way back, and the string usually comes from
 -- someone else.
@@ -1979,7 +2110,7 @@ function NS:ShowProfileManager()
     local frame = self.profileManagerFrame
     if not frame then
         frame = CreateFrame("Frame", "CleansiveProfileManagerFrame", UIParent)
-        frame:SetSize(520, 420)
+        frame:SetSize(520, 520)
         frame:SetPoint("CENTER")
         self:RestoreWindowPosition(frame, "profiles")
         frame:SetFrameStrata("DIALOG")
@@ -2011,20 +2142,30 @@ function NS:ShowProfileManager()
         frame.hint:SetHeight(42)
         frame.hint:SetJustifyH("LEFT")
 
+        -- Deux lignes, parce qu'il y a deux choses. Le profil CHARGE ici peut
+        -- venir d'une surcharge de lieu ; le profil HABITUEL de la
+        -- specialisation est celui que les boutons ci-dessous modifient. Une
+        -- seule ligne melangeait les deux, et le chevron designait l'autre.
         frame.active = text(frame, "", 12, C.text)
-        frame.active:SetPoint("TOPLEFT", 22, -104)
+        frame.active:SetPoint("TOPLEFT", 22, -102)
         frame.active:SetWidth(476)
         frame.active:SetHeight(14)
         frame.active:SetJustifyH("LEFT")
+
+        frame.usual = text(frame, "", 11, C.dim)
+        frame.usual:SetPoint("TOPLEFT", 22, -118)
+        frame.usual:SetWidth(476)
+        frame.usual:SetHeight(14)
+        frame.usual:SetJustifyH("LEFT")
 
         -- Une saisie unique sert a creer ET a renommer : deux champs pour deux
         -- verbes qui prennent le meme argument auraient double la surface sans
         -- rien clarifier.
         local nameBg = solid(frame, "BACKGROUND", C.panelDeep[1], C.panelDeep[2], C.panelDeep[3], 0.80)
-        nameBg:SetPoint("TOPLEFT", 22, -126)
+        nameBg:SetPoint("TOPLEFT", 22, -140)
         nameBg:SetSize(300, 26)
         frame.nameBox = CreateFrame("EditBox", nil, frame)
-        frame.nameBox:SetPoint("TOPLEFT", 22, -126)
+        frame.nameBox:SetPoint("TOPLEFT", 22, -140)
         frame.nameBox:SetSize(300, 26)
         frame.nameBox:SetAutoFocus(false)
         frame.nameBox:SetFontObject(ChatFontNormal)
@@ -2033,7 +2174,7 @@ function NS:ShowProfileManager()
         frame.nameBox:SetScript("OnEscapePressed", function(box) box:ClearFocus() end)
 
         local create = button(frame, self.L.PROFILE_CREATE, 140, 26)
-        create:SetPoint("TOPLEFT", 332, -126)
+        create:SetPoint("TOPLEFT", 332, -140)
         create:SetScript("OnClick", function()
             local ok, message = self:CreateNamedProfile(frame.nameBox:GetText())
             self:Print(message)
@@ -2045,7 +2186,7 @@ function NS:ShowProfileManager()
         for index = 1, 6 do
             local row = CreateFrame("Frame", nil, frame)
             row:SetSize(476, 30)
-            row:SetPoint("TOPLEFT", 22, -166 - ((index - 1) * 34))
+            row:SetPoint("TOPLEFT", 22, -180 - ((index - 1) * 34))
             solid(row, "BACKGROUND", 0, 0, 0, index % 2 == 0 and 0.20 or 0.10):SetAllPoints()
             row.label = text(row, "", 12, C.text)
             row.label:SetPoint("LEFT", 10, 0)
@@ -2063,7 +2204,7 @@ function NS:ShowProfileManager()
         -- Deux messages, deux places. Celui-ci remplace une liste vide et
         -- s'affiche donc a la place de la premiere rangee.
         frame.empty = text(frame, self.L.PROFILE_NONE, 11, C.dim)
-        frame.empty:SetPoint("TOPLEFT", 22, -172)
+        frame.empty:SetPoint("TOPLEFT", 22, -186)
         frame.empty:SetWidth(476)
         frame.empty:SetHeight(28)
         frame.empty:SetJustifyH("LEFT")
@@ -2073,11 +2214,42 @@ function NS:ShowProfileManager()
         -- dessinait par-dessus le premier profil, exactement quand la liste est
         -- la plus chargee.
         frame.overflow = text(frame, "", 11, C.dim)
-        frame.overflow:SetPoint("TOPLEFT", 22, -166 - (6 * 34) - 6)
+        frame.overflow:SetPoint("TOPLEFT", 22, -180 - (6 * 34) - 6)
         frame.overflow:SetWidth(476)
         frame.overflow:SetHeight(14)
         frame.overflow:SetJustifyH("LEFT")
         frame.overflow:Hide()
+
+        -- Les surcharges de lieu et leur verrou n'existaient que par la
+        -- commande « /cleansive profile env ». Une fonction qu'aucun ecran ne
+        -- montre n'est pas livree : un joueur qui n'a pas lu le changelog ne
+        -- pouvait pas la trouver. Un bouton par lieu, qui fait le tour des
+        -- profils comme celui du son d'alerte fait le tour des sons.
+        frame.environmentTitle = text(frame, self.L.PROFILE_ENVIRONMENT_TITLE, 11, C.section)
+        frame.environmentTitle:SetPoint("TOPLEFT", 22, -410)
+        frame.environmentTitle:SetWidth(476)
+        frame.environmentTitle:SetHeight(14)
+        frame.environmentTitle:SetJustifyH("LEFT")
+
+        frame.environmentButtons = {}
+        for index, place in ipairs(self.ENVIRONMENTS) do
+            local control = button(frame, "", 112, 26)
+            control:SetPoint("TOPLEFT", 22 + ((index - 1) * 118), -430)
+            control:SetScript("OnClick", function()
+                local _, message = self:CycleEnvironmentProfile(place)
+                if message then self:Print(message) end
+                self:RefreshProfileManager()
+            end)
+            frame.environmentButtons[place] = control
+        end
+
+        frame.lockButton = button(frame, "", 220, 28)
+        frame.lockButton:SetPoint("BOTTOMLEFT", 254, 20)
+        frame.lockButton:SetScript("OnClick", function()
+            local ok, refusal = self:SetEnvironmentLocked(not self:EnvironmentLocked())
+            if not ok and refusal then self:Print(refusal) end
+            self:RefreshProfileManager()
+        end)
 
         local own = button(frame, self.L.PROFILE_USE_OWN, 220, 28)
         own:SetPoint("BOTTOMLEFT", 22, 20)
@@ -2092,7 +2264,7 @@ function NS:ShowProfileManager()
         -- de mise a l'echelle. SetClampedToScreen borne la position, pas la
         -- taille : sur un petit espace logique elles depassaient sans se
         -- reduire, et ne reagissaient a aucun changement de resolution.
-        fitToScreen(frame, 520, 420)
+        fitToScreen(frame, 520, 520)
         if type(UISpecialFrames) == "table" then
             UISpecialFrames[#UISpecialFrames + 1] = "CleansiveProfileManagerFrame"
         end
@@ -2105,9 +2277,15 @@ end
 function NS:RefreshProfileManager()
     local frame = self.profileManagerFrame
     if not frame then return end
-    frame.active:SetText(string.format(self.L.PROFILE_ACTIVE, self:GetActiveProfileLabel()))
+    -- Trois choses distinctes, et deux d'entre elles portaient le meme nom.
+    -- « Charge ici » tient compte du lieu ; « habituel » est ce que le chevron
+    -- designe et ce que les boutons de cette fenetre modifient. Les confondre
+    -- faisait repondre « X est maintenant utilise » a un clic qui ne changeait
+    -- rien de ce que le joueur avait sous les yeux.
+    frame.active:SetText(string.format(self.L.PROFILE_ACTIVE_HERE, self:GetActiveProfileLabel()))
     local names = self:NamedProfiles()
     local active = self:ActiveNamedProfile()
+    frame.usual:SetText(string.format(self.L.PROFILE_USUAL, active or self.L.PROFILE_OWN_NAME))
     frame.empty:SetShown(#names == 0)
     for index, row in ipairs(frame.rows) do
         local name = names[index]
@@ -2143,6 +2321,21 @@ function NS:RefreshProfileManager()
             row.delete:SetEnabled(not fighting)
         end
     end
+
+    -- Les lieux : chaque bouton porte le profil que SON lieu chargera, et le
+    -- verrou dit ce qu'il fera au prochain clic, pas ce qu'il a fait.
+    for _, place in ipairs(self.ENVIRONMENTS) do
+        local control = frame.environmentButtons[place]
+        if control then
+            local assigned = self:EnvironmentOverride(place)
+            control:SetText((self.L["ENVIRONMENT_" .. string.upper(place)] or place)
+                .. " : " .. (assigned or self.L.PROFILE_ENVIRONMENT_NONE))
+            control:SetEnabled(#names > 0 and not fighting)
+        end
+    end
+    frame.lockButton:SetText(self:EnvironmentLocked()
+        and self.L.PROFILE_UNLOCK_PLACES or self.L.PROFILE_LOCK_PLACES)
+    frame.lockButton:SetEnabled(not fighting)
 
     -- Plus de six profils est un cas que la liste ne montre pas. Le dire plutot
     -- que de laisser croire qu'il n'y en a que six -- et le dire SOUS la liste.
@@ -2228,6 +2421,10 @@ function NS:ShowProfileTransfer()
         frame.analyze:SetPoint("BOTTOMLEFT", 22, 18)
         frame.apply = button(frame, self.L.IMPORT_CONFIRM, 220, 28, true)
         frame.apply:SetPoint("BOTTOMLEFT", 224, 18)
+        -- Griser sans rien dire laisse chercher la panne. Trois mots suffisent.
+        frame.applyHint = text(frame, self.L.IMPORT_COMBAT_HINT, 11, C.dim)
+        frame.applyHint:SetPoint("LEFT", frame.apply, "RIGHT", 10, 0)
+        frame.applyHint:Hide()
 
         frame.analyze:SetScript("OnClick", function()
             local analysis, reason = self:AnalyzeProfileImport(frame.importBox:GetText())
@@ -2283,11 +2480,17 @@ function NS:ShowProfileTransfer()
             end
             frame.result:SetText(table.concat(lines, "\n"))
             frame.apply:SetShown(#analysis.changes > 0)
+            self:RefreshProfileTransferState()
         end)
 
         frame.apply:SetScript("OnClick", function()
             if not frame.pendingImport then return end
-            self:ApplyProfileImport(frame.pendingImport)
+            if not self:ApplyProfileImport(frame.pendingImport) then
+                -- Refuse en combat : l'apercu RESTE, avec son bouton grise.
+                -- L'effacer obligerait a recoller le texte apres le combat.
+                self:RefreshProfileTransferState()
+                return
+            end
             frame.pendingImport = nil
             frame.apply:Hide()
             frame.exportBox:SetText(self:ExportProfile())
@@ -2321,6 +2524,18 @@ function NS:RefreshOptionsStatus()
     if self.profileManagerFrame and self.profileManagerFrame:IsShown() then
         self:RefreshProfileManager()
     end
+    self:RefreshProfileTransferState()
+end
+
+-- Le bouton Appliquer d'un import suit le combat comme les boutons du
+-- gestionnaire : la logique refuse deja, mais un bouton actif qui ne repond
+-- que par un refus est une promesse non tenue. Analyser reste possible.
+function NS:RefreshProfileTransferState()
+    local frame = self.profileTransferFrame
+    if not frame or not frame.apply then return end
+    local fighting = InCombatLockdown and InCombatLockdown() and true or false
+    frame.apply:SetEnabled(not fighting)
+    if frame.applyHint then frame.applyHint:SetShown(fighting) end
 end
 
 -- Accent-insensitive, because a player types "reglage" and the label says

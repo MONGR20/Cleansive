@@ -60,6 +60,11 @@ local function newFrame(name)
     rawset(f, "SetTextColor", function(s, ...) rawset(s, "__textColor", { ... }) end)
     rawset(f, "SetText", function(s, v) rawset(s, "__text", v) end)
     rawset(f, "GetText", function(s) return rawget(s, "__text") end)
+    -- Ce reglage tombait dans le stub generique : un bouton qui n'ecoute que
+    -- le clic gauche et un bouton qui ecoute les cinq rendaient exactement la
+    -- meme chose. La case qui capture une combinaison depend entierement de
+    -- lui -- sans « AnyUp », deux tiers des combinaisons sont inatteignables.
+    rawset(f, "RegisterForClicks", function(s, ...) rawset(s, "__clicks", { ... }) end)
     rawset(f, "SetAlpha", function(s, v) rawset(s, "__alpha", v) end)
     -- SetScale tombait dans le stub generique : une fenetre remise a l'echelle
     -- et une fenetre oubliee rendaient exactement la meme chose.

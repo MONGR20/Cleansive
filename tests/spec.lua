@@ -4215,7 +4215,8 @@ do
     local joined = table.concat(NS:BuildSpellReport(), "\n")
     truthy(#joined > 0, "sorts : le rapport nomme au moins un sort")
     truthy(joined:find("4987", 1, true), "sorts : l'identifiant du sort est donne")
-    truthy(joined:find(NS.L.LEFT, 1, true), "sorts : le clic associe est donne")
+    local _, firstClick = NS:ClickDescription(1)
+    truthy(joined:find(firstClick, 1, true), "sorts : le clic associe est donne")
     truthy(joined:find(NS:GetTypeLabel("Magic"), 1, true),
         "sorts : les types couverts sont donnes")
 
@@ -4321,18 +4322,13 @@ do
     truthy(NS.optionsPages.help:IsShown(), "aide : et elle est la seule visible")
     falsy(NS.optionsPages.general:IsShown(), "aide : la page generale se retire")
 
-    -- Chaque commande que HandleSlash accepte doit etre documentee ici, sinon
-    -- la page devient un piege : elle a l'air complete et ne l'est pas.
+    -- La liste des commandes attendues etait ECRITE ICI, a la main. Elle a
+    -- donc vieilli exactement comme la page qu'elle surveillait : huit
+    -- commandes ajoutees depuis, aucune dans la liste, et le test annoncait
+    -- « toutes les commandes sont documentees ». La verification derive
+    -- desormais la liste de Core.lua lui-meme, dans run.js -- un test qui ne
+    -- peut pas oublier ce que le code accepte.
     for _, language in ipairs({ "enUS", "frFR" }) do
-        local documented = NS.LOCALES[language].HELP_COMMANDS_TEXT
-        local missing = {}
-        for _, command in ipairs({ "spells", "order", "version", "soundstatus",
-            "diag copy", "test", "macro", "cdstatus", "setup", "filters",
-            "pradd", "skadd", "history", "soundtest", "prio", "skip" }) do
-            if not documented:find(command, 1, true) then missing[#missing + 1] = command end
-        end
-        eq(table.concat(missing, ","), "",
-            "aide : toutes les commandes sont documentees en " .. language)
         truthy(NS.LOCALES[language].HELP_TROUBLE_TEXT:find("soundstatus", 1, true),
             "aide : le depannage renvoie a la commande qui repond, en " .. language)
     end
@@ -6183,10 +6179,21 @@ do
         "remappage : et l'ancienne combinaison ne lance plus rien")
 
     -- La lettre affichee doit suivre la combinaison, sinon l'addon annonce un
-    -- clic et en attend un autre.
+    -- clic et en attend un autre. Elle se CONSTRUIT : une table ne couvre que
+    -- les combinaisons qu'on a pensees, et donnait la meme lettre a deux
+    -- dissipations differentes.
     NS:RefreshAll(true)
-    eq(NS.L["CLICK_SHORT_SHIFT_2"], NS.L.CLICK_SHORT_SHIFT_2, "lettre : la cle existe")
-    truthy(NS.L.CLICK_SHORT_SHIFT_2, "lettre : une lettre est prevue pour cette combinaison")
+    local _, described, short = NS:ClickDescription(3)
+    eq(short, NS.L.CLICK_INITIAL_SHIFT .. NS.L.CLICK_SHORT_2,
+        "lettre : l'indice court suit la combinaison posee")
+    truthy(described:find(NS.L.CLICK_MODIFIER_SHIFT, 1, true),
+        "lettre : et la description longue nomme le modificateur")
+    -- Deux dissipations ne peuvent plus porter le meme indice.
+    truthy(NS:ClickShortHint("CTRL-1") ~= NS:ClickShortHint("CTRL-2"),
+        "lettre : Ctrl + gauche et Ctrl + droit ne partagent plus leur indice")
+    eq(NS:ClickShortHint("ALT-CTRL-2"),
+        NS.L.CLICK_INITIAL_ALT .. NS.L.CLICK_INITIAL_CTRL .. NS.L.CLICK_SHORT_2,
+        "lettre : une combinaison a deux modificateurs a le sien aussi")
 
     -- Prendre le bouton 4 doit desactiver son miroir, pas se faire ecraser par
     -- lui : c'est le reglage du joueur qui gagne.
@@ -6961,6 +6968,15 @@ do
         return width, height
     end
 
+    -- L'index des enfants est une PHOTO, prise ici une fois. Une fenetre creee
+    -- apres cette ligne n'a donc aucun enfant aux yeux du detecteur : elle est
+    -- parcourue, et vide. Les trois fenetres sont donc ouvertes AVANT la photo.
+    -- Sans cela, un test qui ne peut rien voir passe toujours.
+    NS:CreateNamedProfile("Temoin")
+    NS:ShowProfileManager()
+    NS:ShowClickBindings()
+    NS:ShowProfileTransfer()
+
     local children = mock.childIndex()
     local function childrenOf(frame) return children[frame] or {} end
 
@@ -7087,6 +7103,26 @@ do
     local zones = {}
     for _, page in pairs(NS.optionsPages) do zones[page] = true end
     measured = measured + inspect("fenetre", NS.optionsFrame, windowRect, zones)
+
+    -- Les deux autres fenetres n'etaient parcourues par rien. Le gestionnaire
+    -- de profils a grandi de cent pixels pour loger les lieux, et une section
+    -- ajoutee au jugé se pose volontiers sur le bouton d'en dessous.
+    measured = measured + inspect("profils", NS.profileManagerFrame,
+        { left = 0, top = 0, right = 520, bottom = 520 })
+    NS.profileManagerFrame:Hide()
+
+    measured = measured + inspect("clics", NS.clickBindingFrame,
+        { left = 0, top = 0, right = 480, bottom = 290 })
+    NS.clickBindingFrame:Hide()
+
+    -- L'apercu d'import est vide tant qu'on n'a rien analyse : on le remplit,
+    -- sinon le bouton Appliquer et son etiquette ne sont pas dans le rendu.
+    NS.profileTransferFrame.apply:Show()
+    NS.profileTransferFrame.applyHint:Show()
+    measured = measured + inspect("transfert", NS.profileTransferFrame,
+        { left = 0, top = 0, right = 700, bottom = 520 })
+    NS.profileTransferFrame:Hide()
+    NS:DeleteNamedProfile("Temoin")
 
     truthy(measured > 100,
         "mise en page : les controles sont bien mesures, pas ecartes en silence")
@@ -7300,6 +7336,305 @@ do
     truthy(table.concat(mock.state.chat, "\n", before + 1):find("aximum", 1, true)
         or table.concat(mock.state.chat, "\n", before + 1):find("ighest", 1, true),
         "pic sonore : soundstatus l'annonce au joueur")
+end
+
+--------------------------------------------------------------------------
+-- 1.6.20 : ce qu'un combat doit refuser EN ENTIER
+--
+-- Un refus a moitie est pire qu'un refus franc : l'addon annonce un reglage
+-- que le bouton securise n'a pas recu, et c'est au moment d'une dissipation
+-- urgente que le joueur s'en apercoit. Trois operations ecrivaient avant de
+-- decouvrir que le combat leur interdisait la suite.
+--------------------------------------------------------------------------
+do
+    freshProfile("PALADIN")
+    knowSpells(4987)
+    NS:UpdateSpells()
+    mock.state.instanceType = "none"
+    mock.state.inCombat = false
+    NS.dbRoot.global.lockEnvironment = nil
+    NS.db.clickBindings = { "1", "2", "CTRL-1" }
+    NS:ApplySecureBindings()
+    local target = NS.buttons[1].clickLayer or NS.buttons[1]
+
+    -- 1. Le remappage. Il ecrivait le profil, rafraichissait les textes et
+    -- repondait « c'est fait », pendant que ApplySecureBindings reportait tout.
+    mock.state.inCombat = true
+    local ok, refusal = NS:SetClickBinding(3, "SHIFT-2")
+    falsy(ok, "combat : remapper un clic est refuse")
+    truthy(refusal and #refusal > 0, "combat : et le refus se dit")
+    eq(NS:ClickBindings()[3], "CTRL-1", "combat : le reglage n'a pas bouge")
+    falsy(target:GetAttribute("shift-type2") == "spell",
+        "combat : l'attribut securise non plus")
+    eq(NS.effectiveClickSlots["CTRL-1"], 3,
+        "combat : et la carte du registre reste celle qui est reellement posee")
+    mock.state.inCombat = false
+    truthy(NS:SetClickBinding(3, "SHIFT-2"), "hors combat : le meme remappage passe")
+    NS:SetClickBinding(3, "CTRL-1")
+
+    -- 2. L'import. Lire doit rester possible ; appliquer, non : un import
+    -- porte les clics, la taille et la disposition d'un seul coup.
+    NS.db.frameSize = 22
+    local exported = NS:ExportProfile()
+    NS.db.frameSize = 31
+    mock.state.inCombat = true
+    local analysis = NS:AnalyzeProfileImport(exported)
+    truthy(analysis, "combat : analyser un import reste possible")
+    falsy(NS:ApplyProfileImport(analysis), "combat : mais l'appliquer est refuse")
+    eq(NS.db.frameSize, 31, "combat : et aucun reglage n'a ete ecrit")
+    mock.state.inCombat = false
+    truthy(NS:ApplyProfileImport(analysis), "hors combat : le meme import passe")
+    eq(NS.db.frameSize, 22, "hors combat : et il ecrit vraiment")
+
+    -- 3. Le verrou des lieux. Il posait le drapeau global, puis ReloadActive-
+    -- Profile refusait en silence : l'etiquette ne montrait plus la surcharge
+    -- pendant que les reglages ecrivaient encore dans la table du donjon.
+    NS:CreateNamedProfile("Donjon")
+    NS:UseNamedProfile("Donjon")
+    NS.db.frameSize = 36
+    NS:UseOwnProfile()
+    NS:SetEnvironmentOverride("dungeon", "Donjon")
+    mock.state.instanceType = "party"
+    NS:QueueProfileSwitch()
+    eq(NS.db.frameSize, 36, "verrou : la surcharge de donjon est bien active avant l'essai")
+    local dungeonTable = NS.db
+
+    mock.state.inCombat = true
+    -- La commande d'abord, depuis l'etat deverrouille : elle jetait le
+    -- resultat et annoncait le nouvel etat quoi qu'il arrive.
+    local before = #mock.state.chat
+    NS:HandleSlash("profile lock")
+    local said = table.concat(mock.state.chat, "\n", before + 1)
+    falsy(said:find(NS.L.PROFILE_ENVIRONMENT_LOCKED, 1, true),
+        "commande : elle n'annonce plus un verrou qu'elle n'a pas pose")
+    falsy(NS:EnvironmentLocked(), "commande : et le verrou n'est pas pose")
+
+    falsy(NS:SetEnvironmentLocked(true), "combat : verrouiller les lieux est refuse")
+    falsy(NS:EnvironmentLocked(), "combat : le verrou n'a pas ete pose")
+    truthy(NS.db == dungeonTable,
+        "combat : les reglages ecrivent toujours dans la meme table")
+    -- LE degat reel : self.db ne peut pas bouger en combat, donc c'est
+    -- l'ETIQUETTE qui partait toute seule. Elle cessait de nommer le profil
+    -- dans lequel les reglages continuaient d'ecrire.
+    truthy(NS:GetActiveProfileLabel():find("Donjon", 1, true),
+        "combat : et l'etiquette nomme toujours ce profil-la")
+    mock.state.inCombat = false
+
+    -- 4. Le renommage. Supprimer parcourait les surcharges de lieu, renommer
+    -- non : la surcharge gardait l'ancien nom, donc un pointeur mort, et le
+    -- profil n'etait plus jamais charge au rechargement suivant.
+    NS.dbRoot.environments["Autre-Royaume"] = { ["2"] = { raid = "Donjon" } }
+    truthy(NS:RenameNamedProfile("Donjon", "Instance"), "renommage : il reussit")
+    eq(NS:EnvironmentOverride("dungeon"), "Instance",
+        "renommage : la surcharge de lieu suit le nouveau nom")
+    eq(NS.dbRoot.environments["Autre-Royaume"]["2"].raid, "Instance",
+        "renommage : y compris celle d'un autre personnage")
+    NS:QueueProfileSwitch()
+    eq(NS.db.frameSize, 36, "renommage : et le profil du donjon se charge toujours")
+
+    mock.state.instanceType = "none"
+    NS:QueueProfileSwitch()
+end
+
+--------------------------------------------------------------------------
+-- 1.6.20 : toutes les surfaces disent le meme geste
+--
+-- Les cases lisaient la combinaison posee. Les deux apercus et la page
+-- Dissipations traduisaient encore le NUMERO du slot avec leur propre table :
+-- apres un remappage, la case affichait « MD » et la page « Ctrl + gauche »
+-- pour la meme dissipation.
+--------------------------------------------------------------------------
+do
+    freshProfile("PALADIN")
+    knowSpells(4987)
+    NS:UpdateSpells()
+    NS.db.showClickHints = true
+    NS:CreateOptions()
+    -- Le premier clic, parce que c'est le seul que porte une classe a un seul
+    -- sort de dissipation : deplacer un slot vide ne prouverait rien.
+    NS:SetClickBinding(1, "ALT-2")
+    NS:RefreshOptions()
+
+    local binding, described, short = NS:ClickDescription(1)
+    eq(binding, "ALT-2", "surfaces : la combinaison de reference est bien la nouvelle")
+
+    -- L'apercu de la page Apparence.
+    eq(NS.uxPreview.cells[1].label:GetText(), short,
+        "surfaces : la lettre de l'apercu suit le remappage")
+    truthy(NS.uxPreview.mapping:GetText():find(described, 1, true),
+        "surfaces : et sa legende nomme le geste reellement pose")
+
+    -- La page Dissipations : l'indice ET la ligne de correspondance.
+    local row
+    for _, candidate in ipairs(NS.typeRows or {}) do
+        if NS.typeToSlot and NS.typeToSlot[candidate.type] == 1 then row = candidate end
+    end
+    truthy(row, "surfaces : une affliction est bien portee par le premier clic")
+    if row then
+        eq(row.badge.label:GetText(), short,
+            "surfaces : l'indice de la page Dissipations suit aussi")
+        truthy(row.mapping:GetText():find(described, 1, true),
+            "surfaces : et sa ligne nomme le meme geste")
+    end
+
+    -- Le rapport « /cleansive spells », qui est ce qu'un joueur copie dans un
+    -- message quand il demande de l'aide.
+    truthy(table.concat(NS:BuildSpellReport(), "\n"):find(described, 1, true),
+        "surfaces : le rapport des sorts aussi")
+end
+
+--------------------------------------------------------------------------
+-- 1.6.20 : le gestionnaire dit LEQUEL des deux profils il parle
+--
+-- L'etiquette tenait compte du lieu, le chevron et les boutons non. Changer le
+-- profil habituel pendant qu'une surcharge de lieu gagnait repondait « X est
+-- maintenant utilise » alors que X n'etait pas charge. Et les surcharges elles-
+-- memes n'existaient que par une commande : aucun ecran ne les montrait.
+--------------------------------------------------------------------------
+do
+    freshProfile("PALADIN")
+    knowSpells(4987)
+    NS:UpdateSpells()
+    mock.state.instanceType = "none"
+    mock.state.inCombat = false
+    NS.dbRoot.global.lockEnvironment = nil
+    NS:CreateNamedProfile("Donjon")
+    NS:CreateNamedProfile("Raid")
+    NS:ShowProfileManager()
+    local frame = NS.profileManagerFrame
+
+    -- Les quatre lieux sont atteignables a la souris, et le bouton fait le
+    -- tour des profils comme celui du son fait le tour des sons.
+    local dungeon = frame.environmentButtons and frame.environmentButtons.dungeon
+    truthy(dungeon, "lieux : le donjon a son bouton dans la fenetre")
+    truthy(dungeon:GetText():find(NS.L.PROFILE_ENVIRONMENT_NONE, 1, true),
+        "lieux : aucun profil ne lui est assigne au depart")
+    dungeon:GetScript("OnClick")(dungeon)
+    eq(NS:EnvironmentOverride("dungeon"), NS:NamedProfiles()[1],
+        "lieux : un clic assigne le premier profil")
+    truthy(dungeon:GetText():find(NS:NamedProfiles()[1], 1, true),
+        "lieux : et le bouton porte ce profil")
+    dungeon:GetScript("OnClick")(dungeon)
+    dungeon:GetScript("OnClick")(dungeon)
+    falsy(NS:EnvironmentOverride("dungeon"),
+        "lieux : le tour complet revient a aucun profil")
+
+    -- LE point : profil charge ici, profil habituel, surcharge. Trois choses.
+    NS:SetEnvironmentOverride("dungeon", "Donjon")
+    mock.state.instanceType = "party"
+    NS:QueueProfileSwitch()
+    NS:RefreshProfileManager()
+    truthy(frame.active:GetText():find("Donjon", 1, true),
+        "gestionnaire : la premiere ligne nomme le profil CHARGE ici")
+    truthy(frame.usual:GetText():find(NS.L.PROFILE_OWN_NAME, 1, true),
+        "gestionnaire : la seconde dit que la specialisation n'a pas de profil habituel")
+
+    -- Choisir un profil habituel pendant qu'une surcharge gagne ne doit pas
+    -- repondre « il est maintenant utilise » sans autre forme de proces.
+    local ok, message = NS:UseNamedProfile("Raid")
+    truthy(ok, "gestionnaire : le profil habituel se choisit malgre la surcharge")
+    truthy(message:find("Donjon", 1, true),
+        "gestionnaire : et le message dit que la surcharge garde la main")
+    NS:RefreshProfileManager()
+    truthy(frame.usual:GetText():find("Raid", 1, true),
+        "gestionnaire : la ligne du profil habituel suit")
+    truthy(frame.active:GetText():find("Donjon", 1, true),
+        "gestionnaire : celle du profil charge, elle, n'a pas bouge")
+
+    -- Le verrou, lui aussi, n'avait aucun bouton.
+    truthy(frame.lockButton:GetText():find(NS.L.PROFILE_LOCK_PLACES, 1, true),
+        "verrou : le bouton propose de verrouiller")
+    frame.lockButton:GetScript("OnClick")(frame.lockButton)
+    truthy(NS:EnvironmentLocked(), "verrou : un clic le pose")
+    truthy(frame.lockButton:GetText():find(NS.L.PROFILE_UNLOCK_PLACES, 1, true),
+        "verrou : et le bouton propose maintenant l'inverse")
+    truthy(frame.active:GetText():find("Raid", 1, true),
+        "verrou : lieux figes, c'est le profil habituel qui est charge")
+    frame.lockButton:GetScript("OnClick")(frame.lockButton)
+    falsy(NS:EnvironmentLocked(), "verrou : et il se leve du meme geste")
+
+    frame:Hide()
+    mock.state.instanceType = "none"
+    NS:QueueProfileSwitch()
+end
+
+--------------------------------------------------------------------------
+-- 1.6.20 : le remappage a enfin un ecran
+--
+-- Il n'existait que par « /cleansive clicks 3 SHIFT-2 » : il fallait avoir lu
+-- le changelog pour savoir qu'il existait. La case ecoute le geste plutot que
+-- de proposer une liste, et elle passe par le MEME chemin que le clic reel.
+--------------------------------------------------------------------------
+do
+    freshProfile("PALADIN")
+    knowSpells(4987)
+    NS:UpdateSpells()
+    mock.state.inCombat = false
+    mock.state.modifiers = {}
+    NS:CreateOptions()
+    NS:ShowClickBindings()
+    local frame = NS.clickBindingFrame
+    truthy(frame, "clics : la fenetre existe")
+
+    local _, described, short = NS:ClickDescription(1)
+    truthy(frame.rows[1].current:GetText():find(described, 1, true),
+        "clics : la rangee montre la combinaison actuelle")
+    truthy(frame.rows[1].current:GetText():find(short, 1, true),
+        "clics : et l'indice court que la case affichera")
+
+    -- La case doit ecouter les CINQ boutons. Un bouton ordinaire n'entend que
+    -- le gauche, et « Maj + clic droit » ne pourrait jamais etre capture.
+    local heard = rawget(frame.rows[3].capture, "__clicks")
+    eq(heard and heard[1], "AnyUp", "clics : la case ecoute les cinq boutons, pas seulement le gauche")
+
+    -- LE geste : on presse Maj + clic droit sur la case du troisieme.
+    mock.state.modifiers = { SHIFT = true }
+    frame.rows[3].capture:GetScript("OnClick")(frame.rows[3].capture, "RightButton")
+    eq(NS:ClickBindings()[3], "SHIFT-2", "clics : la case pose ce qu'on a presse")
+    local target = NS.buttons[1].clickLayer or NS.buttons[1]
+    eq(target:GetAttribute("shift-type2"), "spell",
+        "clics : et l'attribut securise suit dans la foulee")
+    truthy(frame.rows[3].current:GetText():find(NS.L.CLICK_MODIFIER_SHIFT, 1, true),
+        "clics : la fenetre se remet a jour toute seule")
+
+    -- Une combinaison reservee doit etre refusee sans rien casser.
+    mock.state.modifiers = {}
+    frame.rows[1].capture:GetScript("OnClick")(frame.rows[1].capture, "MiddleButton")
+    eq(NS:ClickBindings()[1], "1", "clics : le clic milieu reste au ciblage")
+
+    -- Le retour aux gestes d'origine depuis une configuration CROISEE : le
+    -- premier clic porte ce qui appartient au troisieme, et inversement.
+    -- Reecrire les slots un par un buterait sur le conflit du milieu et
+    -- laisserait la moitie du retour faite.
+    NS:SetClickBinding(1, "ALT-1")
+    NS:SetClickBinding(3, "1")
+    NS:SetClickBinding(1, "CTRL-1")
+    eq(table.concat(NS:ClickBindings(), ","), "CTRL-1,2,1",
+        "clics : les deux gestes sont bien croises avant l'essai")
+    truthy(NS:ResetClickBindings(), "clics : le retour aux defauts reussit")
+    eq(table.concat(NS:ClickBindings(), ","), "1,2,CTRL-1",
+        "clics : et rend bien les trois gestes d'origine")
+
+    -- En combat, la fenetre grise ce que la logique refuse deja.
+    mock.state.inCombat = true
+    NS:RefreshClickBindings()
+    falsy(frame.rows[1].capture:IsEnabled(), "clics : en combat, la case n'ecoute plus")
+    falsy(frame.reset:IsEnabled(), "clics : ni le retour aux defauts")
+    falsy(NS:ResetClickBindings(), "clics : et le retour aux defauts est refuse")
+    mock.state.inCombat = false
+    NS:RefreshClickBindings()
+    truthy(frame.rows[1].capture:IsEnabled(), "clics : le combat fini, la case reecoute")
+
+    -- La legende des couleurs de la page Dissipations nommait elle aussi les
+    -- trois gestes d'origine, ecrits en dur dans les deux langues.
+    NS:SetClickBinding(2, "ALT-2")
+    NS:RefreshOptions()
+    local _, secondDescribed = NS:ClickDescription(2)
+    truthy(NS.dispelClickLegend:GetText():find(secondDescribed, 1, true),
+        "clics : la legende des couleurs suit le remappage")
+
+    frame:Hide()
+    NS:ResetClickBindings()
 end
 
 --------------------------------------------------------------------------
