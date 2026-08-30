@@ -6,6 +6,17 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.6.23
+
+**La fenetre des profils ne repondait a rien sur une base vide.** Signale en
+jeu le 30/08/2026.
+
+- Le fond de la saisie du nom etait **plus sombre que le panneau**, et la case etait vide : elle etait donc litteralement invisible. Le texte d'a cote disait « saisissez un nom ci-dessus » en montrant du vide. Et comme tout le reste de la fenetre attend qu'un profil existe, le seul controle capable d'en creer un etait le seul qu'on ne voyait pas. Fond clair, cadre, et un texte d'invite qui s'efface a la premiere lettre -- le meme motif que la zone de recherche.
+- Les quatre boutons de lieu etaient grises **sans un mot d'explication**, ce qui ne se distingue pas d'une fenetre en panne. Ils disent maintenant pourquoi : une surcharge designe un profil nomme, elle n'en contient pas.
+- Un bouton dit ce que le PROCHAIN clic fera. « Deverrouiller les lieux » ne disait donc pas, lu seul, que les lieux etaient verrouilles. La fenetre l'ecrit.
+- **Septieme mensonge du bouchon de test :** `SetText` ne declenchait pas `OnTextChanged`. En jeu il le declenche. Une case dont l'invite ne s'efface qu'a cet evenement passait donc pour reglee sans l'etre.
+- Tests : 1 584 a 1 597.
+
 ## 1.6.22
 
 **La poignee « C » restait seule a l'ecran quand la grille etait masquee.**

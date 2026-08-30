@@ -7534,6 +7534,23 @@ do
     NS:ShowProfileManager()
     local frame = NS.profileManagerFrame
 
+    -- Une fenetre ouverte sur une base vide ne repondait a RIEN, et ne disait
+    -- pas pourquoi : la saisie du nom avait un fond plus sombre que le
+    -- panneau et etait vide, donc invisible ; les quatre boutons de lieu
+    -- etaient grises sans un mot. Signale en jeu le 30/08 : « je ne sais rien
+    -- modifier ».
+    do
+        local vide = NS.profileManagerFrame
+        truthy(vide.namePlaceholder, "saisie : la case porte un texte d'invite")
+        vide.nameBox:SetText("")
+        NS:RefreshProfileManager()
+        truthy(vide.namePlaceholder:IsShown(),
+            "saisie : vide, elle montre ou taper -- sans quoi on ne la voit pas")
+        vide.nameBox:SetText("Essai")
+        falsy(vide.namePlaceholder:IsShown(), "saisie : remplie, l'invite s'efface")
+        vide.nameBox:SetText("")
+    end
+
     -- Les quatre lieux sont atteignables a la souris, et le bouton fait le
     -- tour des profils comme celui du son fait le tour des sons.
     local dungeon = frame.environmentButtons and frame.environmentButtons.dungeon
@@ -7571,6 +7588,17 @@ do
         "gestionnaire : la ligne du profil habituel suit")
     truthy(frame.active:GetText():find("Donjon", 1, true),
         "gestionnaire : celle du profil charge, elle, n'a pas bouge")
+
+    -- Un bouton dit ce que le PROCHAIN clic fera : « Deverrouiller les lieux »
+    -- ne dit pas, lu seul, que les lieux SONT verrouilles.
+    NS:SetEnvironmentLocked(true)
+    NS:RefreshProfileManager()
+    truthy(frame.environmentNote:GetText():find(NS.L.PROFILE_ENVIRONMENT_IS_LOCKED, 1, true),
+        "lieux : quand ils sont verrouilles, la fenetre le dit")
+    NS:SetEnvironmentLocked(false)
+    NS:RefreshProfileManager()
+    eq(frame.environmentNote:GetText(), "",
+        "lieux : deverrouilles, elle ne dit plus rien de superflu")
 
     -- Le verrou, lui aussi, n'avait aucun bouton.
     truthy(frame.lockButton:GetText():find(NS.L.PROFILE_LOCK_PLACES, 1, true),
@@ -7722,6 +7750,45 @@ do
     mock.state.inRaid, mock.state.inGroup = false, false
     NS:UpdateGridVisibilityDriver()
     truthy(anchor.handle:IsShown(), "poignee : et elle revient la ou la grille s'affiche")
+end
+
+--------------------------------------------------------------------------
+-- 1.6.23 : une fenetre de profils vide ne repondait a rien
+--
+-- Signale en jeu le 30/08/2026 : « je ne sais rien modifier ». Tout le reste
+-- de la fenetre attend qu'un profil existe -- et le seul controle qui pouvait
+-- en creer un etait invisible. Les quatre boutons de lieu etaient grises sans
+-- un mot d'explication, ce qui ne se distingue pas d'une fenetre en panne.
+--------------------------------------------------------------------------
+do
+    freshProfile("PALADIN")
+    knowSpells(4987)
+    NS:UpdateSpells()
+    mock.state.inCombat = false
+    NS:ShowProfileManager()
+    local frame = NS.profileManagerFrame
+
+    eq(#NS:NamedProfiles(), 0, "vide : la base ne contient aucun profil nomme")
+    truthy(frame.environmentNote:GetText():find(NS.L.PROFILE_ENVIRONMENT_NEEDS, 1, true),
+        "vide : la fenetre dit pourquoi les boutons de lieu ne repondent pas")
+    falsy(frame.environmentButtons.dungeon:IsEnabled(),
+        "vide : et ils sont bien grises, car une surcharge designe un profil existant")
+
+    -- Le chemin complet, celui qui etait ferme : taper un nom, creer, et voir
+    -- la fenetre se reveiller.
+    frame.nameBox:SetText("Raid")
+    local create = frame.createButton
+    truthy(create, "vide : le bouton de creation est bien la")
+    create:GetScript("OnClick")(create)
+    eq(#NS:NamedProfiles(), 1, "vide : un profil est cree depuis les reglages courants")
+    truthy(frame.environmentButtons.dungeon:IsEnabled(),
+        "vide : les boutons de lieu repondent des qu'un profil existe")
+    eq(frame.environmentNote:GetText(), "",
+        "vide : et la fenetre n'a plus rien a expliquer")
+    truthy(frame.namePlaceholder:IsShown(),
+        "vide : la saisie est videe apres la creation, l'invite revient")
+
+    frame:Hide()
 end
 
 --------------------------------------------------------------------------

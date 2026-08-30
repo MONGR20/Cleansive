@@ -58,7 +58,14 @@ local function newFrame(name)
     end)
     rawset(f, "SetColorTexture", function(s, ...) rawset(s, "__color", { ... }) end)
     rawset(f, "SetTextColor", function(s, ...) rawset(s, "__textColor", { ... }) end)
-    rawset(f, "SetText", function(s, v) rawset(s, "__text", v) end)
+    -- SetText ne declenchait rien. En jeu il declenche OnTextChanged, avec
+    -- userInput a faux : une case dont l'invite ne s'efface qu'a cet evenement
+    -- passait donc pour reglee sans l'etre. Septieme mensonge du bouchon.
+    rawset(f, "SetText", function(s, v)
+        rawset(s, "__text", v)
+        local handler = rawget(s, "__scripts_OnTextChanged")
+        if handler then handler(s, false) end
+    end)
     rawset(f, "GetText", function(s) return rawget(s, "__text") end)
     -- Ce reglage tombait dans le stub generique : un bouton qui n'ecoute que
     -- le clic gauche et un bouton qui ecoute les cinq rendaient exactement la

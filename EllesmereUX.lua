@@ -2161,17 +2161,29 @@ function NS:ShowProfileManager()
         -- Une saisie unique sert a creer ET a renommer : deux champs pour deux
         -- verbes qui prennent le meme argument auraient double la surface sans
         -- rien clarifier.
-        local nameBg = solid(frame, "BACKGROUND", C.panelDeep[1], C.panelDeep[2], C.panelDeep[3], 0.80)
-        nameBg:SetPoint("TOPLEFT", 22, -140)
-        nameBg:SetSize(300, 26)
-        frame.nameBox = CreateFrame("EditBox", nil, frame)
-        frame.nameBox:SetPoint("TOPLEFT", 22, -140)
-        frame.nameBox:SetSize(300, 26)
+        -- Le fond de cette saisie etait PLUS SOMBRE que le panneau, et la case
+        -- etait vide : elle etait donc litteralement invisible. Le texte d'a
+        -- cote disait « saisissez un nom ci-dessus » en montrant du vide, et
+        -- tout le reste de la fenetre attend qu'un profil existe -- donc rien
+        -- ne repondait a rien. Meme motif que la zone de recherche de la barre
+        -- laterale : un fond CLAIR, un cadre, et un texte d'invite.
+        local nameHolder = CreateFrame("Frame", nil, frame)
+        nameHolder:SetPoint("TOPLEFT", 22, -140)
+        nameHolder:SetSize(300, 26)
+        solid(nameHolder, "BACKGROUND", 1, 1, 1, 0.05):SetAllPoints()
+        border(nameHolder, 0.18)
+        frame.nameBox = CreateFrame("EditBox", nil, nameHolder)
+        frame.nameBox:SetAllPoints()
         frame.nameBox:SetAutoFocus(false)
         frame.nameBox:SetFontObject(ChatFontNormal)
         frame.nameBox:SetTextInsets(6, 6, 0, 0)
         frame.nameBox:SetMaxLetters(32)
         frame.nameBox:SetScript("OnEscapePressed", function(box) box:ClearFocus() end)
+        frame.namePlaceholder = text(nameHolder, self.L.PROFILE_NAME_PLACEHOLDER, 12, C.dim)
+        frame.namePlaceholder:SetPoint("LEFT", 7, 0)
+        frame.nameBox:SetScript("OnTextChanged", function(box)
+            frame.namePlaceholder:SetShown((box:GetText() or "") == "")
+        end)
 
         local create = button(frame, self.L.PROFILE_CREATE, 140, 26)
         create:SetPoint("TOPLEFT", 332, -140)
@@ -2181,6 +2193,7 @@ function NS:ShowProfileManager()
             if ok then frame.nameBox:SetText("") end
             self:RefreshProfileManager()
         end)
+        frame.createButton = create
 
         frame.rows = {}
         for index = 1, 6 do
@@ -2226,15 +2239,23 @@ function NS:ShowProfileManager()
         -- pouvait pas la trouver. Un bouton par lieu, qui fait le tour des
         -- profils comme celui du son d'alerte fait le tour des sons.
         frame.environmentTitle = text(frame, self.L.PROFILE_ENVIRONMENT_TITLE, 11, C.section)
-        frame.environmentTitle:SetPoint("TOPLEFT", 22, -410)
+        frame.environmentTitle:SetPoint("TOPLEFT", 22, -400)
         frame.environmentTitle:SetWidth(476)
         frame.environmentTitle:SetHeight(14)
         frame.environmentTitle:SetJustifyH("LEFT")
 
+        -- Quatre boutons grises sans un mot d'explication : le joueur essaie,
+        -- rien ne repond, et rien ne dit pourquoi. Cette ligne le dit.
+        frame.environmentNote = text(frame, "", 11, C.dim)
+        frame.environmentNote:SetPoint("TOPLEFT", 22, -414)
+        frame.environmentNote:SetWidth(476)
+        frame.environmentNote:SetHeight(14)
+        frame.environmentNote:SetJustifyH("LEFT")
+
         frame.environmentButtons = {}
         for index, place in ipairs(self.ENVIRONMENTS) do
             local control = button(frame, "", 112, 26)
-            control:SetPoint("TOPLEFT", 22 + ((index - 1) * 118), -430)
+            control:SetPoint("TOPLEFT", 22 + ((index - 1) * 118), -432)
             control:SetScript("OnClick", function()
                 local _, message = self:CycleEnvironmentProfile(place)
                 if message then self:Print(message) end
@@ -2336,6 +2357,21 @@ function NS:RefreshProfileManager()
     frame.lockButton:SetText(self:EnvironmentLocked()
         and self.L.PROFILE_UNLOCK_PLACES or self.L.PROFILE_LOCK_PLACES)
     frame.lockButton:SetEnabled(not fighting)
+
+    -- Un bouton dit ce que le PROCHAIN clic fera, pas l'etat courant : lu seul,
+    -- « Deverrouiller les lieux » ne dit pas que les lieux sont verrouilles.
+    -- Et quatre boutons grises sans explication ne se distinguent pas d'une
+    -- fenetre en panne.
+    if #names == 0 then
+        frame.environmentNote:SetText(self.L.PROFILE_ENVIRONMENT_NEEDS)
+    elseif self:EnvironmentLocked() then
+        frame.environmentNote:SetText(self.L.PROFILE_ENVIRONMENT_IS_LOCKED)
+    else
+        frame.environmentNote:SetText("")
+    end
+    if frame.namePlaceholder then
+        frame.namePlaceholder:SetShown((frame.nameBox:GetText() or "") == "")
+    end
 
     -- Plus de six profils est un cas que la liste ne montre pas. Le dire plutot
     -- que de laisser croire qu'il n'y en a que six -- et le dire SOUS la liste.
