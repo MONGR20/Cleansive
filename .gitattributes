@@ -1,0 +1,8 @@
+# L'archive publiee par la chaine CI sortait en CRLF alors que le depot est en
+# LF : je ne verifiais que mon zip local, jamais celui que les joueurs
+# telechargent. WoW charge les deux, mais le controle d'archive du projet
+# refuse le CRLF, et un controle qu'on ignore ne sert plus a rien.
+* text=auto eol=lf
+*.png binary
+*.wav binary
+*.zip binary

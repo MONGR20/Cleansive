@@ -6,6 +6,19 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.6.15
+
+Corrections issues d'un audit externe de la 1.6.14.
+
+- **La migration des noms contenant une barre verticale ne s'executait pas chez ceux qui en avaient besoin.** Ajoutee en 1.6.12, elle etait placee sous un marqueur que la **1.6.11 posait deja**, sans rien migrer. Toute personne passee par la 1.6.11 -- c'est-a-dire exactement la population concernee -- ne la voyait jamais. Un marqueur qui decrit un autre nettoyage ne peut pas servir de marqueur de migration : celui-ci lui est propre. Et mon test forcait ce marqueur a rien, donc il verifiait une installation qui SAUTE la 1.6.11. Il modelise maintenant une vraie base issue d'une session 1.6.11.
+- **Un suffixe de collision pouvait rendre un profil introuvable.** « nom de 32 octets » suivi de « (2) » fait 36 : la cle etait bien enregistree, et toute recherche ulterieure la cherchait a 32. La place du suffixe est desormais reservee avant la coupe, qui reste sure en UTF-8.
+- **La molette sautait la moitie d'une page.** Le gestionnaire du modele Blizzard deplace deja de son pas -- ou, a defaut, de la moitie de la hauteur visible. La 1.6.13 l'appelait puis ajoutait 40 px : environ 300 px par cran. Un seul pilote a la fois, et le meme pas de 40 px des deux cotes. Le bouchon ne deplacait rien, donc rien ne pouvait le voir : il deplace maintenant.
+- **Le gestionnaire de profils suit l'entree en combat.** Il savait griser ses boutons, mais rien ne l'appelait au pull : ouvert avant, il gardait des boutons actifs qui repondaient ensuite par un refus.
+- **Une seule cle d'import rejetee pouvait remplir la fenetre.** Leur nombre etait borne, pas leur longueur.
+- **L'etat de la souris n'est plus abandonne avec le niveau de cadre.** Les deux vivaient dans la meme etape : la levee du premier sautait le second, puis le refus retenu sautait les deux pour toujours, et l'option d'infobulle ne s'appliquait plus jamais aux boutons d'aura.
+- **Le paquet publie sortait en CRLF alors que le depot est en LF.** Je ne verifiais que mon archive locale, jamais celle que les joueurs telechargent -- ou mon propre controle d'archive echoue. Un `.gitattributes` fixe les fins de ligne ; a confirmer sur la prochaine publication.
+- Tests : 1 437 a 1 449.
+
 ## 1.6.14
 
 **Premier releve d'une vraie cle mythique**, le 30/08/2026. Il repond aux deux
@@ -79,16 +92,5 @@ Corrections issues d'un audit externe de la 1.6.10.
 - **Le bouton du son d'alerte est enfin verifie.** Le mecanisme etait teste depuis la 1.6.6 et le bouton pose en 1.6.7, mais rien ne verifiait qu'il etait branche sur quoi que ce soit : le debrancher ne faisait tomber aucun test. Une option qu'on ne peut atteindre que par une commande n'est pas livree. La rotation, le libelle qui suit, et la disparition du reglage quand le son est coupe sont maintenant tenus.
 - Le nombre de sons proposes n'est PAS ecrit dans le test : il depend du client. Le figer aurait fait tomber ce test le jour ou la liste change, sans qu'aucun defaut existe.
 - Tests : 1 345 a 1 356.
-
-## 1.6.9
-
-**Profils nommes.** Un profil qu'on nomme, et que plusieurs personnages et specialisations peuvent utiliser en meme temps.
-
-- Creer depuis les reglages courants, utiliser, renommer, supprimer — par la fenetre **Profils** (bouton sur la carte de profil, page General) ou par `/cleansive profile`.
-- **Deux regles portent tout le reste.** Le profil propre d'une specialisation n'est JAMAIS supprime quand elle pointe vers un profil partage : revenir dessus reste toujours possible, y compris apres la suppression du partage — sinon supprimer un profil partage laisserait des personnages sans rien. Et **rien ne bascule tout seul** : le point 304 de l'inventaire interdit les profils automatiques, et une specialisation ne pointe vers un profil nomme que si on le lui a demande.
-- **Supprimer desaffecte tout le monde**, pas seulement le personnage connecte. Un pointeur laisse en place aurait fait repartir un autre personnage sur les valeurs d'origine a sa prochaine connexion, sans que rien ne le dise — et pire, il aurait ressuscite tout seul le jour ou un profil aurait repris le meme nom.
-- Un nom vient d'une saisie libre : longueur bornee a 32, espaces de bord rognes, caracteres de controle retires. Un retour a la ligne dans un nom aurait casse la liste et l'export en silence.
-- La suppression demande deux clics, comme toute action irreversible de l'addon. La fenetre montre six profils ; au-dela, elle le dit plutot que de laisser croire qu'il n'y en a que six.
-- Tests : 1 292 a 1 345. Neuf injections de defaut verifiees, dont deux qui ne tombaient pas au premier essai : elles visaient le bon cas sans l'exercer.
 
 L'historique complet est dans `CHANGELOG.md`, livre avec l'addon.

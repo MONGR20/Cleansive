@@ -850,15 +850,31 @@ function NS:CreateOptions()
     -- valent mieux qu'un heritage dont je ne peux pas verifier le detail hors
     -- du client.
     contentScroll:EnableMouseWheel(true)
-    chainScript(contentScroll, "OnMouseWheel", function() end)
     local templateWheel = contentScroll:GetScript("OnMouseWheel")
     contentScroll:SetScript("OnMouseWheel", function(target, delta)
-        if templateWheel then templateWheel(target, delta) end
         local range = target:GetVerticalScrollRange() or 0
         if range <= 0 then return end
-        local wanted = (target:GetVerticalScroll() or 0) - (delta * 40)
+        local before = target:GetVerticalScroll() or 0
+        if templateWheel then templateWheel(target, delta) end
+        -- Le gestionnaire du modele deplace de scrollBar.scrollStep ou, a
+        -- defaut, de LA MOITIE de la hauteur visible. L'appeler puis ajouter
+        -- 40 px faisait environ 300 px par cran : la molette marchait, mais
+        -- sautait la moitie de la page. Un seul pilote a la fois -- si le
+        -- modele a deplace, on n'y touche plus ; s'il n'a rien fait, on
+        -- deplace nous-memes. Le repli reste indispensable : c'est lui qui
+        -- garantit que la molette fonctionne sans dependre du modele.
+        if (target:GetVerticalScroll() or 0) ~= before then return end
+        local wanted = before - (delta * 40)
         target:SetVerticalScroll(math.max(0, math.min(range, wanted)))
     end)
+    -- Et si la barre du modele est la, on lui donne le meme pas : le geste est
+    -- alors identique qu'il passe par elle ou par le repli.
+    -- Le type est verifie, pas la simple presence : sur un cadre, tout champ
+    -- commencant par une majuscule peut etre une methode. « if frame.ScrollBar »
+    -- etait donc vrai meme sans barre.
+    if type(contentScroll.ScrollBar) == "table" then
+        contentScroll.ScrollBar.scrollStep = 40
+    end
     self.optionsPages = {}
     self.optionsPageHeights = {}
     self.optionSliders = {}
@@ -2254,7 +2270,9 @@ function NS:ShowProfileTransfer()
                 local shown = {}
                 for index, key in ipairs(analysis.rejected) do
                     if index > MAX_REJECTED then break end
-                    shown[#shown + 1] = key
+                    -- Une SEULE cle inconnue peut peser plusieurs milliers de
+                    -- caracteres : borner leur nombre ne suffisait pas.
+                    shown[#shown + 1] = short(key)
                 end
                 local text = table.concat(shown, ", ")
                 if #analysis.rejected > MAX_REJECTED then
@@ -2293,8 +2311,16 @@ function NS:ShowProfileTransfer()
 end
 
 function NS:RefreshOptionsStatus()
-    if not self.optionsStatusText then return end
-    self.optionsStatusText:SetText(self:OptionsStatusText())
+    if self.optionsStatusText then
+        self.optionsStatusText:SetText(self:OptionsStatusText())
+    end
+    -- Le gestionnaire de profils grise ses boutons en combat, mais rien ne le
+    -- rafraichissait a l'entree : ouvert avant le pull, il gardait des boutons
+    -- actifs qui repondaient ensuite par un refus. Il est reveille ici, avec la
+    -- ligne d'etat, par les deux evenements de combat.
+    if self.profileManagerFrame and self.profileManagerFrame:IsShown() then
+        self:RefreshProfileManager()
+    end
 end
 
 -- Accent-insensitive, because a player types "reglage" and the label says

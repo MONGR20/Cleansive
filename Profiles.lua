@@ -338,42 +338,6 @@ function NS:NamedProfileStore()
     if type(raw.assignments) ~= "table" then raw.assignments = {} end
     if not raw.namedStoreChecked then
         raw.namedStoreChecked = true
-        -- Les versions 1.6.9 et 1.6.10 acceptaient la barre verticale dans un
-        -- nom. La 1.6.11 la retire des saisies -- mais les noms DEJA enregistres
-        -- restaient tels quels : un bouton transmettait « Raid|Soins », la
-        -- normalisation en faisait « RaidSoins », et le profil devenait
-        -- introuvable. Utiliser, renommer et supprimer echouaient tous avec
-        -- « aucun profil de ce nom ».
-        --
-        -- La migration renomme la cle ET suit les affectations. En cas de
-        -- collision avec un nom deja pris, l'ancien est garde sous un suffixe
-        -- plutot qu'ecrase : perdre un profil pour cause de doublon serait pire
-        -- que d'en avoir deux a trier.
-        local renames = {}
-        for key, value in pairs(raw.named) do
-            if type(key) == "string" and key:find("|", 1, true) and type(value) == "table" then
-                local wanted = self:NormalizeProfileName(key) or "Profil"
-                local candidate, suffix = wanted, 2
-                while raw.named[candidate] or renames[candidate] do
-                    candidate = wanted .. " (" .. suffix .. ")"
-                    suffix = suffix + 1
-                end
-                renames[candidate] = key
-            end
-        end
-        for candidate, key in pairs(renames) do
-            raw.named[candidate], raw.named[key] = raw.named[key], nil
-            for _, specs in pairs(raw.assignments) do
-                if type(specs) == "table" then
-                    for spec, name in pairs(specs) do
-                        if name == key then specs[spec] = candidate end
-                    end
-                end
-            end
-        end
-        -- P2 de l'audit : rien ne validait ce stockage entree par entree. Une
-        -- cle non textuelle dans « named » remontait jusqu'au table.sort de
-        -- NamedProfiles, qui leve en comparant un nombre a une chaine.
         for key, value in pairs(raw.named) do
             if type(key) ~= "string" or key == "" or type(value) ~= "table" then
                 raw.named[key] = nil
@@ -391,14 +355,58 @@ function NS:NamedProfileStore()
             end
         end
     end
+
+    -- Les 1.6.9 et 1.6.10 acceptaient la barre verticale dans un nom. La 1.6.11
+    -- la retire des saisies, mais laissait les noms DEJA enregistres tels
+    -- quels : un bouton transmettait « Raid|Soins », la normalisation en
+    -- faisait « RaidSoins », et le profil devenait introuvable.
+    --
+    -- La 1.6.12 a ajoute cette migration DANS le bloc ci-dessus -- dont le
+    -- marqueur etait deja pose par la 1.6.11, qui ne migrait rien. Elle ne s'est
+    -- donc jamais executee chez les seules personnes qui en avaient besoin :
+    -- celles passees par la 1.6.11. Un marqueur qui decrit un autre nettoyage
+    -- ne peut pas servir de marqueur de migration. Celui-ci lui est propre, et
+    -- porte le numero de version qui l'introduit.
+    if not raw.namedBarMigration1615 then
+        raw.namedBarMigration1615 = true
+        local renames = {}
+        for key, value in pairs(raw.named) do
+            if type(key) == "string" and key:find("|", 1, true) and type(value) == "table" then
+                local wanted = self:NormalizeProfileName(key) or "Profil"
+                local candidate, suffix = wanted, 2
+                while raw.named[candidate] or renames[candidate] do
+                    -- La place du suffixe est RESERVEE avant de raccourcir la
+                    -- base : « nom de 32 octets » + « (2) » faisait 36, la cle
+                    -- etait bien enregistree, et toute recherche ulterieure la
+                    -- cherchait a 32 octets. Le profil devenait inatteignable.
+                    local tail = " (" .. suffix .. ")"
+                    local base = self:NormalizeProfileName(wanted, MAX_PROFILE_NAME - #tail) or "Profil"
+                    candidate = base .. tail
+                    suffix = suffix + 1
+                end
+                renames[candidate] = key
+            end
+        end
+        for candidate, key in pairs(renames) do
+            raw.named[candidate], raw.named[key] = raw.named[key], nil
+            for _, specs in pairs(raw.assignments) do
+                if type(specs) == "table" then
+                    for spec, name in pairs(specs) do
+                        if name == key then specs[spec] = candidate end
+                    end
+                end
+            end
+        end
+    end
     return raw.named, raw.assignments
 end
 
 -- Un nom venu d'une saisie libre : longueur bornee, espaces rognes, et aucun
 -- caractere de controle -- un retour a la ligne dans un nom casserait la liste
 -- et l'export sans que rien ne le dise.
-function NS:NormalizeProfileName(raw)
+function NS:NormalizeProfileName(raw, limit)
     if type(raw) ~= "string" then return nil end
+    limit = tonumber(limit) or MAX_PROFILE_NAME
     -- La barre verticale est refusee pour deux raisons : elle separe les deux
     -- noms de la commande de renommage, et dans un texte affiche par WoW elle
     -- ouvre une sequence de mise en forme -- un nom bien choisi pourrait donc
@@ -409,8 +417,8 @@ function NS:NormalizeProfileName(raw)
     -- UTF-8 -- « Chasseur de démons » et ses accents -- produisait un nom
     -- invalide, affiche en caractere de remplacement et impossible a retaper.
     -- La coupe recule donc jusqu'au debut du caractere.
-    if #name > MAX_PROFILE_NAME then
-        local cut = MAX_PROFILE_NAME
+    if #name > limit then
+        local cut = limit
         while cut > 0 do
             local byte = name:byte(cut + 1)
             -- 0x80..0xBF est une continuation : le caractere commence avant.

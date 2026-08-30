@@ -749,12 +749,18 @@ function NS:StyleAuraVisual(button, auraType, visual)
     -- laisse passer. Le seul temoin fiable est l'echec lui-meme. Il est donc
     -- retenu, POUR CETTE ETAPE SEULE, et n'est plus retente : 690 fois en une
     -- cle, c'etait 690 relances de pendingAuraStyle pour rien.
+    -- Deux operations, deux etapes. Groupees, la levee de la premiere sautait
+    -- la seconde -- puis levelRefused sautait les deux pour toujours, et l'etat
+    -- de la souris ne suivait plus jamais l'option d'infobulle. « Pour cette
+    -- etape seule » ne valait que si l'etape n'en contenait qu'une.
+    step(function()
+        if visual.auraButton.SetMouseMotionEnabled then
+            visual.auraButton:SetMouseMotionEnabled(enabled and self.db.showTooltips)
+        end
+    end)
     if not visual.levelRefused then
         local applied = step(function()
             visual.auraButton:SetFrameLevel(level)
-            if visual.auraButton.SetMouseMotionEnabled then
-                visual.auraButton:SetMouseMotionEnabled(enabled and self.db.showTooltips)
-            end
         end)
         -- L'objet ne redevient jamais accessible : cinq sessions le confirment
         -- pour le mecanisme voisin. La memoire meurt avec le visuel, donc une

@@ -266,12 +266,27 @@ function M.install(_G)
         -- puisse verifier qu'ils sont encore appeles.
         if type(template) == "string" and template:find("ScrollFrame", 1, true) then
             rawset(frame, "__templateRan", {})
-            for _, script in ipairs({ "OnVerticalScroll", "OnScrollRangeChanged", "OnMouseWheel" }) do
+            for _, script in ipairs({ "OnVerticalScroll", "OnScrollRangeChanged" }) do
                 rawset(frame, "__scripts_" .. script, function(target)
                     local ran = rawget(target, "__templateRan")
                     if ran then ran[script] = (ran[script] or 0) + 1 end
                 end)
             end
+            -- La molette du modele DEPLACE : scrollStep, ou a defaut la moitie
+            -- de la hauteur visible. Un marqueur qui ne bougeait pas laissait
+            -- croire qu'appeler le modele puis ajouter 40 px etait sans
+            -- consequence -- alors qu'un cran faisait environ 300 px en jeu.
+            -- __templateScrollStep vaut 0 par defaut : le modele ne bouge pas,
+            -- ce qui est le cas ou le repli de l'addon doit prendre le relais.
+            rawset(frame, "__scripts_OnMouseWheel", function(target, delta)
+                local ran = rawget(target, "__templateRan")
+                if ran then ran.OnMouseWheel = (ran.OnMouseWheel or 0) + 1 end
+                local step = rawget(target, "__templateScrollStep") or 0
+                if step == 0 then return end
+                local range = rawget(target, "__scrollRange") or 0
+                local wanted = (rawget(target, "__scroll") or 0) - ((delta or 0) * step)
+                rawset(target, "__scroll", math.max(0, math.min(range, wanted)))
+            end)
         end
         if frameType == "AuraContainer" then
             state.auraEngine.created = state.auraEngine.created + 1

@@ -2751,6 +2751,10 @@ do
     do
         local ran = rawget(scroll, "__templateRan")
         truthy(ran, "defilement : la zone est bien construite sur un modele")
+        -- Une portee non nulle : sans rien a faire defiler, la molette sort
+        -- avant meme d'appeler le modele, et la chaine ne serait pas exercee.
+        scroll.__scrollRange = 300
+        scroll:SetVerticalScroll(0)
         for _, script in ipairs({ "OnVerticalScroll", "OnScrollRangeChanged", "OnMouseWheel" }) do
             local handler = scroll:GetScript(script)
             truthy(handler, "defilement : " .. script .. " est pose")
@@ -2761,7 +2765,6 @@ do
         end
 
         -- Et la molette deplace reellement, en restant dans les bornes.
-        scroll.__scrollRange = 300
         scroll:SetVerticalScroll(0)
         scroll:GetScript("OnMouseWheel")(scroll, -1)
         truthy(scroll:GetVerticalScroll() > 0, "molette : elle descend")
@@ -2771,6 +2774,19 @@ do
         scroll:SetVerticalScroll(0)
         scroll:GetScript("OnMouseWheel")(scroll, 1)
         eq(scroll:GetVerticalScroll(), 0, "molette : ni le haut")
+
+        -- 1.6.15 : le gestionnaire du modele deplace deja, de scrollStep ou de
+        -- la MOITIE de la hauteur visible. L'appeler PUIS ajouter 40 px faisait
+        -- environ 300 px par cran : la molette marchait, mais sautait la moitie
+        -- de la page. Le bouchon ne deplacait rien, donc rien ne pouvait le
+        -- voir.
+        rawset(scroll, "__templateScrollStep", 120)
+        scroll:SetVerticalScroll(0)
+        scroll:GetScript("OnMouseWheel")(scroll, -1)
+        eq(scroll:GetVerticalScroll(), 120,
+            "molette : quand le modele deplace, on n'ajoute RIEN par-dessus")
+        rawset(scroll, "__templateScrollStep", 0)
+        scroll:SetVerticalScroll(0)
         scroll.__scrollRange = 0
     end
 
@@ -3427,6 +3443,24 @@ do
     -- les charges et la lettre de clic.
     truthy(rawget(visual.overlay, "__color") ~= nil,
         "cle : les huit autres etapes s'appliquent toujours")
+
+    -- 1.6.15 : le niveau de cadre et l'etat de la souris etaient dans la MEME
+    -- etape. La levee du premier sautait le second, puis levelRefused sautait
+    -- les deux pour toujours : l'option d'infobulle ne s'appliquait plus jamais
+    -- aux boutons d'aura. « Pour cette etape seule » ne valait que si l'etape
+    -- n'en contenait qu'une.
+    local motion = {}
+    rawset(visual.auraButton, "SetMouseMotionEnabled", function(_, value)
+        motion[#motion + 1] = value and true or false
+    end)
+    truthy(visual.levelRefused, "souris : le niveau de cadre est bien deja abandonne")
+    NS.db.showTooltips = false
+    NS:StyleAuraVisual(button, auraType, visual)
+    NS.db.showTooltips = true
+    NS:StyleAuraVisual(button, auraType, visual)
+    truthy(#motion >= 2,
+        "souris : elle continue d'etre reglee malgre le refus du niveau de cadre")
+    eq(motion[#motion], true, "souris : et elle suit la valeur de l'option")
 end
 
 --------------------------------------------------------------------------
@@ -4344,6 +4378,31 @@ do
     local huge = "CLEANSIVE1;frameSize=30;" .. string.rep("a", 21000)
     truthy(select(2, NS:AnalyzeProfileImport(huge)),
         "import : un texte demesure est refuse avec sa raison")
+
+    -- 1.6.15 : borner le NOMBRE de rejets ne suffisait pas. Une seule cle
+    -- inconnue peut peser plusieurs milliers de caracteres, et elle etait
+    -- reaffichee entiere : le texte repassait sous les boutons.
+    do
+        local huge = string.rep("z", 3000)
+        local analysis = NS:AnalyzeProfileImport("CLEANSIVE1;frameSize=30;" .. huge .. "=1")
+        truthy(analysis, "rejet : l'analyse aboutit malgre la cle demesuree")
+        truthy(#analysis.rejected > 0, "rejet : la cle inconnue est bien rejetee")
+        local longest = 0
+        for _, key in ipairs(analysis.rejected) do longest = math.max(longest, #key) end
+        truthy(longest > 1000, "rejet : elle arrive entiere jusqu'a la couche d'affichage")
+
+        -- Ce qui compte n'est pas la donnee mais le TEXTE RENDU : c'est lui qui
+        -- traversait les boutons de confirmation.
+        NS:ShowProfileTransfer()
+        local transfer = NS.profileTransferFrame
+        transfer.importBox:SetText("CLEANSIVE1;frameSize=30;" .. huge .. "=1")
+        transfer.analyze:GetScript("OnClick")(transfer.analyze)
+        local rendered = transfer.result.__text or ""
+        truthy(#rendered > 0, "rejet : l'apercu affiche bien quelque chose")
+        truthy(#rendered < 800,
+            "rejet : et le texte rendu reste borne, il ne traverse plus la fenetre")
+        transfer:Hide()
+    end
 
     -- P2 de l'audit du 30/08 : la borne d'import etait plus PETITE que le plus
     -- gros export possible. Cleansive produisait donc un texte qu'il refusait
@@ -6242,13 +6301,18 @@ do
             "debordement : il est SOUS la liste, pas par-dessus la premiere ligne")
 
         -- Et les trois boutons qui changent un profil sont grises en combat.
+        -- Par l'EVENEMENT reel, pas par un appel direct : la fonction savait
+        -- deja griser, mais rien ne l'appelait a l'entree en combat. Ouvert
+        -- avant le pull, le gestionnaire gardait des boutons actifs qui
+        -- repondaient ensuite par un refus.
+        local fire = NS.eventFrame:GetScript("OnEvent")
         mock.state.inCombat = true
-        NS:RefreshProfileManager()
+        fire(NS.eventFrame, "PLAYER_REGEN_DISABLED")
         falsy(window.rows[1].use:IsEnabled(), "combat : « utiliser » est grise")
         falsy(window.rows[1].delete:IsEnabled(), "combat : « supprimer » aussi")
         falsy(window.ownButton:IsEnabled(), "combat : « revenir au sien » aussi")
         mock.state.inCombat = false
-        NS:RefreshProfileManager()
+        fire(NS.eventFrame, "PLAYER_REGEN_ENABLED")
         truthy(window.rows[1].delete:IsEnabled(), "hors combat : ils reviennent")
 
         for _, name in ipairs(NS:NamedProfiles()) do NS:DeleteNamedProfile(name) end
@@ -6262,7 +6326,13 @@ do
         local raw = NS.dbRoot
         raw.named = { ["Raid|Soins"] = { frameSize = 31 } }
         raw.assignments = { [NS.activeCharacterKey] = { [NS.activeSpecKey] = "Raid|Soins" } }
-        raw.namedStoreChecked = nil
+        -- Une base qui sort d'une session 1.6.11 : son nettoyage a deja tourne
+        -- et a pose son marqueur, la migration de la barre n'a jamais existe.
+        -- C'est LE chemin des personnes concernees. Forcer namedStoreChecked a
+        -- nil testait une installation qui saute la 1.6.11 -- c'est-a-dire
+        -- exactement celles qui n'ont pas le probleme.
+        raw.namedStoreChecked = true
+        raw.namedBarMigration1615 = nil
         local named, assignments = NS:NamedProfileStore()
         eq(named["Raid|Soins"], nil, "migration : l'ancienne cle a disparu")
         truthy(named["RaidSoins"], "migration : le profil existe sous un nom utilisable")
@@ -6277,7 +6347,8 @@ do
 
         -- Collision : l'ancien ne doit pas ecraser celui qui porte deja ce nom.
         raw.named = { ["A|B"] = { frameSize = 33 }, ["AB"] = { frameSize = 12 } }
-        raw.assignments, raw.namedStoreChecked = {}, nil
+        raw.assignments = {}
+        raw.namedStoreChecked, raw.namedBarMigration1615 = true, nil
         local named2 = NS:NamedProfileStore()
         -- Repli sur chaque lecture : sans migration ces tables sont nil, et un
         -- defaut isole emporterait la suite de la suite au lieu d'echouer seul.
@@ -6286,6 +6357,25 @@ do
         truthy(named2["AB (2)"], "collision : l'ancien est garde sous un nom distinct")
         eq(type(named2["AB (2)"]) == "table" and named2["AB (2)"].frameSize or 0, 33,
             "collision : avec ses propres reglages")
+        raw.named, raw.assignments = {}, {}
+
+        -- Collision A LA BORNE : « nom de 32 octets » + « (2) » fait 36, et
+        -- toute recherche ulterieure normalise a 32. La cle etait bien
+        -- enregistree et devenait pourtant introuvable.
+        local long = string.rep("a", 28) .. "b|cd"
+        raw.named = { [long] = { frameSize = 33 },
+            [NS:NormalizeProfileName(long)] = { frameSize = 12 } }
+        raw.assignments = {}
+        raw.namedStoreChecked, raw.namedBarMigration1615 = true, nil
+        local named3 = NS:NamedProfileStore()
+        local migrated
+        for name in pairs(named3) do
+            if name ~= NS:NormalizeProfileName(long) then migrated = name end
+        end
+        truthy(migrated, "borne : l'ancien nom a bien ete migre sous un autre")
+        truthy(#migrated <= 32, "borne : le nom migre tient dans la limite")
+        eq(NS:NormalizeProfileName(migrated), migrated,
+            "borne : et il se retrouve tel quel apres normalisation, donc il est atteignable")
         raw.named, raw.assignments = {}, {}
     end
 

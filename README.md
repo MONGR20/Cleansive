@@ -1,4 +1,4 @@
-# Cleansive 1.6.14
+# Cleansive 1.6.15
 
 Cleansive is a standalone one-click cleansing addon for **World of Warcraft Retail 12.1** (`120100`). It provides a compact Decursive-style workflow with a dark, class-colored interface inspired by the clarity of Ellesmere UI. The interface follows the language of your WoW client, English or French; either can be picked from the General page at any time.
 
@@ -177,6 +177,7 @@ the reason on its own.
 
 ## Recent changes
 
+- **1.6.15** - external audit fixes: the vertical-bar profile migration never ran for the people who needed it, and the mouse wheel was skipping half a page.
 - **1.6.14** - a real Mythic+ log at last: the native sound registry holds under restriction, but the engine's frame level is refused 690 times a key. That refusal is now remembered instead of retried.
 - **1.6.13** - the settings pages actually scroll: replacing the scroll template's own handlers left its bar unconfigured, so nothing moved.
 - **1.6.12** - two fixes the 1.6.11 changelog claimed but did not contain, plus the migration of old profile names containing a vertical bar.
