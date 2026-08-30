@@ -16,10 +16,30 @@ local CLICK_COLORS = {
 -- La lettre disait « G », « D » ou « C » selon le NUMERO du slot. Depuis que
 -- la combinaison se regle, le numero ne dit plus rien : la lettre vient de la
 -- meme description que l'apercu, la page Dissipations et l'infobulle.
+-- L'indice le plus riche qui TIENNE dans la cellule. La combinaison complete
+-- d'abord ; a defaut le numero de la dissipation, qui tient toujours sur un
+-- caractere et ne se confond avec rien -- les indices de bouton s'ecrivent
+-- G, D, M, 4 et 5, jamais 1, 2 ni 3.
+--
+-- Ne rien dessiner etait pire que de dessiner moins. Cette lettre est le SEUL
+-- reperage de la dissipation qui ne passe pas par la couleur, et les trois
+-- couleurs de clic partagent leur teinte avec trois couleurs de type : rouge
+-- avec Bleed, bleu avec Magic, orange avec Disease. La supprimer parce qu'une
+-- combinaison longue ne tenait pas rendait la case muette pour qui l'avait
+-- justement activee.
+function NS:ClickHintText(slot, size)
+    if not slot then return "" end
+    local bindings = self.ClickBindings and self:ClickBindings()
+    local full = bindings and self:ClickShortHint(bindings[slot] or "") or ""
+    if full ~= "" and self:ClickHintMetrics(full, size) then return full end
+    local number = tostring(slot)
+    if self:ClickHintMetrics(number, size) then return number end
+    return ""
+end
+
 local function clickHint(slot)
-    if not slot or not NS.ClickDescription then return "" end
-    local _, _, short = NS:ClickDescription(slot)
-    return short or ""
+    if not slot or not NS.ClickHintText then return "" end
+    return NS:ClickHintText(slot)
 end
 
 -- Since Retail 12.1, aura data can become secret in combat. These types are
@@ -900,10 +920,11 @@ function NS:StyleAuraVisual(button, auraType, visual)
         end)
     end
     local visualHint = slot and clickHint(slot) or (manual and "!" or "")
-    -- La combinaison peut ne pas tenir dans la cellule : la mesure le dit, et
-    -- l'indice n'est alors pas dessine du tout plutot que de deborder.
+    -- ClickHintText a deja choisi le plus riche des indices qui tienne. Une
+    -- chaine vide veut donc dire qu'aucun ne tient, pas qu'on abandonne le
+    -- premier venu.
     local hintFits = self:ApplyClickHint(visual.clickHint, visual.clickHintPlate, visualHint)
-    local hintVisible = hintShown and hintFits
+    local hintVisible = hintShown and hintFits and visualHint ~= ""
     if visual.clickHint then
         step(function()
             visual.clickHint:ClearAllPoints()
@@ -2005,9 +2026,10 @@ function NS:SetButtonState(button, aura, auraType, slot, secret, charmed)
         -- n'est alors pas dessine du tout plutot que de deborder sur la case
         -- voisine. L'infobulle nomme deja le geste de chaque dissipation.
         local fits = self:ApplyClickHint(button.clickHint, button.clickHintPlate, hintText)
-        button.clickHint:SetShown(hintShown and fits)
+        local visible = hintShown and fits and hintText ~= ""
+        button.clickHint:SetShown(visible)
         if button.clickHintPlate then
-            button.clickHintPlate:SetShown(hintShown and fits)
+            button.clickHintPlate:SetShown(visible)
         end
     end
 

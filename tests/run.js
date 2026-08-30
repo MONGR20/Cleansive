@@ -171,6 +171,44 @@ const wordingOffenders = [];
 // lieu -- qui n'ont aucun controle graphique : un joueur qui n'a pas lu le
 // changelog ne pouvait pas les decouvrir du tout. Une promesse tenue par
 // personne se verifie donc ici, pas a la relecture.
+// Une couleur de texte est posee en blanc a une opacite : la couleur REELLE
+// est sa composition sur le panneau, pas le blanc. Personne ne la mesurait, et
+// le token des titres de section rendait 3,95:1 la ou un texte de moins de
+// 18 px en demande 4,5. Les valeurs sont exactes : autant les calculer.
+const contrastOffenders = [];
+{
+  const ux = fs.readFileSync(path.join(addon, "EllesmereUX.lua"), "utf8");
+  const table = ux.match(/^local C = \{([\s\S]*?)^\}/m);
+  const tokens = {};
+  if (!table) {
+    contrastOffenders.push("table des couleurs introuvable dans EllesmereUX.lua");
+  } else {
+    for (const m of table[1].matchAll(/(\w+)\s*=\s*\{\s*([0-9., ]+)\}/g)) {
+      tokens[m[1]] = m[2].split(",").map(v => parseFloat(v.trim())).filter(v => !isNaN(v));
+    }
+  }
+  const linear = c => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
+  const luminance = c => 0.2126 * linear(c[0]) + 0.7152 * linear(c[1]) + 0.0722 * linear(c[2]);
+  const panel = tokens.panel;
+  // Les roles qui portent du TEXTE. Les surfaces n'ont pas de seuil a tenir.
+  for (const role of ["text", "dim", "section"]) {
+    const token = tokens[role];
+    if (!token || !panel) {
+      contrastOffenders.push(`token « ${role} » ou « panel » absent`);
+      continue;
+    }
+    const alpha = token.length > 3 ? token[3] : 1;
+    const composed = [0, 1, 2].map(i => alpha * token[i] + (1 - alpha) * panel[i]);
+    const hi = Math.max(luminance(composed), luminance(panel));
+    const lo = Math.min(luminance(composed), luminance(panel));
+    const ratio = (hi + 0.05) / (lo + 0.05);
+    if (ratio < 4.5) {
+      contrastOffenders.push(
+        `« ${role} » sur « panel » : ${ratio.toFixed(2)}:1, seuil 4.5:1 pour un texte sous 18 px`);
+    }
+  }
+}
+
 const helpOffenders = [];
 {
   const core = fs.readFileSync(path.join(addon, "Core.lua"), "utf8");
@@ -290,6 +328,14 @@ if (wordingOffenders.length) {
   for (const o of wordingOffenders) console.log("          " + o);
 } else {
   console.log("  ok    libelles : aucun texte ne contredit le comportement connu");
+}
+
+if (contrastOffenders.length) {
+  failed += 1;
+  console.log("\n  ECHEC contraste : un token de texte ne tient pas son seuil");
+  for (const o of contrastOffenders) console.log("          " + o);
+} else {
+  console.log("  ok    contraste : les tokens de texte tiennent 4.5:1 sur le panneau");
 }
 
 if (helpOffenders.length) {

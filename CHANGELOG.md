@@ -6,6 +6,50 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.6.25
+
+**Revue d'interface.** Quatre defauts mesures, dont deux que la 1.6.24 venait
+d'introduire.
+
+**L'indice de clic ne disparait plus.** La 1.6.24 avait raison de refuser
+qu'une combinaison longue deborde sur la case voisine, et tort de ne rien
+dessiner a la place : cette lettre est le SEUL reperage de la dissipation qui
+ne passe pas par la couleur. Et la couleur ne suffit pas -- les trois couleurs
+de clic partagent leur teinte avec trois couleurs de type, a moins de quinze
+degres : rouge avec Bleed (0 degre), bleu avec Magic (9,5), orange avec Disease
+(13,1). Quand la combinaison complete ne tient pas, la case affiche desormais
+le NUMERO de la dissipation, qui tient toujours sur un caractere et ne se
+confond avec aucun indice de bouton -- ceux-ci s'ecrivent G, D, M, 4 et 5.
+
+**Les titres de section rendaient 3,95:1.** Le token etait pose en blanc a 41 %
+d'opacite : sa couleur reelle est sa composition sur le panneau, et personne ne
+la mesurait. 45 % donne 4,53:1, au-dessus des 4,5 qu'un texte de moins de
+18 px demande. Un controle statique calcule maintenant les trois tokens de
+texte a chaque execution.
+
+**Un nom de profil rogne redevient lisible.** La 1.6.24 avait borne le libelle
+des boutons de lieu pour qu'il ne deborde plus, sans donner nulle part ou lire
+le nom complet. L'infobulle le porte, et se relit a chaque survol puisque ce
+nom change.
+
+**Sept controles poses depuis la 1.6.20 ignoraient la convention d'aide du
+fichier**, dont deux boutons qui ne portent qu'un chevron. Le fichier attache
+pourtant une aide a vingt autres controles.
+
+**Et le reste.**
+
+- Le champ de nom sert a creer ET a renommer ; son texte d'invite disparait a la premiere lettre, et plus rien ne le nommait. Il porte un libelle visible.
+- Les deux lignes de la section des lieux etaient hautes d'une ligne et portaient une explication de deux. L'explication passe en infobulle, la ligne dit l'essentiel.
+- **Neuvieme mensonge du bouchon :** `HookScript` ne faisait RIEN. Les vingt infobulles de l'addon etaient posees dans le vide aux yeux des tests, et un bouton sans aide rendait exactement la meme chose qu'un bouton avec.
+- Tests : 1 637 a 1 671.
+
+Deux constats de la revue sont ecartes, avec leur raison. La poignee de
+deplacement fait 24 x 14 px, sous la base de 24 x 24 : l'exception d'espacement
+s'applique, rien ne se trouve a moins de 24 px d'elle. Et les deux cents
+pixels vides du gestionnaire de profils quand la liste est courte demanderaient
+de repositionner la fenetre a chaque rafraichissement, ce qui coute plus que ce
+que ca rend.
+
 ## 1.6.24
 
 **Corrections de l'audit externe de la 1.6.23.** Aucun defaut du coeur : ce

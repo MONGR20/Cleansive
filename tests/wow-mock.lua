@@ -86,6 +86,18 @@ local function newFrame(name)
     rawset(f, "SetMouseMotionEnabled", function(s, v) rawset(s, "__mouseMotion", v and true or false) end)
     rawset(f, "SetScript", function(s, k, v) rawset(s, "__scripts_" .. k, v) end)
     rawset(f, "GetScript", function(s, k) return rawget(s, "__scripts_" .. k) end)
+    -- HookScript tombait dans le stub generique : il ne faisait RIEN. Toutes
+    -- les infobulles de l'addon -- vingt appels a attachHelp -- etaient donc
+    -- posees dans le vide aux yeux des tests, et un bouton sans aide rendait
+    -- exactement la meme chose qu'un bouton avec. Neuvieme mensonge du
+    -- bouchon. Comme en jeu, le gestionnaire d'origine s'execute en premier.
+    rawset(f, "HookScript", function(s, k, v)
+        local previous = rawget(s, "__scripts_" .. k)
+        rawset(s, "__scripts_" .. k, function(...)
+            if previous then previous(...) end
+            return v(...)
+        end)
+    end)
     rawset(f, "SetAttribute", function(s, k, v) rawset(s, "__attr_" .. tostring(k), v) end)
     rawset(f, "GetAttribute", function(s, k) return rawget(s, "__attr_" .. tostring(k)) end)
     -- L'orientation d'un chevron ne se voit que par son angle : sans cela un

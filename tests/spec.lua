@@ -7995,6 +7995,125 @@ do
 end
 
 --------------------------------------------------------------------------
+-- 1.6.25 : ce que la revue d'interface a mesure
+--------------------------------------------------------------------------
+do
+    freshProfile("PALADIN")
+    knowSpells(4987)
+    NS:UpdateSpells()
+
+    -- 1. L'indice de clic est le SEUL reperage qui ne passe pas par la
+    -- couleur, et les trois couleurs de clic partagent leur teinte avec trois
+    -- couleurs de type. Le supprimer parce qu'une combinaison longue ne tenait
+    -- pas rendait la case muette pour qui l'avait justement activee.
+    NS.db.clickBindings = { "ALT-CTRL-SHIFT-2", "2", "CTRL-1" }
+    falsy(NS:ClickHintMetrics(NS:ClickShortHint("ALT-CTRL-SHIFT-2"), 22),
+        "indice : la combinaison complete ne tient pas sur une case de 22 px")
+    eq(NS:ClickHintText(1, 22), "1",
+        "indice : la case se rabat sur le NUMERO de la dissipation")
+    truthy(NS:ClickHintMetrics(NS:ClickHintText(1, 22), 22),
+        "indice : et ce repli tient, lui")
+    eq(NS:ClickHintText(2, 22), NS:ClickShortHint("2"),
+        "indice : une combinaison qui tient garde sa forme complete")
+    eq(NS:ClickHintText(1, 40), NS:ClickShortHint("ALT-CTRL-SHIFT-2"),
+        "indice : une grande case retrouve la combinaison entiere")
+
+    -- Le numero ne peut pas etre confondu avec un indice de bouton : ceux-ci
+    -- s'ecrivent avec les lettres des boutons 1 a 3, puis 4 et 5.
+    local collisions = {}
+    for slot = 1, 3 do
+        for _, binding in ipairs({ "1", "2", "3", "4", "5" }) do
+            if NS:ClickShortHint(binding) == tostring(slot) then
+                collisions[#collisions + 1] = binding .. " = " .. tostring(slot)
+            end
+        end
+    end
+    eq(table.concat(collisions, ", "), "",
+        "indice : aucun indice de bouton ne s'ecrit comme un numero de dissipation")
+
+    -- Une case si petite qu'aucun indice ne tient reste muette : c'est la
+    -- seule situation ou ne rien dessiner est le bon choix.
+    local tiny = NS:ClickHintText(1, 12)
+    truthy(tiny == "" or NS:ClickHintMetrics(tiny, 12),
+        "indice : sur la plus petite case, ce qui est dessine tient encore")
+
+    -- 2. Le contraste des tokens de texte est mesure par un controle statique
+    -- dans run.js : il lit la table des couleurs a la source et compose chaque
+    -- token sur le panneau, ce qu'un test qui ne voit que NS ne peut pas faire.
+
+    -- 3. Une explication qui ne tient pas dans la hauteur posee est coupee
+    -- sans que rien ne le dise. Les deux lignes de la section des lieux sont
+    -- hautes d'une ligne : leur texte doit y tenir, dans les DEUX langues.
+    for _, language in ipairs({ "enUS", "frFR" }) do
+        for _, key in ipairs({ "PROFILE_ENVIRONMENT_NEEDS", "PROFILE_ENVIRONMENT_IS_LOCKED" }) do
+            local text = NS.LOCALES[language][key]
+            truthy(text, "copie : " .. key .. " existe en " .. language)
+            -- Le modele du bouchon : #octets x taille x 0,55, la largeur du
+            -- conteneur etant 476 et la police 11.
+            truthy(#text * 11 * 0.55 <= 476, string.format(
+                "copie : %s tient sur une ligne en %s (%d octets)", key, language, #text))
+        end
+    end
+
+    -- 4. Sept controles poses depuis la 1.6.20 ignoraient la convention d'aide
+    -- du fichier, dont deux boutons qui ne portent qu'un chevron.
+    NS:CreateNamedProfile("Temoin")
+    NS:ShowProfileManager()
+    NS:ShowClickBindings()
+    local manager, clicks = NS.profileManagerFrame, NS.clickBindingFrame
+    for _, entry in ipairs({
+        { manager.previousPage, "la fleche precedente" },
+        { manager.nextPage, "la fleche suivante" },
+        { manager.lockButton, "le verrou des lieux" },
+        { manager.createButton, "le bouton de creation" },
+        { manager.environmentButtons.dungeon, "le bouton du donjon" },
+        { clicks.rows[1].capture, "la case d'ecoute" },
+        { clicks.reset, "le retour aux defauts" },
+    }) do
+        -- Pas « un gestionnaire OnEnter existe » : chaque bouton de l'addon en
+        -- a un pour son survol. Ce qui compte est que l'infobulle recoive
+        -- vraiment du texte.
+        mock.state.tooltip = nil
+        local control = entry[1]
+        truthy(control, "aide : " .. entry[2] .. " existe")
+        if control and control:GetScript("OnEnter") then
+            control:GetScript("OnEnter")(control)
+        end
+        truthy(mock.state.tooltip and #mock.state.tooltip > 0,
+            "aide : " .. entry[2] .. " s'explique au survol")
+    end
+
+    -- Et LE point : un nom rogne doit rester atteignable quelque part.
+    local longName = NS:NormalizeProfileName(string.rep("Mistral", 8))
+    NS:CreateNamedProfile(longName)
+    NS:SetEnvironmentOverride("dungeon", longName)
+    NS:RefreshProfileManager()
+    do
+        local control = manager.environmentButtons.dungeon
+        mock.state.tooltip = nil
+        control:GetScript("OnEnter")(control)
+        local said = table.concat(mock.state.tooltip or {}, "\n")
+        truthy(said:find(longName, 1, true),
+            "aide : l'infobulle du lieu porte le nom COMPLET, que le bouton rogne")
+    end
+
+    -- 5. Le champ de nom sert a creer ET a renommer : une fois quelque chose
+    -- tape, le texte d'invite disparait et plus rien ne le nommait.
+    truthy(manager.nameLabel, "saisie : le champ porte un libelle visible")
+    truthy(#(manager.nameLabel:GetText() or "") > 0, "saisie : ce libelle dit quelque chose")
+    manager.nameBox:SetText("Quelque chose")
+    falsy(manager.namePlaceholder:IsShown(), "saisie : l'invite s'efface a la saisie")
+    truthy(manager.nameLabel:IsShown(), "saisie : le libelle, lui, reste")
+
+    manager.nameBox:SetText("")
+    NS:SetEnvironmentOverride("dungeon", nil)
+    NS:DeleteNamedProfile(longName)
+    NS:DeleteNamedProfile("Temoin")
+    manager:Hide()
+    clicks:Hide()
+end
+
+--------------------------------------------------------------------------
 -- report
 --------------------------------------------------------------------------
 local lines = {}

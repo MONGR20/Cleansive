@@ -25,7 +25,10 @@ local C = {
     rowEven = { 0, 0, 0, 0.20 },
     text = { 1, 1, 1, 0.92 },
     dim = { 1, 1, 1, 0.53 },
-    section = { 1, 1, 1, 0.41 },
+    -- 0,41 mesurait 3,95:1 sur le panneau, sous les 4,5:1 qu'un texte de moins
+    -- de 18 px demande. 0,45 en donne 4,53:1, et ce token porte TOUS les titres
+    -- de section de la fenetre.
+    section = { 1, 1, 1, 0.45 },
 }
 
 local function localized(fr, en)
@@ -261,6 +264,21 @@ local function showHelpTooltip(owner, heading, body)
     if heading and heading ~= "" then GameTooltip:AddLine(heading, 1, 1, 1) end
     GameTooltip:AddLine(body, 0.78, 0.78, 0.78, true)
     GameTooltip:Show()
+end
+
+-- L'aide etait figee a la creation. Un bouton dont le libelle change -- le
+-- profil d'un lieu, l'etat du verrou -- a besoin qu'elle soit relue a chaque
+-- survol, sinon elle annonce ce qui etait vrai au chargement.
+local function attachLiveHelp(control, provider)
+    if not control or not provider then return control end
+    control:HookScript("OnEnter", function(self)
+        local heading, body = provider()
+        showHelpTooltip(self, heading, body)
+    end)
+    control:HookScript("OnLeave", function()
+        if GameTooltip then GameTooltip:Hide() end
+    end)
+    return control
 end
 
 local function attachHelp(control, heading, body)
@@ -2058,6 +2076,8 @@ function NS:ShowClickBindings()
             -- boutons de pouce : un bouton ordinaire n'entend que le gauche,
             -- et deux tiers des combinaisons seraient restees inatteignables.
             if capture.RegisterForClicks then capture:RegisterForClicks("AnyUp") end
+            attachHelp(capture, string.format(self.L.CLICK_SLOT_LABEL, slot),
+                self.L.TIP_CLICK_CAPTURE)
             capture:SetScript("OnClick", function(_, mouseButton)
                 local binding = self:ClickBindingFromMouse(mouseButton)
                 if not binding then return end
@@ -2071,6 +2091,7 @@ function NS:ShowClickBindings()
 
         frame.reset = button(frame, self.L.CLICK_RESET, 240, 28)
         frame.reset:SetPoint("BOTTOMLEFT", 22, 20)
+        attachHelp(frame.reset, self.L.CLICK_RESET, self.L.TIP_CLICK_RESET)
         frame.reset:SetScript("OnClick", function()
             local _, message = self:ResetClickBindings()
             if message then self:Print(message) end
@@ -2167,9 +2188,18 @@ function NS:ShowProfileManager()
         -- tout le reste de la fenetre attend qu'un profil existe -- donc rien
         -- ne repondait a rien. Meme motif que la zone de recherche de la barre
         -- laterale : un fond CLAIR, un cadre, et un texte d'invite.
+        -- Le texte d'invite disparait a la premiere lettre, et ce champ sert a
+        -- DEUX verbes : creer et renommer. Une fois quelque chose tape, plus
+        -- rien ne disait de quoi il s'agissait. Un libelle visible, dans la
+        -- rangee qui existe deja plutot qu'une ligne de plus.
+        frame.nameLabel = text(frame, self.L.PROFILE_NAME_LABEL, 12, C.dim)
+        frame.nameLabel:SetPoint("TOPLEFT", 22, -146)
+        frame.nameLabel:SetWidth(88)
+        frame.nameLabel:SetJustifyH("LEFT")
+
         local nameHolder = CreateFrame("Frame", nil, frame)
-        nameHolder:SetPoint("TOPLEFT", 22, -140)
-        nameHolder:SetSize(300, 26)
+        nameHolder:SetPoint("TOPLEFT", 116, -140)
+        nameHolder:SetSize(224, 26)
         solid(nameHolder, "BACKGROUND", 1, 1, 1, 0.05):SetAllPoints()
         border(nameHolder, 0.18)
         frame.nameBox = CreateFrame("EditBox", nil, nameHolder)
@@ -2186,7 +2216,8 @@ function NS:ShowProfileManager()
         end)
 
         local create = button(frame, self.L.PROFILE_CREATE, 140, 26)
-        create:SetPoint("TOPLEFT", 332, -140)
+        create:SetPoint("TOPLEFT", 350, -140)
+        attachHelp(create, self.L.PROFILE_CREATE, self.L.TIP_PROFILE_CREATE)
         create:SetScript("OnClick", function()
             local ok, message = self:CreateNamedProfile(frame.nameBox:GetText())
             self:Print(message)
@@ -2228,12 +2259,14 @@ function NS:ShowProfileManager()
         frame.listOffset = 0
         frame.previousPage = button(frame, "<", 30, 22)
         frame.previousPage:SetPoint("TOPLEFT", 22, -386)
+        attachHelp(frame.previousPage, self.L.PROFILE_MANAGER, self.L.TIP_PROFILE_PAGE)
         frame.previousPage:SetScript("OnClick", function()
             frame.listOffset = math.max(0, frame.listOffset - #frame.rows)
             self:RefreshProfileManager()
         end)
         frame.nextPage = button(frame, ">", 30, 22)
         frame.nextPage:SetPoint("TOPLEFT", 130, -386)
+        attachHelp(frame.nextPage, self.L.PROFILE_MANAGER, self.L.TIP_PROFILE_PAGE)
         frame.nextPage:SetScript("OnClick", function()
             frame.listOffset = frame.listOffset + #frame.rows
             self:RefreshProfileManager()
@@ -2254,6 +2287,10 @@ function NS:ShowProfileManager()
         frame.environmentTitle:SetWidth(476)
         frame.environmentTitle:SetHeight(14)
         frame.environmentTitle:SetJustifyH("LEFT")
+        -- L'explication retiree de la ligne vit sur l'infobulle des quatre
+        -- boutons de lieu. Une zone de survol posee sur le titre aurait couvert
+        -- le titre lui-meme, et la ligne courte porte deja l'instruction
+        -- actionnable quand ces boutons sont grises.
 
         -- Quatre boutons grises sans un mot d'explication : le joueur essaie,
         -- rien ne repond, et rien ne dit pourquoi. Cette ligne le dit.
@@ -2277,6 +2314,15 @@ function NS:ShowProfileManager()
                 control.uxLabel:SetJustifyH("CENTER")
                 if control.uxLabel.SetWordWrap then control.uxLabel:SetWordWrap(false) end
             end
+            -- Le libelle est rogne pour ne pas deborder : l'infobulle est le
+            -- seul endroit ou le nom complet reste atteignable. Elle se relit
+            -- a chaque survol, puisque ce nom change.
+            attachLiveHelp(control, function()
+                local assigned = self:EnvironmentOverride(place)
+                return (self.L["ENVIRONMENT_" .. string.upper(place)] or place)
+                    .. " : " .. (assigned or self.L.PROFILE_ENVIRONMENT_NONE),
+                    self.L.TIP_ENVIRONMENT
+            end)
             control:SetScript("OnClick", function()
                 local _, message = self:CycleEnvironmentProfile(place)
                 if message then self:Print(message) end
@@ -2287,6 +2333,7 @@ function NS:ShowProfileManager()
 
         frame.lockButton = button(frame, "", 220, 28)
         frame.lockButton:SetPoint("BOTTOMLEFT", 254, 20)
+        attachHelp(frame.lockButton, self.L.PROFILE_ENVIRONMENT_TITLE, self.L.TIP_PROFILE_LOCK)
         frame.lockButton:SetScript("OnClick", function()
             local ok, refusal = self:SetEnvironmentLocked(not self:EnvironmentLocked())
             if not ok and refusal then self:Print(refusal) end
