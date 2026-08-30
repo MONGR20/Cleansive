@@ -113,6 +113,9 @@ local defaults = {
     showNames = false,
     classColorCells = false,
     alertSound = "DEFAULT",
+    -- Les combinaisons d'origine, ecrites explicitement : gauche, droite,
+    -- Ctrl + gauche. Par defaut, rien ne change pour personne.
+    clickBindings = { "1", "2", "CTRL-1" },
     separateRaidSize = false,
     raidFrameSize = 18,
     raidSpacing = 2,
@@ -674,6 +677,156 @@ function NS:HandleProfileCommand(rest)
     if ok and self.RefreshOptions then self:RefreshOptions() end
 end
 
+--------------------------------------------------------------------------
+-- Remappage des clics
+--
+-- Point 37 a 42 de l'inventaire, avec la reserve du point 305 : « ne pas
+-- proposer de remappage libre sans controle des conflits ». Deux dissipations
+-- sur la meme combinaison, ou une dissipation sur une combinaison que l'addon
+-- utilise deja, ce n'est pas un reglage exotique : c'est un clic qui ne fera
+-- pas ce qu'il annonce, en plein combat. Le controle est donc la fonction
+-- principale ici, et le remappage n'en est que la consequence.
+--
+-- Une combinaison s'ecrit « MODIFICATEURS-BOUTON », les modificateurs dans
+-- l'ordre canonique de WoW -- ALT, CTRL, SHIFT -- parce que tout autre ordre
+-- ne correspond jamais.
+--------------------------------------------------------------------------
+local CLICK_MODIFIERS = { "ALT", "CTRL", "SHIFT" }
+local CLICK_BUTTONS = { ["1"] = true, ["2"] = true, ["3"] = true, ["4"] = true, ["5"] = true }
+
+-- Ce que l'addon se reserve. Le milieu cible, Ctrl + milieu focalise : deux
+-- gestes qui existent depuis le debut et que personne ne s'attend a perdre en
+-- deplacant une dissipation.
+local RESERVED_BINDINGS = { ["3"] = "TARGET", ["CTRL-3"] = "FOCUS" }
+NS.RESERVED_BINDINGS = RESERVED_BINDINGS
+
+function NS:NormalizeClickBinding(raw)
+    if type(raw) ~= "string" then return nil end
+    local seen, button = {}, nil
+    for part in string.gmatch(string.upper(raw), "[^%-%s+]+") do
+        if CLICK_BUTTONS[part] then
+            if button then return nil end
+            button = part
+        else
+            local known = false
+            for _, name in ipairs(CLICK_MODIFIERS) do
+                if name == part then known = true end
+            end
+            -- Un modificateur repete, ou inconnu, n'est pas une combinaison
+            -- « presque bonne » : c'est une combinaison qui ne se declenchera
+            -- jamais. La refuser vaut mieux que la corriger en silence.
+            if not known or seen[part] then return nil end
+            seen[part] = true
+        end
+    end
+    if not button then return nil end
+    local parts = {}
+    for _, name in ipairs(CLICK_MODIFIERS) do
+        if seen[name] then parts[#parts + 1] = name end
+    end
+    parts[#parts + 1] = button
+    return table.concat(parts, "-")
+end
+
+-- Le prefixe d'attribut correspondant : « CTRL-1 » donne « ctrl- » et 1.
+function NS:ClickBindingAttribute(binding)
+    local normalized = self:NormalizeClickBinding(binding)
+    if not normalized then return nil end
+    local parts = {}
+    for part in string.gmatch(normalized, "[^%-]+") do parts[#parts + 1] = part end
+    local button = table.remove(parts)
+    local prefix = ""
+    if #parts > 0 then prefix = string.lower(table.concat(parts, "-")) .. "-" end
+    return prefix, button
+end
+
+function NS:ClickBindings()
+    local stored = self.db and self.db.clickBindings
+    local list = {}
+    for slot = 1, 3 do
+        local value = type(stored) == "table" and stored[slot]
+        list[slot] = self:NormalizeClickBinding(value) or self.profileDefaults.clickBindings[slot]
+    end
+    return list
+end
+
+-- Rend la liste des conflits, vide quand tout va bien. C'est cette fonction
+-- que le reglage interroge avant d'ecrire quoi que ce soit.
+function NS:ClickBindingConflicts(bindings)
+    local conflicts, byBinding = {}, {}
+    for slot = 1, 3 do
+        local binding = bindings[slot]
+        if binding then
+            local reserved = RESERVED_BINDINGS[binding]
+            if reserved then
+                conflicts[#conflicts + 1] = {
+                    slot = slot, binding = binding, kind = "reserved", other = reserved,
+                }
+            end
+            if byBinding[binding] then
+                conflicts[#conflicts + 1] = {
+                    slot = slot, binding = binding, kind = "duplicate", other = byBinding[binding],
+                }
+            else
+                byBinding[binding] = slot
+            end
+        end
+    end
+    return conflicts
+end
+
+function NS:DescribeClickBinding(binding)
+    local normalized = self:NormalizeClickBinding(binding)
+    if not normalized then return binding end
+    local parts = {}
+    for part in string.gmatch(normalized, "[^%-]+") do parts[#parts + 1] = part end
+    local button = table.remove(parts)
+    local names = {}
+    for _, modifier in ipairs(parts) do
+        names[#names + 1] = self.L["CLICK_MODIFIER_" .. modifier] or modifier
+    end
+    names[#names + 1] = self.L["CLICK_BUTTON_" .. button] or button
+    return table.concat(names, " + ")
+end
+
+function NS:SetClickBinding(slot, raw)
+    slot = tonumber(slot)
+    if not slot or slot < 1 or slot > 3 then return false, self.L.CLICK_SLOT_UNKNOWN end
+    local binding = self:NormalizeClickBinding(raw)
+    if not binding then return false, self.L.CLICK_BINDING_INVALID end
+
+    local wanted = self:ClickBindings()
+    wanted[slot] = binding
+    local conflicts = self:ClickBindingConflicts(wanted)
+    if #conflicts > 0 then
+        local first = conflicts[1]
+        if first.kind == "reserved" then
+            return false, string.format(self.L.CLICK_BINDING_RESERVED,
+                self:DescribeClickBinding(first.binding),
+                self.L["CLICK_RESERVED_" .. first.other] or first.other)
+        end
+        return false, string.format(self.L.CLICK_BINDING_TAKEN,
+            self:DescribeClickBinding(first.binding), first.other)
+    end
+
+    self.db.clickBindings = wanted
+    if self.ApplySecureBindings then self:ApplySecureBindings() end
+    if self.RefreshAll then self:RefreshAll(true) end
+    if self.RefreshOptions then self:RefreshOptions() end
+    return true, string.format(self.L.CLICK_BINDING_SET, slot, self:DescribeClickBinding(binding))
+end
+
+function NS:PrintClickBindings()
+    local bindings = self:ClickBindings()
+    for slot = 1, 3 do
+        local def = self.clickSpells and self.clickSpells[slot]
+        local name = def and (def.secureName or def.name) or self.L.CLICK_SLOT_EMPTY
+        self:Print(string.format(self.L.CLICK_LINE, slot,
+            self:DescribeClickBinding(bindings[slot]), name))
+    end
+    self:Print(self.L.CLICK_COMMAND_HINT)
+end
+
 function NS:PlayAfflictionAlert(preview)
     if not self.db or not self.db.sound or not self.enabled then return false end
     -- Une alerte d'essai est un geste du joueur : elle se joue toujours. Une
@@ -1110,6 +1263,14 @@ function NS:HandleSlash(message)
         self:SetEnabled(false)
     elseif command == "soundtest" then
         self:PlayAfflictionAlert(true)
+    elseif command == "clicks" then
+        local slot, binding = rest:match("^(%S*)%s*(.-)$")
+        if slot == "" then
+            self:PrintClickBindings()
+        else
+            local _, message = self:SetClickBinding(slot, binding)
+            self:Print(message)
+        end
     elseif command == "profile" then
         self:HandleProfileCommand(rest)
     elseif command == "sound" then

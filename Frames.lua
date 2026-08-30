@@ -13,11 +13,17 @@ local CLICK_COLORS = {
     [3] = { 1.00, 0.46, 0.02 },
 }
 
+-- La lettre disait « G », « D » ou « C » selon le NUMERO du slot. Depuis que
+-- la combinaison se regle, le numero ne dit plus rien : la lettre se deduit de
+-- la combinaison reellement posee, sinon l'addon annoncerait un clic et en
+-- attendrait un autre.
 local function clickHint(slot)
-    if slot == 1 then return NS.L.CLICK_SHORT_LEFT end
-    if slot == 2 then return NS.L.CLICK_SHORT_RIGHT end
-    if slot == 3 then return NS.L.CLICK_SHORT_CTRL end
-    return ""
+    if not slot then return "" end
+    local bindings = NS.ClickBindings and NS:ClickBindings()
+    local binding = bindings and bindings[slot]
+    if not binding then return "" end
+    local key = "CLICK_SHORT_" .. string.gsub(binding, "%-", "_")
+    return NS.L[key] or string.sub(binding, -1)
 end
 
 -- Since Retail 12.1, aura data can become secret in combat. These types are
@@ -1184,22 +1190,50 @@ function NS:ApplySecureBindings()
         local twoName = two and (two.secureName or two.name)
         local threeName = three and (three.secureName or three.name)
 
-        -- Replace both the exact and wildcard defaults supplied by the unit
-        -- template so Retail 12.1 cannot fall back to target/menu behavior.
-        target:SetAttribute("type1", oneName and "spell" or "none")
-        target:SetAttribute("spell1", oneName)
-        target:SetAttribute("*type1", oneName and "spell" or "none")
-        target:SetAttribute("*spell1", oneName)
-
-        target:SetAttribute("type2", twoName and "spell" or "none")
-        target:SetAttribute("spell2", twoName)
-        target:SetAttribute("*type2", twoName and "spell" or "none")
-        target:SetAttribute("*spell2", twoName)
-
-        target:SetAttribute("ctrl-type1", threeName and "spell" or "none")
-        target:SetAttribute("ctrl-spell1", threeName)
-        target:SetAttribute("type3", "target")
-        target:SetAttribute("ctrl-type3", "focus")
+        -- Les trois combinaisons viennent du reglage, pas du code : gauche,
+        -- droite et Ctrl + gauche par defaut, donc rien ne change tant que
+        -- personne n'y touche. Chaque pose remplace l'exact ET le joker fourni
+        -- par le modele d'unite, sinon Retail 12.1 retombe sur son propre
+        -- comportement de ciblage.
+        local bindings = self:ClickBindings()
+        local names = { oneName, twoName, threeName }
+        local used = {}
+        -- Ce qui etait pose la fois d'avant et ne l'est plus doit etre DESARME.
+        -- Sans cela, deplacer une dissipation de Ctrl + gauche vers Maj + droit
+        -- laissait Ctrl + gauche lancer encore le sort : deux combinaisons pour
+        -- une dissipation, dont une que le joueur croyait avoir liberee. C'est
+        -- exactement ce qui rend un remappage plus dangereux qu'utile.
+        for _, previous in ipairs(self.appliedClickBindings or {}) do
+            local stale = true
+            for slot = 1, 3 do
+                if bindings[slot] == previous then stale = false end
+            end
+            if stale then
+                local prefix, index = self:ClickBindingAttribute(previous)
+                if prefix and index then
+                    target:SetAttribute(prefix .. "type" .. index, "none")
+                    target:SetAttribute(prefix .. "spell" .. index, nil)
+                    target:SetAttribute(prefix .. "*type" .. index, "none")
+                    target:SetAttribute(prefix .. "*spell" .. index, nil)
+                end
+            end
+        end
+        for slot = 1, 3 do
+            local prefix, index = self:ClickBindingAttribute(bindings[slot])
+            if prefix and index then
+                local spellName = names[slot]
+                target:SetAttribute(prefix .. "type" .. index, spellName and "spell" or "none")
+                target:SetAttribute(prefix .. "spell" .. index, spellName)
+                target:SetAttribute(prefix .. "*type" .. index, spellName and "spell" or "none")
+                target:SetAttribute(prefix .. "*spell" .. index, spellName)
+                used[bindings[slot]] = true
+            end
+        end
+        -- Les deux gestes que l'addon se reserve. Ils ne sont poses que si le
+        -- joueur ne les a pas pris : ClickBindingConflicts refuse deja de les
+        -- lui donner, ceci est la ceinture de la bretelle.
+        if not used["3"] then target:SetAttribute("type3", "target") end
+        if not used["CTRL-3"] then target:SetAttribute("ctrl-type3", "focus") end
 
         -- The two awkward combinations, mirrored onto the thumb buttons for
         -- players whose mouse has them. Nothing new is bound: button 4 is the
@@ -1208,15 +1242,25 @@ function NS:ApplySecureBindings()
         -- The wildcards are set for the same reason as buttons 1 and 2 above:
         -- the unit template can supply its own default and 12.1 would fall
         -- back to it.
-        target:SetAttribute("type4", threeName and "spell" or "none")
-        target:SetAttribute("spell4", threeName)
-        target:SetAttribute("*type4", threeName and "spell" or "none")
-        target:SetAttribute("*spell4", threeName)
-
-        target:SetAttribute("type5", "focus")
-        target:SetAttribute("*type5", "focus")
+        -- Les miroirs des boutons de pouce ne s'imposent plus : si le joueur a
+        -- deplace une dissipation sur le bouton 4 ou 5, c'est SON choix qui
+        -- gagne. Poser le miroir par-dessus aurait ecrase le reglage qu'on
+        -- vient de lui accorder.
+        if not used["4"] then
+            target:SetAttribute("type4", threeName and "spell" or "none")
+            target:SetAttribute("spell4", threeName)
+            target:SetAttribute("*type4", threeName and "spell" or "none")
+            target:SetAttribute("*spell4", threeName)
+        end
+        if not used["5"] then
+            target:SetAttribute("type5", "focus")
+            target:SetAttribute("*type5", "focus")
+        end
         end
     end
+    -- Retenu APRES la boucle : ce qui vient d'etre pose sera ce qu'il faudra
+    -- desarmer la prochaine fois.
+    self.appliedClickBindings = self:ClickBindings()
     self:ConfigurePriorityDispelButton()
     self:ApplyPriorityDispelBinding(true)
 end

@@ -5868,7 +5868,7 @@ do
     -- une qui porte du personnel, c'est ici que ca casse.
     local allowed = {}
     for _, key in ipairs({
-        "enabled", "locked", "showPets", "showFocus", "showNames", "classColorCells", "alertSound", "separateRaidSize", "raidFrameSize", "raidSpacing", "showTooltips",
+        "enabled", "locked", "showPets", "showFocus", "showNames", "classColorCells", "alertSound", "clickBindings", "separateRaidSize", "raidFrameSize", "raidSpacing", "showTooltips",
         "sound", "failureSound", "showCooldown", "showDuration", "showStacks",
         "showClickHints", "autoHide", "afflictedOnly", "groupManualTypes",
         "showSolo", "showParty", "showRaid", "controlWarning",
@@ -6125,6 +6125,87 @@ do
         truthy(ok, "stockage : et la liste se trie sans lever")
         raw.named, raw.assignments = {}, {}
     end
+end
+
+--------------------------------------------------------------------------
+-- 1.6.18 : remappage des clics, avec detection des conflits
+--
+-- Le point 305 de l'inventaire interdit « le remappage libre sans controle des
+-- conflits ». Deux dissipations sur la meme combinaison, ou une dissipation
+-- sur une combinaison que l'addon utilise deja, ce n'est pas un reglage
+-- exotique : c'est un clic qui ne fera pas ce qu'il annonce, en plein combat.
+-- Le controle est donc la fonction principale, le remappage sa consequence.
+--------------------------------------------------------------------------
+do
+    freshProfile("PALADIN")
+    knowSpells(4987)
+    NS:UpdateSpells()
+    NS:RebuildRoster()
+
+    -- L'ecriture d'une combinaison. L'ordre des modificateurs est canonique
+    -- chez WoW -- ALT, CTRL, SHIFT -- et tout autre ordre ne correspond jamais.
+    eq(NS:NormalizeClickBinding("ctrl-1"), "CTRL-1", "combinaison : la casse est indifferente")
+    eq(NS:NormalizeClickBinding("shift-ctrl-2"), "CTRL-SHIFT-2",
+        "combinaison : les modificateurs sont remis dans l'ordre du jeu")
+    eq(NS:NormalizeClickBinding("1"), "1", "combinaison : un bouton seul suffit")
+    falsy(NS:NormalizeClickBinding("CTRL"), "combinaison : un modificateur sans bouton est refuse")
+    falsy(NS:NormalizeClickBinding("1-2"), "combinaison : deux boutons aussi")
+    falsy(NS:NormalizeClickBinding("CTRL-CTRL-1"), "combinaison : un modificateur repete aussi")
+    falsy(NS:NormalizeClickBinding("META-1"), "combinaison : un modificateur inconnu aussi")
+    falsy(NS:NormalizeClickBinding("6"), "combinaison : un bouton qui n'existe pas aussi")
+
+    -- Par defaut, exactement ce que faisait l'addon avant ce reglage.
+    local defaults = NS:ClickBindings()
+    eq(defaults[1], "1", "defaut : le premier clic reste le clic gauche")
+    eq(defaults[2], "2", "defaut : le deuxieme le clic droit")
+    eq(defaults[3], "CTRL-1", "defaut : le troisieme Ctrl + gauche")
+    eq(#NS:ClickBindingConflicts(defaults), 0, "defaut : et aucun conflit")
+
+    -- LE controle. Deux dissipations sur la meme combinaison.
+    falsy(NS:SetClickBinding(2, "1"), "conflit : deux dissipations sur le meme clic sont refusees")
+    eq(NS:ClickBindings()[2], "2", "conflit : et rien n'a ete ecrit")
+    local _, refusal = NS:SetClickBinding(2, "1")
+    truthy(refusal:find("1", 1, true), "conflit : le refus nomme le clic deja pris")
+
+    -- Une combinaison que l'addon se reserve.
+    falsy(NS:SetClickBinding(1, "3"), "reserve : le clic milieu cible, il est refuse")
+    falsy(NS:SetClickBinding(1, "CTRL-3"), "reserve : Ctrl + milieu focalise, aussi")
+    eq(NS:ClickBindings()[1], "1", "reserve : et rien n'a ete ecrit")
+
+    -- Une combinaison libre est acceptee, et arrive vraiment sur le bouton.
+    truthy(NS:SetClickBinding(3, "SHIFT-2"), "remappage : une combinaison libre est acceptee")
+    eq(NS:ClickBindings()[3], "SHIFT-2", "remappage : elle est retenue")
+    local target = NS.buttons[1].clickLayer or NS.buttons[1]
+    eq(target:GetAttribute("shift-type2"), "spell",
+        "remappage : l'attribut securise correspondant est bien pose")
+    truthy(target:GetAttribute("shift-spell2"), "remappage : avec son sort")
+    eq(target:GetAttribute("ctrl-type1"), "none",
+        "remappage : et l'ancienne combinaison ne lance plus rien")
+
+    -- La lettre affichee doit suivre la combinaison, sinon l'addon annonce un
+    -- clic et en attend un autre.
+    NS:RefreshAll(true)
+    eq(NS.L["CLICK_SHORT_SHIFT_2"], NS.L.CLICK_SHORT_SHIFT_2, "lettre : la cle existe")
+    truthy(NS.L.CLICK_SHORT_SHIFT_2, "lettre : une lettre est prevue pour cette combinaison")
+
+    -- Prendre le bouton 4 doit desactiver son miroir, pas se faire ecraser par
+    -- lui : c'est le reglage du joueur qui gagne.
+    truthy(NS:SetClickBinding(3, "4"), "miroir : le bouton 4 peut etre choisi")
+    eq(target:GetAttribute("type4"), "spell", "miroir : il porte bien la dissipation")
+
+    -- Un profil exporte puis relu doit rendre les memes combinaisons, et un
+    -- texte abime doit etre refuse ENTIER : accepter la moitie d'un remappage
+    -- donnerait un jeu de clics que personne n'a choisi.
+    local exported = NS:ExportProfile()
+    local analysis = NS:AnalyzeProfileImport(exported)
+    truthy(analysis, "transfert : un export se relit")
+    falsy(NS:AnalyzeProfileImport("CLEANSIVE1;clickBindings=1,2"),
+        "transfert : une liste incomplete est refusee")
+    falsy(NS:AnalyzeProfileImport("CLEANSIVE1;clickBindings=1,1,2"),
+        "transfert : une liste en conflit avec elle-meme aussi")
+
+    NS.db.clickBindings = { "1", "2", "CTRL-1" }
+    NS:ApplySecureBindings()
 end
 
 --------------------------------------------------------------------------

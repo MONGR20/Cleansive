@@ -6,6 +6,20 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.6.18
+
+**Remappage des clics de dissipation**, avec ce qui le rend acceptable : la
+detection des conflits.
+
+- Chaque dissipation peut aller sur n'importe quel bouton de souris de 1 a 5, avec Alt, Ctrl et Maj. `/cleansive clicks` liste les trois clics, leur combinaison et le sort qui s'y trouve ; `/cleansive clicks 3 SHIFT-2` en deplace un.
+- **Le controle des conflits est la fonction principale, le remappage n'en est que la consequence.** Le point 305 de l'inventaire interdit « le remappage libre sans controle des conflits », et il a raison : deux dissipations sur la meme combinaison, ce n'est pas un reglage exotique, c'est un clic qui ne fera pas ce qu'il annonce en plein combat. Rien n'est ecrit tant qu'un conflit existe, et le refus nomme ce qui bloque.
+- Les deux gestes que l'addon se reserve -- clic milieu pour cibler, Ctrl + milieu pour focaliser -- sont refuses comme destination.
+- **Un defaut trouve par son propre test :** deplacer une dissipation laissait l'ANCIENNE combinaison armee. Ctrl + gauche continuait de lancer le sort apres son depart vers Maj + droit : deux combinaisons pour une dissipation, dont une que le joueur croyait avoir liberee. Ce qui n'est plus pose est desormais desarme.
+- La lettre affichee sur la case suit la combinaison reelle. Elle se deduisait du NUMERO du clic, ce qui ne veut plus rien dire des qu'on peut le deplacer.
+- Les miroirs des boutons de pouce cedent au reglage : si vous prenez le bouton 4, c'est votre choix qui gagne.
+- Un remappage se transfere avec le profil, et une liste illisible ou en conflit avec elle-meme est refusee ENTIERE -- en accepter la moitie donnerait un jeu de clics que personne n'a choisi.
+- Tests : 1 474 a 1 504.
+
 ## 1.6.17
 
 **Surcharges de profil par lieu.** Monde ouvert, donjon, raid, JcJ.
@@ -64,30 +78,5 @@ captures, sur la 1.6.12 publiee.
 - **La bande « la page continue plus bas » recouvrait la derniere ligne** de chaque page longue. Elle etait posee dans la zone de lecture ; celle-ci s'arrete maintenant 22 px au-dessus d'elle. La hauteur reellement visible passe donc de 550 a 528 px, et les pages qui la depassent defilent — ce qu'elles sont censees faire.
 - **Le rapport de diagnostic affichait « lock=0 » puis « one » sur deux lignes.** Le separateur des restrictions etait une barre verticale : dans un texte affiche par WoW, « | » ouvre une sequence d'echappement, et « |none » se lit « |n » -- un retour a la ligne -- suivi de « one ». Le separateur est desormais une barre oblique, et un test refuse toute barre verticale dans ce releve.
 - Tests : 1 417 a 1 433.
-
-## 1.6.12
-
-**Le changelog de la 1.6.11 annoncait deux corrections qui n'existaient pas.**
-
-Mon script d'edition ecrivait le fichier APRES ses trois remplacements. Le
-troisieme est tombe sur une ancre absente, ce qui a annule les deux premiers --
-qui avaient deja affiche « ok ». J'ai cru ces « ok » et je les ai recopies dans
-le changelog. Un audit externe l'a vu ; aucun de mes 1 397 tests ne le pouvait,
-puisque les deux corrections etaient invisibles a la suite.
-
-L'outil ecrit desormais apres CHAQUE remplacement et relit le fichier sur disque
-pour confirmer. Les deux corrections sont faites, et testees :
-
-- **Au-dela de six profils, l'avertissement se pose sous la liste.** Il reutilisait le texte de la liste vide, ancre a la place de la premiere rangee : il recouvrait le premier profil, exactement quand la liste est la plus chargee.
-- **Les trois boutons qui changent un profil sont grises pendant un combat.** La logique refusait deja, donc la base n'a jamais pu etre abimee -- mais un bouton actif qui repond par un refus est une promesse non tenue.
-
-**Le reste de l'audit :**
-
-- **Les anciens noms de profils contenant une barre verticale sont migres.** Les 1.6.9 et 1.6.10 les acceptaient ; la 1.6.11 la retire des saisies mais laissait les cles enregistrees telles quelles. Un bouton transmettait « Raid|Soins », la normalisation en faisait « RaidSoins », et le profil devenait introuvable : utiliser, renommer et supprimer echouaient tous. La migration renomme la cle ET suit les affectations. En cas de collision, l'ancien est garde sous un suffixe plutot qu'ecrase -- perdre un profil pour cause de doublon serait pire que d'en avoir deux a trier.
-- **Le refus de changement de profil n'est plus imprime deux fois.** La garde annoncait le refus ET le rendait a l'appelant, qui l'annoncait a son tour.
-- **Ouvrir les reglages en combat ne fait plus apparaitre la couche non protegee seule.** La fenetre ouverte force l'affichage -- mais en combat le pilote securise ne peut pas etre relache. Dans un raid ou la grille est masquee par contexte, un chiffre de recharge se retrouvait au-dessus de rien. Les surcharges ne promettent plus que ce que le pilote peut tenir.
-- **L'apercu d'import borne la longueur de chaque valeur, pas seulement le nombre de lignes.** Un seul changement de filtre porte jusqu'a 500 identifiants de chaque cote : la ligne revenait a la ligne autant de fois qu'il fallait et repassait sous les boutons. La liste des rejets est bornee de la meme facon.
-- **Toujours ouvert et assume :** `AddAuraSound` sans garde de restriction, et le jeton de revision brut dans un ZIP construit a la main. Le premier demande une cle Mythique+ pour trancher, le second une publication par la chaine CI.
-- Tests : 1 397 a 1 417.
 
 L'historique complet est dans `CHANGELOG.md`, livre avec l'addon.

@@ -33,6 +33,7 @@ local TRANSFER_FIELDS = {
     { key = "separateRaidSize", kind = "boolean" },
     { key = "raidFrameSize", kind = "number", min = 12, max = 40, step = 1 },
     { key = "raidSpacing", kind = "number", min = 0, max = 12, step = 1 },
+    { key = "clickBindings", kind = "clicklist" },
     { key = "alertSound", kind = "enum",
       values = { "DEFAULT", "RAID_WARNING", "READY_CHECK", "QUEST_FAILED", "ALARM" } },
     { key = "showTooltips", kind = "boolean" },
@@ -944,6 +945,11 @@ local function encodeValue(field, value)
         table.sort(parts)
         return table.concat(parts, ",")
     end
+    if field.kind == "clicklist" then
+        local parts = {}
+        for slot = 1, 3 do parts[slot] = tostring(value[slot] or "") end
+        return table.concat(parts, ",")
+    end
     if field.kind == "idset" then
         local ids = {}
         for id in pairs(value) do
@@ -1003,6 +1009,22 @@ local function decodeValue(field, text)
             if map[dispelType] == nil then return nil end
         end
         return map
+    end
+    if field.kind == "clicklist" then
+        -- Une combinaison illisible, ou un conflit, et c'est TOUTE la liste qui
+        -- est refusee : accepter la moitie d'un remappage donnerait un jeu de
+        -- clics que personne n'a choisi.
+        local list, index = {}, 0
+        for part in string.gmatch(text .. ",", "([^,]*),") do
+            index = index + 1
+            if index > 3 then return nil end
+            local binding = NS:NormalizeClickBinding(part)
+            if not binding then return nil end
+            list[index] = binding
+        end
+        if index ~= 3 then return nil end
+        if #NS:ClickBindingConflicts(list) > 0 then return nil end
+        return list
     end
     if field.kind == "idset" then
         local set, count = {}, 0
