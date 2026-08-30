@@ -3406,6 +3406,9 @@ do
     rawset(visual.typeMark, "__color", nil)
 
     local before = NS:GetDiagnostics().styleFailures or 0
+    -- Le niveau n'est repose que s'il a change : sans cela la passe n'essaie
+    -- meme pas, ce qui est justement la correction de la 1.6.16.
+    visual.wantedLevel = nil
     truthy(pcall(NS.StyleAuraVisual, NS, button, auraType, visual),
         "style : la passe survit au refus")
     truthy(rawget(visual.overlay, "__color") ~= nil,
@@ -3431,9 +3434,47 @@ do
     end)
     truthy(visual.levelRefused, "cle : le refus est retenu sur le visuel")
 
+    -- 1.6.16 : le niveau etait repose a CHAQUE passe alors qu'il ne change
+    -- qu'avec la priorite du type. C'est ce qui a transforme un refus en 690.
+    visual.levelRefused, visual.wantedLevel = nil, nil
+    NS:StyleAuraVisual(button, auraType, visual)
+    eq(calls, 1, "niveau : une premiere passe tente une fois")
+    for _ = 1, 5 do NS:StyleAuraVisual(button, auraType, visual) end
+    eq(calls, 1, "niveau : une valeur inchangee n'est jamais reposee")
+    -- Et le cas de la grande majorite des joueurs : le client ACCEPTE. Sans le
+    -- garde-fou, le niveau etait repose a chaque passe -- c'est ce qui a
+    -- transforme un refus en 690 sur une seule cle.
+    local accepted = 0
+    rawset(visual.auraButton, "SetFrameLevel", function(target, value)
+        accepted = accepted + 1
+        rawset(target, "__level", value)
+    end)
+    visual.levelRefused, visual.wantedLevel = nil, nil
+    for _ = 1, 6 do NS:StyleAuraVisual(button, auraType, visual) end
+    eq(accepted, 1, "niveau : six passes, une seule pose -- la valeur n'a pas bouge")
+
+    -- Nos couches se placaient par rapport au niveau DEMANDE. Quand le client
+    -- refuse, le bouton garde son ancien niveau et nos couches se retrouvaient
+    -- posees par rapport a une valeur qui n'existe pas.
+    rawset(visual.auraButton, "SetFrameLevel", function() end)
+    rawset(visual.auraButton, "__level", 500)
+    visual.levelRefused, visual.wantedLevel = nil, nil
+    NS:StyleAuraVisual(button, auraType, visual)
+    eq(rawget(visual.labelLayer, "__level"), 503,
+        "niveau : nos couches suivent le niveau REEL du bouton, pas celui demande")
+
+    visual.levelRefused = true
+
     local afterFirst = NS:GetDiagnostics().styleFailures
     rawset(visual.overlay, "__color", nil)
-    for _ = 1, 5 do NS:StyleAuraVisual(button, auraType, visual) end
+    -- Ce qui est verifie ici : un refus RETENU ne rejoue rien, meme quand le
+    -- niveau demande change -- sinon la memoire ne servirait a rien des la
+    -- premiere reorganisation des priorites.
+    calls = 0
+    for index = 1, 5 do
+        visual.wantedLevel = index
+        NS:StyleAuraVisual(button, auraType, visual)
+    end
     eq(calls, 0, "cle : l'etape refusee n'est plus jamais retentee")
     eq(NS:GetDiagnostics().styleFailures, afterFirst,
         "cle : et le releve ne se gonfle plus de six cent quatre-vingt-dix echecs")

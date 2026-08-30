@@ -99,7 +99,11 @@ local function newFrame(name)
     -- a la mauvaise epaisseur, ou pas dessine du tout, etait indetectable.
     rawset(f, "SetHeight", function(s, v) rawset(s, "__height", v) end)
     rawset(f, "SetWidth", function(s, v) rawset(s, "__width", v) end)
-    rawset(f, "GetFrameLevel", function() return 1 end)
+    -- SetFrameLevel tombait dans le stub generique et GetFrameLevel rendait
+    -- toujours 1 : impossible de verifier qu'une couche se place par rapport a
+    -- une autre. Tout l'empilement de l'addon etait donc invisible aux tests.
+    rawset(f, "SetFrameLevel", function(s, value) rawset(s, "__level", tonumber(value) or 0) end)
+    rawset(f, "GetFrameLevel", function(s) return rawget(s, "__level") or 1 end)
     -- Coordonnees ecran : nil tant que le test n a pas pose de rectangle,
     -- ce qui reproduit un cadre non encore place.
     rawset(f, "GetLeft", function(s) local r = rawget(s, "__rect") return r and r.left end)

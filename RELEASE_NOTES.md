@@ -6,6 +6,18 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.6.16
+
+Premiere tranche du chantier « sortir les elements visuels du cadre protege ».
+Elle est plus petite que prevu, parce que le code a repondu une chose que je ne
+savais pas.
+
+- **Nos propres cadres poses SOUS l'objet du moteur ne sont jamais refuses.** Seul l'objet du moteur lui-meme l'est. Deplacer les decorations n'etait donc pas le sujet : le sujet etait l'unique appel qui touche cet objet.
+- **Le niveau du bouton du moteur n'est repose que s'il a change**, c'est-a-dire presque jamais -- il ne depend que de la priorite du type. Il etait pourtant repose a chaque passe de style. C'est cela qui a transforme un refus en **690 refus sur une seule cle**. Sur la prochaine, ce nombre doit tomber a un par visuel, puis a zero.
+- **Nos deux couches suivent le niveau REEL du bouton, plus celui qu'on avait demande.** Quand le client refuse, le bouton garde son ancien niveau : le voile de duree et la couche des libelles se retrouvaient places par rapport a une valeur qui n'existait pas. On lui demande maintenant le niveau qu'il a.
+- **Le harnais ne mesurait aucun empilement** : `SetFrameLevel` tombait dans le bouchon generique et `GetFrameLevel` rendait toujours 1. Toute la superposition de l'addon etait invisible aux tests. Elle est mesuree.
+- Tests : 1 449 a 1 453.
+
 ## 1.6.15
 
 Corrections issues d'un audit externe de la 1.6.14.
@@ -16,7 +28,7 @@ Corrections issues d'un audit externe de la 1.6.14.
 - **Le gestionnaire de profils suit l'entree en combat.** Il savait griser ses boutons, mais rien ne l'appelait au pull : ouvert avant, il gardait des boutons actifs qui repondaient ensuite par un refus.
 - **Une seule cle d'import rejetee pouvait remplir la fenetre.** Leur nombre etait borne, pas leur longueur.
 - **L'etat de la souris n'est plus abandonne avec le niveau de cadre.** Les deux vivaient dans la meme etape : la levee du premier sautait le second, puis le refus retenu sautait les deux pour toujours, et l'option d'infobulle ne s'appliquait plus jamais aux boutons d'aura.
-- **Le paquet publie sortait en CRLF alors que le depot est en LF.** Je ne verifiais que mon archive locale, jamais celle que les joueurs telechargent -- ou mon propre controle d'archive echoue. Un `.gitattributes` fixe les fins de ligne ; a confirmer sur la prochaine publication.
+- **Je ne verifiais que mon archive locale, jamais celle que les joueurs telechargent.** Sur celle de la CI, mon propre controle d'archive echouait : elle sort en CRLF alors que le depot est en LF. J'ai d'abord cru a un `.gitattributes` manquant. Verifie sur l'archive publiee de la v1.6.15 : **ca ne vient pas de git, c'est l'empaqueteur BigWigs qui convertit**, et c'est la convention des addons WoW depuis toujours. Le controle ne refuse donc plus le CRLF que dans le DEPOT. Le `.gitattributes` reste, pour les diffs.
 - Tests : 1 437 a 1 449.
 
 ## 1.6.14
@@ -86,11 +98,5 @@ Corrections issues d'un audit externe de la 1.6.10.
 - **Correction apportee a cette entree par la 1.6.12 :** elle annoncait aussi que l'avertissement au-dela de six profils se posait sous la liste, et que les boutons de profils etaient grises en combat. **Ces deux corrections n'etaient pas dans la 1.6.11** -- un script d'edition les avait annulees en silence. Elles sont faites en 1.6.12.
 - **Non corrige, et assume :** `AddAuraSound` est toujours tente sans garde de restriction. Le risque est reel — une cle mythique garde `ChallengeMode` actif alors que `InCombatLockdown` dit non — mais toute garde que je pourrais ecrire ici couperait les alertes pendant une cle entiere dans le cas « afficher seulement en combat ». Cela demande une session en jeu pour trancher, pas une supposition de plus.
 - Tests : 1 356 a 1 397.
-
-## 1.6.10
-
-- **Le bouton du son d'alerte est enfin verifie.** Le mecanisme etait teste depuis la 1.6.6 et le bouton pose en 1.6.7, mais rien ne verifiait qu'il etait branche sur quoi que ce soit : le debrancher ne faisait tomber aucun test. Une option qu'on ne peut atteindre que par une commande n'est pas livree. La rotation, le libelle qui suit, et la disparition du reglage quand le son est coupe sont maintenant tenus.
-- Le nombre de sons proposes n'est PAS ecrit dans le test : il depend du client. Le figer aurait fait tomber ce test le jour ou la liste change, sans qu'aucun defaut existe.
-- Tests : 1 345 a 1 356.
 
 L'historique complet est dans `CHANGELOG.md`, livre avec l'addon.

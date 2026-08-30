@@ -758,7 +758,12 @@ function NS:StyleAuraVisual(button, auraType, visual)
             visual.auraButton:SetMouseMotionEnabled(enabled and self.db.showTooltips)
         end
     end)
-    if not visual.levelRefused then
+    -- Le niveau demande ne change qu'avec la priorite du type, c'est-a-dire
+    -- presque jamais. Il etait pourtant repose a CHAQUE passe : c'est ce qui a
+    -- transforme un refus en 690 refus sur une seule cle. Une valeur qui n'a pas
+    -- bouge n'a rien a etre reappliquee.
+    if not visual.levelRefused and visual.wantedLevel ~= level then
+        visual.wantedLevel = level
         local applied = step(function()
             visual.auraButton:SetFrameLevel(level)
         end)
@@ -807,14 +812,25 @@ function NS:StyleAuraVisual(button, auraType, visual)
             visual.clickHintPlate:SetShown(hintShown)
         end)
     end
+    -- Nos deux couches se placaient par rapport au niveau DEMANDE, en supposant
+    -- que la demande avait ete honoree. Quand le client la refuse -- 690 fois
+    -- sur une cle mesuree -- le bouton du moteur garde son ancien niveau, et nos
+    -- couches se retrouvent posees par rapport a une valeur qui n'existe pas.
+    -- On lui demande donc le niveau qu'il A, pas celui qu'on voulait. La lecture
+    -- est protegee : elle porte sur l'objet du moteur, comme le reste.
+    local anchorLevel = level
+    do
+        local read, actual = pcall(visual.auraButton.GetFrameLevel, visual.auraButton)
+        if read and type(actual) == "number" then anchorLevel = actual end
+    end
     if visual.durationCooldown then
         step(function()
-            visual.durationCooldown:SetFrameLevel(level + 1)
+            visual.durationCooldown:SetFrameLevel(anchorLevel + 1)
             visual.durationCooldown:SetDrawSwipe(enabled and self.db.showDuration ~= false)
         end)
     end
     if visual.labelLayer then
-        step(function() visual.labelLayer:SetFrameLevel(level + 3) end)
+        step(function() visual.labelLayer:SetFrameLevel(anchorLevel + 3) end)
     end
     -- Silent, and deliberately so. This restyles labels the protected engine
     -- owns, and 12.1 can declare them forbidden to addon code: a real session
