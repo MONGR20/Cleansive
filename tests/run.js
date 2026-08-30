@@ -467,7 +467,15 @@ const packageOffenders = [];
     if (raw.length >= 3 && raw[0] === 0xEF && raw[1] === 0xBB && raw[2] === 0xBF) {
       packageOffenders.push(`${entry.relative} commence par un BOM UTF-8`);
     }
-    if (/\.(lua|toc|xml)$/i.test(entry.name) && raw.includes(Buffer.from("\r\n"))) {
+    // Le CRLF n'est refuse que dans le DEPOT. L'empaqueteur BigWigs convertit
+    // en CRLF a la construction : c'est la convention des addons WoW depuis
+    // toujours, et le client charge les deux. Un .gitattributes en LF n'y
+    // change rien, essaye et verifie sur l'archive publiee de la v1.6.15.
+    // Refuser le paquet pour cela, c'etait refuser une convention que je ne
+    // controle pas -- et un controle qu'on doit ignorer ne sert plus a rien.
+    const inRepository = fs.existsSync(pkgmeta);
+    if (inRepository && /\.(lua|toc|xml)$/i.test(entry.name)
+      && raw.includes(Buffer.from("\r\n"))) {
       packageOffenders.push(`${entry.relative} contient des fins de ligne CRLF`);
     }
   }
