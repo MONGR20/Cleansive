@@ -624,6 +624,14 @@ function NS:HandleProfileCommand(rest)
         for _, name in ipairs(self:NamedProfiles()) do
             self:Print((name == active and "> " or "   ") .. name)
         end
+        for _, place in ipairs(self.ENVIRONMENTS) do
+            local override = self:EnvironmentOverride(place)
+            if override then
+                self:Print(string.format(self.L.PROFILE_ENVIRONMENT_SET,
+                    self.L["ENVIRONMENT_" .. string.upper(place)] or place, override))
+            end
+        end
+        if self:EnvironmentLocked() then self:Print(self.L.PROFILE_ENVIRONMENT_LOCKED) end
         self:Print(self.L.PROFILE_COMMAND_HINT)
         return
     end
@@ -635,6 +643,17 @@ function NS:HandleProfileCommand(rest)
         ok, message = self:UseNamedProfile(argument)
     elseif verb == "own" then
         ok, message = self:UseOwnProfile()
+    elseif verb == "env" then
+        -- « env <lieu> » sans nom retire la surcharge : le verbe et son
+        -- contraire sur la meme ligne, plutot qu'un second verbe a retenir.
+        local place, target = argument:match("^(%S*)%s*(.-)$")
+        ok, message = self:SetEnvironmentOverride(string.lower(place or ""), target)
+    elseif verb == "lock" then
+        local locked = not self:EnvironmentLocked()
+        self:SetEnvironmentLocked(locked)
+        ok = true
+        message = locked and self.L.PROFILE_ENVIRONMENT_LOCKED
+            or self.L.PROFILE_ENVIRONMENT_UNLOCKED
     elseif verb == "delete" then
         ok, message = self:DeleteNamedProfile(argument)
     elseif verb == "rename" then

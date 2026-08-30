@@ -6128,6 +6128,105 @@ do
 end
 
 --------------------------------------------------------------------------
+-- 1.6.17 : surcharges de profil par lieu
+--
+-- La plus petite surcharge qui puisse exister : elle ne porte AUCUN reglage,
+-- elle designe seulement un profil nomme deja existant pour un lieu donne.
+-- Le point 304 de l'inventaire interdit « une multitude de profils
+-- automatiques incomprehensibles » : rien ne bascule sans qu'on l'ait demande
+-- lieu par lieu, et un verrou global fige tout.
+--------------------------------------------------------------------------
+do
+    freshProfile("PALADIN")
+    knowSpells(4987)
+    NS:UpdateSpells()
+    mock.state.instanceType = "none"
+    NS.dbRoot.global.lockEnvironment = nil
+    NS.db.frameSize = 22
+
+    eq(NS:CurrentEnvironment(), "world", "lieu : hors instance, c'est le monde ouvert")
+    mock.state.instanceType = "party"
+    eq(NS:CurrentEnvironment(), "dungeon", "lieu : un groupe donne le donjon")
+    mock.state.instanceType = "raid"
+    eq(NS:CurrentEnvironment(), "raid", "lieu : un raid donne le raid")
+    mock.state.instanceType = "arena"
+    eq(NS:CurrentEnvironment(), "pvp", "lieu : une arene compte comme du JcJ")
+    mock.state.instanceType = "none"
+
+    -- Une surcharge ne peut designer qu'un profil qui existe.
+    falsy(NS:SetEnvironmentOverride("dungeon", "PasUnProfil"),
+        "surcharge : elle refuse un profil inconnu")
+    falsy(NS:SetEnvironmentOverride("nulle-part", "X"),
+        "surcharge : et un lieu inconnu")
+
+    NS:CreateNamedProfile("Donjon")
+    NS:UseNamedProfile("Donjon")
+    NS.db.frameSize = 31
+    NS:UseOwnProfile()
+    eq(NS.db.frameSize, 22, "surcharge : le profil propre est intact avant l'essai")
+
+    truthy(NS:SetEnvironmentOverride("dungeon", "Donjon"), "surcharge : elle est acceptee")
+    eq(NS.db.frameSize, 22,
+        "surcharge : hors donjon, elle ne change RIEN -- rien ne bascule tout seul ailleurs")
+
+    -- Entrer en donjon doit recharger : sans le lieu dans l'identite, le
+    -- personnage et la specialisation n'ayant pas bouge, rien ne se serait
+    -- passe et la surcharge n'aurait jamais servi.
+    mock.state.instanceType = "party"
+    NS:QueueProfileSwitch()
+    eq(NS.db.frameSize, 31, "surcharge : entrer en donjon charge bien le profil designe")
+    truthy(NS:GetActiveProfileLabel():find("donjon", 1, true)
+        or NS:GetActiveProfileLabel():find("dungeon", 1, true),
+        "surcharge : et le libelle affiche annonce le lieu")
+
+    -- En sortir doit revenir en arriere, sans rien avoir ecrit dans le profil
+    -- propre au passage.
+    mock.state.instanceType = "none"
+    NS:QueueProfileSwitch()
+    eq(NS.db.frameSize, 22, "surcharge : en sortir revient au profil habituel")
+
+    -- Le verrou fige tout, quel que soit le lieu traverse.
+    mock.state.instanceType = "party"
+    NS:SetEnvironmentLocked(true)
+    NS:QueueProfileSwitch()
+    eq(NS.db.frameSize, 22, "verrou : le lieu ne change plus rien")
+    falsy(NS:GetActiveProfileLabel():find("donjon", 1, true),
+        "verrou : et le libelle ne promet plus un lieu qui n'agit pas")
+    NS:SetEnvironmentLocked(false)
+    NS:QueueProfileSwitch()
+    eq(NS.db.frameSize, 31, "verrou : le lever rend leur effet aux surcharges")
+
+    -- Retirer la surcharge, par le meme verbe sans nom.
+    NS:HandleSlash("profile env dungeon")
+    NS:QueueProfileSwitch()
+    eq(NS.db.frameSize, 22, "surcharge : « env <lieu> » sans nom la retire")
+
+    -- Un profil supprime ne doit pas laisser une surcharge morte derriere lui.
+    NS:HandleSlash("profile env dungeon Donjon")
+    eq(NS:EnvironmentOverride("dungeon"), "Donjon", "commande : la surcharge est posee")
+    NS:DeleteNamedProfile("Donjon")
+    falsy(NS:EnvironmentOverride("dungeon"),
+        "surcharge : un profil supprime n'est plus rendu comme surcharge")
+    -- Lire n'est pas ranger : EnvironmentOverride verifie deja l'existence,
+    -- donc il repondrait « aucune » meme avec un pointeur mort en base. Ce qui
+    -- compte est que la BASE soit propre -- sinon la surcharge ressusciterait
+    -- au premier profil qui reprendrait ce nom.
+    local stored = NS.dbRoot.environments[NS.activeCharacterKey]
+    stored = type(stored) == "table" and stored[NS.activeSpecKey]
+    falsy(type(stored) == "table" and stored.dungeon,
+        "surcharge : et la base ne garde aucun pointeur mort")
+    NS:CreateNamedProfile("Donjon")
+    falsy(NS:EnvironmentOverride("dungeon"),
+        "surcharge : un nom repris ne ressuscite aucune surcharge")
+    NS:DeleteNamedProfile("Donjon")
+    NS:QueueProfileSwitch()
+    eq(NS.db.frameSize, 22, "surcharge : et on revient au profil propre")
+
+    mock.state.instanceType = "none"
+    NS:QueueProfileSwitch()
+end
+
+--------------------------------------------------------------------------
 -- 1.6.9 : profils nommes
 --
 -- Deux regles portent tout le reste. Le profil propre d'une specialisation

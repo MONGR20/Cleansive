@@ -241,6 +241,7 @@ state = {
     lossOfControl = {},
     lossOfControlRestricted = false,
     tocRevision = "@project-abbreviated-hash@",
+    instanceType = "none",
     timers = {},
 }
 M.state = state
@@ -557,7 +558,12 @@ function M.install(_G)
     _G.GetMacroIndexByName, _G.CreateMacro, _G.EditMacro = function() return 0 end, function() return 1 end, function() end
     _G.StaticPopupDialogs, _G.StaticPopup_Show = {}, function() end
     _G.Settings, _G.SettingsPanel, _G.HideUIPanel = nil, nil, function() end
-    _G.IsInInstance = function() return false, "none" end
+    -- Cable en dur sur « nulle part » : tout code qui decide selon le lieu
+    -- passait pour verifie sans l'etre.
+    _G.IsInInstance = function()
+        local kind = state.instanceType or "none"
+        return kind ~= "none", kind
+    end
     _G.GetInstanceInfo = function() return "Royaumes de l'Est", "none", 0, "", 0, 0, false, 0 end
     _G.IsControlKeyDown, _G.IsShiftKeyDown, _G.IsAltKeyDown = function() return false end, function() return false end, function() return false end
 end

@@ -6,6 +6,18 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.6.17
+
+**Surcharges de profil par lieu.** Monde ouvert, donjon, raid, JcJ.
+
+- C'est la plus petite surcharge qui puisse exister : elle **ne porte aucun reglage**, elle designe seulement un profil nomme deja existant pour un lieu donne. Rien de neuf a comprendre, rien qui bascule sans qu'on l'ait demande lieu par lieu — le point 304 de l'inventaire interdit « une multitude de profils automatiques incomprehensibles », et c'est une bonne interdiction.
+- **Un verrou global** fige tout : la grille ne change plus quand vous traversez une porte, quoi qu'il arrive. `/cleansive profile lock`.
+- Le lieu fait desormais partie de l'identite du profil actif. Sans cela, entrer en donjon ne rechargeait rien : le personnage et la specialisation n'avaient pas bouge, et la surcharge n'aurait jamais servi a rien.
+- Le libelle du profil actif annonce le lieu quand une surcharge s'applique. Verrouille, il ne promet plus un lieu qui n'agit pas.
+- `/cleansive profile env <world|dungeon|raid|pvp> [nom]` — sans nom, la surcharge est retiree. Le verbe et son contraire sur la meme ligne.
+- **Un defaut trouve par son propre test :** supprimer un profil actif **par surcharge** ne rechargeait rien. La verification portait sur le chemin -- l'affectation nommee -- et pas sur l'identite. C'est desormais `self.db == la table supprimee` qui decide, ce qui couvre les deux chemins. Les surcharges mortes sont nettoyees comme les affectations mortes, pour la meme raison : un pointeur laisse en place ressusciterait au premier profil qui reprendrait ce nom.
+- Tests : 1 453 a 1 474.
+
 ## 1.6.16
 
 Premiere tranche du chantier « sortir les elements visuels du cadre protege ».

@@ -6,6 +6,18 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.6.17
+
+**Surcharges de profil par lieu.** Monde ouvert, donjon, raid, JcJ.
+
+- C'est la plus petite surcharge qui puisse exister : elle **ne porte aucun reglage**, elle designe seulement un profil nomme deja existant pour un lieu donne. Rien de neuf a comprendre, rien qui bascule sans qu'on l'ait demande lieu par lieu — le point 304 de l'inventaire interdit « une multitude de profils automatiques incomprehensibles », et c'est une bonne interdiction.
+- **Un verrou global** fige tout : la grille ne change plus quand vous traversez une porte, quoi qu'il arrive. `/cleansive profile lock`.
+- Le lieu fait desormais partie de l'identite du profil actif. Sans cela, entrer en donjon ne rechargeait rien : le personnage et la specialisation n'avaient pas bouge, et la surcharge n'aurait jamais servi a rien.
+- Le libelle du profil actif annonce le lieu quand une surcharge s'applique. Verrouille, il ne promet plus un lieu qui n'agit pas.
+- `/cleansive profile env <world|dungeon|raid|pvp> [nom]` — sans nom, la surcharge est retiree. Le verbe et son contraire sur la meme ligne.
+- **Un defaut trouve par son propre test :** supprimer un profil actif **par surcharge** ne rechargeait rien. La verification portait sur le chemin -- l'affectation nommee -- et pas sur l'identite. C'est desormais `self.db == la table supprimee` qui decide, ce qui couvre les deux chemins. Les surcharges mortes sont nettoyees comme les affectations mortes, pour la meme raison : un pointeur laisse en place ressusciterait au premier profil qui reprendrait ce nom.
+- Tests : 1 453 a 1 474.
+
 ## 1.6.16
 
 Premiere tranche du chantier « sortir les elements visuels du cadre protege ».
@@ -77,26 +89,5 @@ pour confirmer. Les deux corrections sont faites, et testees :
 - **L'apercu d'import borne la longueur de chaque valeur, pas seulement le nombre de lignes.** Un seul changement de filtre porte jusqu'a 500 identifiants de chaque cote : la ligne revenait a la ligne autant de fois qu'il fallait et repassait sous les boutons. La liste des rejets est bornee de la meme facon.
 - **Toujours ouvert et assume :** `AddAuraSound` sans garde de restriction, et le jeton de revision brut dans un ZIP construit a la main. Le premier demande une cle Mythique+ pour trancher, le second une publication par la chaine CI.
 - Tests : 1 397 a 1 417.
-
-## 1.6.11
-
-Corrections issues d'un audit externe de la 1.6.10.
-
-**Les deux defauts serieux etaient dans les profils nommes, arrives en 1.6.9.**
-
-- **Changer de profil pendant un combat est refuse.** `use`, `own` et la suppression modifiaient la base PUIS demandaient un rechargement que le combat refuse : les cles actives restaient a rien pendant que les reglages continuaient d'ecrire dans l'ancien profil, le message annoncant le nouveau. Une seconde operation ecrivait alors sous une cle vide au lieu du personnage. Un changement de profil ne peut pas etre a moitie applique — c'est deja la regle retenue pour l'apercu en 1.6.1. Les boutons concernes sont grises pendant le combat.
-- **Un profil partage est desormais reellement charge au demarrage.** La resolution de l'affectation n'existait que dans le chemin de changement de specialisation, qui sort tot quand les cles n'ont pas bouge. Une connexion ou la specialisation est deja connue au chargement annoncait donc le profil partage tout en ecrivant dans le profil propre. Il n'y a plus qu'un seul endroit ou la question se pose.
-
-**Le reste :**
-
-- **La couche non protegee suit enfin les regles solo, groupe et raid.** « Afficher en raid » eteint, elle pouvait laisser un chiffre de recharge, le badge TEST ou la plaque d'attente seuls a l'ecran, sans grille dessous. C'est le troisieme consommateur de ce verdict apres le pilote securise et le registre sonore : il ne se calcule plus qu'a un seul endroit.
-- **Cleansive exportait un profil qu'il refusait ensuite d'importer.** Deux ensembles de 500 identifiants depassent l'ancienne borne de 8 000 caracteres. Un test tient maintenant le contrat A LA TAILLE MAXIMALE.
-- **Un nom de profil n'est plus coupe au milieu d'un caractere accentue** : la borne comptait des octets. La barre verticale est refusee — elle separe les deux noms du renommage, et dans un texte affiche par WoW elle ouvre une sequence de mise en forme.
-- **Les listes de priorite et d'exclusion sont reparees entree par entree.** Une base contenant `priority = { 42 }` faisait lever des le premier roster. Le stockage des profils nommes est nettoye de la meme facon : une cle non textuelle remontait jusqu'au tri, qui leve en comparant un nombre a une chaine.
-- **Toute suppression d'alerte native passe par un seul endroit**, donc le compteur des alertes vivantes ne derive plus apres un nettoyage d'orphelin.
-- L'apercu d'import est borne a huit lignes suivies d'un compte. Les deux fenetres de profils suivent la mise a l'echelle et se ferment par Echap. Le README documente `/cleansive profile` et `/cleansive sound`.
-- **Correction apportee a cette entree par la 1.6.12 :** elle annoncait aussi que l'avertissement au-dela de six profils se posait sous la liste, et que les boutons de profils etaient grises en combat. **Ces deux corrections n'etaient pas dans la 1.6.11** -- un script d'edition les avait annulees en silence. Elles sont faites en 1.6.12.
-- **Non corrige, et assume :** `AddAuraSound` est toujours tente sans garde de restriction. Le risque est reel — une cle mythique garde `ChallengeMode` actif alors que `InCombatLockdown` dit non — mais toute garde que je pourrais ecrire ici couperait les alertes pendant une cle entiere dans le cas « afficher seulement en combat ». Cela demande une session en jeu pour trancher, pas une supposition de plus.
-- Tests : 1 356 a 1 397.
 
 L'historique complet est dans `CHANGELOG.md`, livre avec l'addon.

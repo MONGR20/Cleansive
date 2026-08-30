@@ -306,6 +306,12 @@ local function absorbHistory(global, profile)
 end
 
 function NS:GetActiveProfileLabel()
+    local environment = self:CurrentEnvironment()
+    local override = not self:EnvironmentLocked() and self:EnvironmentOverride(environment)
+    if override then
+        return override .. "  -  "
+            .. (self.L["ENVIRONMENT_" .. string.upper(environment)] or environment)
+    end
     local named = self:ActiveNamedProfile()
     if named then return named .. "  -  " .. self.L.PROFILE_SHARED end
     local specName = self.activeSpecName
@@ -484,7 +490,11 @@ function NS:DeleteNamedProfile(rawName)
     if not named or not name or not named[name] then
         return false, self.L.PROFILE_UNKNOWN
     end
-    local wasActive = self:ActiveNamedProfile() == name
+    -- L'identite, pas le chemin : un profil peut etre actif par affectation OU
+    -- par surcharge de lieu, et la seconde n'etait pas regardee. Supprimer le
+    -- profil du donjon depuis le donjon laissait donc self.db pointer sur une
+    -- table qui n'existe plus dans la base.
+    local wasActive = self.db ~= nil and self.db == named[name]
     named[name] = nil
     -- Toute specialisation qui pointait dessus revient a SON profil, qui n'a
     -- jamais ete supprime. Laisser un pointeur mort ferait repartir un autre
@@ -494,6 +504,23 @@ function NS:DeleteNamedProfile(rawName)
         if type(character) == "table" then
             for spec, assigned in pairs(character) do
                 if assigned == name then character[spec] = nil end
+            end
+        end
+    end
+    -- Et les surcharges de lieu, pour la meme raison que les affectations : un
+    -- pointeur mort laisse en place ressusciterait au premier profil qui
+    -- reprendrait ce nom.
+    local raw = self.dbRoot
+    if raw and type(raw.environments) == "table" then
+        for _, character in pairs(raw.environments) do
+            if type(character) == "table" then
+                for _, specs in pairs(character) do
+                    if type(specs) == "table" then
+                        for place, assigned in pairs(specs) do
+                            if assigned == name then specs[place] = nil end
+                        end
+                    end
+                end
             end
         end
     end
@@ -662,9 +689,110 @@ end
 -- ActiveNamedProfile annoncer le profil partage pendant que self.db pointait
 -- ailleurs : les reglages partaient au mauvais endroit, sans rien dire.
 -- Il n'y a plus qu'un seul endroit ou la question se pose.
+--------------------------------------------------------------------------
+-- Surcharges par environnement
+--
+-- Le point 304 de l'inventaire interdit « une multitude de profils
+-- automatiques incomprehensibles ». La surcharge est donc la plus petite qui
+-- puisse exister : elle ne porte AUCUN reglage, elle designe seulement un
+-- profil nomme deja existant pour un lieu donne. Rien de neuf a comprendre,
+-- rien qui bascule sans qu'on l'ait demande lieu par lieu.
+--
+-- Et un verrou global, parce qu'un joueur qui regle sa grille veut parfois
+-- qu'elle ne bouge plus, quoi qu'il traverse.
+--------------------------------------------------------------------------
+local ENVIRONMENTS = { "world", "dungeon", "raid", "pvp" }
+NS.ENVIRONMENTS = ENVIRONMENTS
+
+function NS:CurrentEnvironment()
+    if not IsInInstance then return "world" end
+    local inside, kind = IsInInstance()
+    if not inside then return "world" end
+    if kind == "raid" then return "raid" end
+    if kind == "pvp" or kind == "arena" then return "pvp" end
+    if kind == "party" or kind == "scenario" then return "dungeon" end
+    return "world"
+end
+
+function NS:EnvironmentLocked()
+    local global = self.dbRoot and self.dbRoot.global
+    return global and global.lockEnvironment and true or false
+end
+
+function NS:SetEnvironmentLocked(locked)
+    local global = self.dbRoot and self.dbRoot.global
+    if not global then return false end
+    global.lockEnvironment = locked and true or false
+    self:ReloadActiveProfile()
+    return true
+end
+
+local function environmentStore(self, characterKey, specKey)
+    local raw = self.dbRoot
+    if not raw then return nil end
+    if type(raw.environments) ~= "table" then raw.environments = {} end
+    local character = raw.environments[characterKey]
+    if type(character) ~= "table" then character = {} raw.environments[characterKey] = character end
+    local spec = character[specKey]
+    if type(spec) ~= "table" then spec = {} character[specKey] = spec end
+    return spec
+end
+
+function NS:EnvironmentOverride(environment)
+    local raw = self.dbRoot
+    local character = raw and type(raw.environments) == "table"
+        and raw.environments[self.activeCharacterKey or ""]
+    local spec = type(character) == "table" and character[self.activeSpecKey or ""]
+    local name = type(spec) == "table" and spec[environment]
+    local named = self:NamedProfileStore()
+    if type(name) == "string" and named and named[name] then return name end
+    return nil
+end
+
+function NS:SetEnvironmentOverride(environment, rawName)
+    if self:ProfileChangeBlockedByCombat() then return false, self.L.PROFILE_COMBAT_REFUSED end
+    local valid = false
+    for _, candidate in ipairs(ENVIRONMENTS) do
+        if candidate == environment then valid = true end
+    end
+    if not valid then return false, self.L.PROFILE_ENVIRONMENT_UNKNOWN end
+    local specKey = self.activeSpecKey
+    if not specKey then return false, self.L.PROFILE_UNKNOWN end
+    local store = environmentStore(self, self.activeCharacterKey, specKey)
+    if not store then return false, self.L.PROFILE_UNKNOWN end
+
+    if rawName == nil or rawName == "" then
+        store[environment] = nil
+        self:ReloadActiveProfile()
+        return true, string.format(self.L.PROFILE_ENVIRONMENT_CLEARED,
+            self.L["ENVIRONMENT_" .. string.upper(environment)] or environment)
+    end
+    local name = self:NormalizeProfileName(rawName)
+    local named = self:NamedProfileStore()
+    if not name or not named or not named[name] then return false, self.L.PROFILE_UNKNOWN end
+    store[environment] = name
+    self:ReloadActiveProfile()
+    return true, string.format(self.L.PROFILE_ENVIRONMENT_SET,
+        self.L["ENVIRONMENT_" .. string.upper(environment)] or environment, name)
+end
+
 function NS:ResolveActiveProfileTable(characterKey, specKey, ownProfile)
     local named, assignments = self:NamedProfileStore()
     if not named then return ownProfile end
+
+    -- La surcharge de lieu passe AVANT l'affectation : c'est sa raison d'etre.
+    -- Elle ne s'applique jamais quand l'environnement est verrouille, et jamais
+    -- vers un profil qui n'existe plus.
+    if not self:EnvironmentLocked() then
+        local raw = self.dbRoot
+        local envCharacter = type(raw.environments) == "table" and raw.environments[characterKey]
+        local envSpec = type(envCharacter) == "table" and envCharacter[specKey]
+        local wanted = type(envSpec) == "table" and envSpec[self:CurrentEnvironment()]
+        if type(wanted) == "string" and type(named[wanted]) == "table" then
+            return named[wanted]
+        end
+    end
+
     local character = assignments[characterKey]
     local assigned = type(character) == "table" and character[specKey]
     if type(assigned) ~= "string" then return ownProfile end
@@ -699,7 +827,12 @@ function NS:LoadCurrentProfile(cloneCurrent)
     -- Still no specialization data: keep booting on the throwaway profile
     -- rather than persisting anything under an unknown key.
     if not specKey then return false end
-    if characterKey == self.activeCharacterKey and specKey == self.activeSpecKey then return false end
+    -- L'environnement fait partie de l'identite : sans lui, entrer en donjon ne
+    -- rechargeait rien, puisque le personnage et la specialisation n'avaient
+    -- pas bouge -- et la surcharge n'aurait jamais servi a rien.
+    local environment = self:CurrentEnvironment()
+    if characterKey == self.activeCharacterKey and specKey == self.activeSpecKey
+        and environment == self.activeEnvironment then return false end
 
     local profiles = self.dbRoot.profiles
     profiles[characterKey] = type(profiles[characterKey]) == "table" and profiles[characterKey] or {}
@@ -735,6 +868,7 @@ function NS:LoadCurrentProfile(cloneCurrent)
     self.activeCharacterKey = characterKey
     self.activeSpecKey = specKey
     self.activeSpecName = specName
+    self.activeEnvironment = environment
     self.enabled = profile.enabled and true or false
     self.gridManuallyHidden = false
     self.pendingEnabled = nil
