@@ -190,6 +190,17 @@ function NS:BuildAuraSoundPlan()
     return spellIDs, units, fingerprint, registrations
 end
 
+-- Le seul endroit ou une poignee native est retiree, et donc le seul endroit
+-- ou le compteur des enregistrements vivants bouge vers le bas.
+function NS:RemoveNativeAuraSound(handle)
+    local ok, result = pcall(C_UnitAuras.RemoveAuraSound, handle)
+    local removed = ok and result ~= false
+    if removed then
+        self.liveNativeSounds = math.max(0, (self.liveNativeSounds or 0) - 1)
+    end
+    return removed, ok and result or result
+end
+
 function NS:RequestAuraSoundRefresh(reason)
     self.pendingSoundRefreshReason = reason or self.pendingSoundRefreshReason or "requested"
     if self.auraSoundRefreshScheduled then return end
@@ -260,8 +271,14 @@ function NS:RefreshAuraSoundRegistrations(reason)
     self.auraSoundOrphanHandles = self.auraSoundOrphanHandles or {}
     if self:IsNativeAuraSoundAvailable() then
         for handle in pairs(self.auraSoundOrphanHandles) do
-            local ok, result = pcall(C_UnitAuras.RemoveAuraSound, handle)
-            if ok and result ~= false then self.auraSoundOrphanHandles[handle] = nil end
+            -- P2 de l'audit du 30/08 : ce nettoyage retirait la poignee sans
+            -- decrementer le compteur des enregistrements vivants. Apres un
+            -- remplacement refuse puis un nettoyage reussi, soundstatus et
+            -- diag copy annoncaient plus d'alertes vivantes qu'il n'y en avait.
+            -- TOUTE suppression passe maintenant par le meme endroit.
+            if self:RemoveNativeAuraSound(handle) then
+                self.auraSoundOrphanHandles[handle] = nil
+            end
         end
     end
 
@@ -388,10 +405,8 @@ function NS:RefreshAuraSoundRegistrations(reason)
     diagnostics.pending = #pendingAdds > 0 or #pendingRemovals > 0
 
     local function removeNativeHandle(handle)
-        local ok, result = pcall(C_UnitAuras.RemoveAuraSound, handle)
-        local removed = ok and result ~= false
-        if removed then self.liveNativeSounds = math.max(0, (self.liveNativeSounds or 0) - 1) end
-        return removed, ok and result or result
+        local removed, detail = self:RemoveNativeAuraSound(handle)
+        return removed, detail
     end
 
     local function countNativeHandle()

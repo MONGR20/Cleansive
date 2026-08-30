@@ -401,7 +401,9 @@ end
 -- alors qu'il n'affiche rien, et la seule sortie etait de couper le son a la main.
 -- Ceci rejoue la meme regle en Lua. Un test compare les deux verdicts sur toutes
 -- les combinaisons : le jour ou la macro change, le miroir doit changer avec elle.
-function NS:GridWouldBeVisible()
+-- combatOverride existe parce que PLAYER_REGEN_DISABLED arrive avant que
+-- InCombatLockdown ne bascule : l'appelant sait, la fonction non.
+function NS:GridWouldBeVisible(combatOverride)
     if not self.enabled then return false end
     -- L'apercu et la fenetre de reglages forcent l'affichage : ce que le joueur
     -- regarde doit s'entendre.
@@ -414,7 +416,9 @@ function NS:GridWouldBeVisible()
     elseif IsInGroup and IsInGroup() then allowed = self.db.showParty ~= false
     else allowed = self.db.showSolo ~= false end
     if not allowed then return false end
-    if self.db.autoHide and not (InCombatLockdown and InCombatLockdown()) then return false end
+    local inCombat = combatOverride
+    if inCombat == nil then inCombat = InCombatLockdown and InCombatLockdown() end
+    if self.db.autoHide and not inCombat then return false end
     return true
 end
 
@@ -502,15 +506,19 @@ function NS:UpdateGridVisibilityDriver()
     end
 end
 
+-- P2 de l'audit du 30/08 : cette couche decidait seule, sans jamais lire
+-- showSolo, showParty ni showRaid. « Afficher en raid » eteint, le pilote
+-- securise masquait les cases en entrant en raid -- et un chiffre de recharge,
+-- le badge TEST, la plaque d'attente ou l'indicateur manuel pouvaient rester
+-- seuls a l'ecran, sans grille dessous.
+--
+-- Elle pose maintenant exactement la meme question que la grille. C'est le
+-- troisieme consommateur de ce verdict apres le pilote et le registre sonore :
+-- il n'y a plus qu'un seul endroit ou il se calcule.
 function NS:UpdateCooldownOverlayVisibility(combatOverride)
     local overlay = self.cooldownBody
     if not overlay then return end
-    local autoHideActive = self.db.autoHide and RegisterStateDriver
-    local inCombat = combatOverride
-    if inCombat == nil then inCombat = InCombatLockdown and InCombatLockdown() end
-    local visible = self.enabled and not self.gridManuallyHidden
-        and (self.testMode or not autoHideActive or inCombat)
-    overlay:SetShown(visible and true or false)
+    overlay:SetShown(self:GridWouldBeVisible(combatOverride) and true or false)
 end
 
 -- Les sons integres sont lus dans SOUNDKIT AU MOMENT ou on en a besoin, jamais

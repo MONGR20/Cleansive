@@ -1,4 +1,4 @@
-# Cleansive 1.6.10
+# Cleansive 1.6.11
 
 Cleansive is a standalone one-click cleansing addon for **World of Warcraft Retail 12.1** (`120100`). It provides a compact Decursive-style workflow with a dark, class-colored interface inspired by the clarity of Ellesmere UI. The interface follows the language of your WoW client, English or French; either can be picked from the General page at any time.
 
@@ -103,6 +103,8 @@ Red, blue, and orange identify the click to use. The optional L/R/C corner lette
 - `/cleansive history`: open the clickable affliction history.
 - `/cleansive control`: list the loss-of-control effects seen so far; `control <type>` starts or stops watching one; `control clear` empties the observed list without touching your choices.
 - `/cleansive setup`: reopen the setup assistant.
+- `/cleansive profile`: list the named profiles and the active one. `new <name>` creates one from your current settings, `use <name>` points this specialization at it, `own` returns to this specialization's own profile, `rename <old> | <new>`, `delete <name>`. Changing profile is refused while you are fighting: a profile switch cannot be half applied.
+- `/cleansive sound`: list the alert sounds this client actually knows, and pick one by name. Blizzard's own alert registry takes a sound file, so afflictions the client protects keep the shipped sound.
 
 When Decursive is disabled, `/dcr` and `/decursive` remain available as compatibility aliases.
 
@@ -175,6 +177,7 @@ the reason on its own.
 
 ## Recent changes
 
+- **1.6.11** - external audit fixes: profile changes are refused mid-combat, a shared profile is really loaded at login, and the unprotected layer follows the same visibility rules as the grid.
 - **1.6.10** - the alert sound button is verified end to end: unwiring it now fails a test.
 - **1.6.9** - named profiles, shareable across characters and specializations. A specialization's own profile is never destroyed, so coming back to it always works.
 - **1.6.8** - raids can have their own cell size and spacing, off by default. Eighteen places read the geometry directly; they now all go through one accessor.

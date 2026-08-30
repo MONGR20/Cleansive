@@ -2019,6 +2019,14 @@ function NS:ShowProfileManager()
         end)
         frame.ownButton = own
 
+        -- P3 de l'audit : ces deux fenetres n'etaient pas inscrites au systeme
+        -- de mise a l'echelle. SetClampedToScreen borne la position, pas la
+        -- taille : sur un petit espace logique elles depassaient sans se
+        -- reduire, et ne reagissaient a aucun changement de resolution.
+        fitToScreen(frame, 520, 420)
+        if type(UISpecialFrames) == "table" then
+            UISpecialFrames[#UISpecialFrames + 1] = "CleansiveProfileManagerFrame"
+        end
         self.profileManagerFrame = frame
     end
     self:RefreshProfileManager()
@@ -2151,10 +2159,22 @@ function NS:ShowProfileTransfer()
                 frame.apply:Hide()
                 return
             end
+            -- P2 de l'audit du 30/08 : un import qui change presque tout
+            -- produisait des dizaines de lignes dans un texte sans hauteur
+            -- bornee. Il traversait les boutons de confirmation puis sortait
+            -- de la fenetre. Huit lignes et un compte : le joueur doit pouvoir
+            -- juger, pas tout relire -- et le bouton Appliquer doit rester
+            -- visible, c'est lui qui engage.
+            local MAX_LINES = 8
             local lines = {}
-            for _, change in ipairs(analysis.changes) do
+            for index, change in ipairs(analysis.changes) do
+                if index > MAX_LINES then break end
                 lines[#lines + 1] = string.format(self.L.IMPORT_CHANGE_LINE,
                     change.key, change.from, change.to)
+            end
+            if #analysis.changes > MAX_LINES then
+                lines[#lines + 1] = string.format(self.L.IMPORT_MORE_CHANGES,
+                    #analysis.changes - MAX_LINES)
             end
             if #lines == 0 then lines[1] = self.L.IMPORT_NO_CHANGE end
             if #analysis.rejected > 0 then
@@ -2174,6 +2194,7 @@ function NS:ShowProfileTransfer()
             frame.result:SetText("")
         end)
 
+        fitToScreen(frame, 700, 520)
         if type(UISpecialFrames) == "table" then
             UISpecialFrames[#UISpecialFrames + 1] = "CleansiveProfileTransferFrame"
         end

@@ -71,7 +71,16 @@ local TRANSFER_PREFIX = "CLEANSIVE1"
 
 -- Declarees ici et non pres de leur usage : une locale definie plus bas est
 -- invisible au-dessus, et decodeValue lisait une globale nil.
-local MAX_IMPORT_LENGTH = 8000
+-- P2 de l'audit du 30/08 : la borne d'import etait plus PETITE que le plus
+-- gros export possible. Deux ensembles de 500 identifiants a sept chiffres
+-- font deja 8 038 caracteres avant meme le reste du profil : Cleansive
+-- produisait un texte qu'il refusait ensuite de relire. Le contrat qui compte
+-- est celui-ci, et un test le tient a la taille maximale :
+--     AnalyzeProfileImport(ExportProfile()) doit toujours reussir.
+-- 2 ensembles x 500 identifiants x 8 caracteres = 8 000, plus les cles, plus
+-- tous les autres reglages : 20 000 laisse une marge franche sans devenir une
+-- borne qui n'en est plus une.
+local MAX_IMPORT_LENGTH = 20000
 local MAX_IDS_PER_SET = 500
 
 -- Les bornes, les valeurs permises et la liste des booleens ne sont plus
@@ -165,8 +174,37 @@ function NS:IsRepairableSetting(key)
     return false
 end
 
+-- P2 de l'audit du 30/08 : la reparation couvrait les nombres, les booleens,
+-- les enumerations, les positions et les types -- mais jamais le CONTENU des
+-- deux listes. Une base contenant « priority = { 42 } », ou une entree sans
+-- kind, faisait lever EntryMatches sur entry.kind des le premier roster.
+-- Une entree qui ne peut plus rien identifier n'est pas reparable : on la
+-- retire, ce qui est le seul choix qui laisse l'addon demarrer.
+local VALID_ENTRY_KINDS = { PLAYER = true, CLASS = true, GROUP = true }
+
+local function normalizeEntryList(list)
+    if type(list) ~= "table" then return {} end
+    local clean = {}
+    for _, entry in ipairs(list) do
+        if type(entry) == "table" and VALID_ENTRY_KINDS[entry.kind] then
+            local value = entry.value
+            if type(value) == "number" then value = tostring(value) end
+            if type(value) == "string" and value ~= "" then
+                clean[#clean + 1] = {
+                    kind = entry.kind,
+                    value = value,
+                    label = type(entry.label) == "string" and entry.label or value,
+                }
+            end
+        end
+    end
+    return clean
+end
+
 local function normalizeProfile(profile, fallback)
     if type(profile) ~= "table" or type(fallback) ~= "table" then return end
+    profile.priority = normalizeEntryList(profile.priority)
+    profile.skip = normalizeEntryList(profile.skip)
     for key, bounds in pairs(NUMERIC_BOUNDS) do
         local value = tonumber(profile[key])
         if not value then
@@ -298,6 +336,28 @@ function NS:NamedProfileStore()
     if not raw then return nil end
     if type(raw.named) ~= "table" then raw.named = {} end
     if type(raw.assignments) ~= "table" then raw.assignments = {} end
+    if not raw.namedStoreChecked then
+        raw.namedStoreChecked = true
+        -- P2 de l'audit : rien ne validait ce stockage entree par entree. Une
+        -- cle non textuelle dans « named » remontait jusqu'au table.sort de
+        -- NamedProfiles, qui leve en comparant un nombre a une chaine.
+        for key, value in pairs(raw.named) do
+            if type(key) ~= "string" or key == "" or type(value) ~= "table" then
+                raw.named[key] = nil
+            end
+        end
+        for character, specs in pairs(raw.assignments) do
+            if type(character) ~= "string" or type(specs) ~= "table" then
+                raw.assignments[character] = nil
+            else
+                for spec, name in pairs(specs) do
+                    if type(spec) ~= "string" or type(name) ~= "string" then
+                        specs[spec] = nil
+                    end
+                end
+            end
+        end
+    end
     return raw.named, raw.assignments
 end
 
@@ -306,9 +366,27 @@ end
 -- et l'export sans que rien ne le dise.
 function NS:NormalizeProfileName(raw)
     if type(raw) ~= "string" then return nil end
-    local name = raw:gsub("%c", ""):gsub("^%s+", ""):gsub("%s+$", "")
+    -- La barre verticale est refusee pour deux raisons : elle separe les deux
+    -- noms de la commande de renommage, et dans un texte affiche par WoW elle
+    -- ouvre une sequence de mise en forme -- un nom bien choisi pourrait donc
+    -- colorer, voire masquer, le reste de la ligne.
+    local name = raw:gsub("%c", ""):gsub("|", ""):gsub("^%s+", ""):gsub("%s+$", "")
     if name == "" then return nil end
-    if #name > MAX_PROFILE_NAME then name = name:sub(1, MAX_PROFILE_NAME) end
+    -- La borne compte des OCTETS. Couper a l'octet 32 au milieu d'une sequence
+    -- UTF-8 -- « Chasseur de démons » et ses accents -- produisait un nom
+    -- invalide, affiche en caractere de remplacement et impossible a retaper.
+    -- La coupe recule donc jusqu'au debut du caractere.
+    if #name > MAX_PROFILE_NAME then
+        local cut = MAX_PROFILE_NAME
+        while cut > 0 do
+            local byte = name:byte(cut + 1)
+            -- 0x80..0xBF est une continuation : le caractere commence avant.
+            if not byte or byte < 128 or byte >= 192 then break end
+            cut = cut - 1
+        end
+        name = name:sub(1, cut):gsub("%s+$", "")
+        if name == "" then return nil end
+    end
     return name
 end
 
@@ -330,6 +408,21 @@ function NS:ActiveNamedProfile()
     return nil
 end
 
+-- P1 de l'audit du 30/08. Ces trois operations changeaient la base PUIS
+-- demandaient un rechargement que le combat refuse. Les cles actives restaient
+-- alors a nil pendant que self.db pointait encore sur l'ancienne table : le
+-- message annoncait un profil, les reglages en modifiaient un autre, et une
+-- seconde operation ecrivait dans assignments[""] au lieu du personnage.
+--
+-- Refuser est la seule reponse honnete. Un changement de profil a moitie
+-- applique est pire que pas de changement du tout, et c'est deja la regle
+-- retenue pour l'apercu en 1.6.1.
+function NS:ProfileChangeBlockedByCombat()
+    if not (InCombatLockdown and InCombatLockdown()) then return false end
+    self:Print(self.L.PROFILE_COMBAT_REFUSED)
+    return true
+end
+
 function NS:CreateNamedProfile(rawName)
     local name = self:NormalizeProfileName(rawName)
     if not name then return false, self.L.PROFILE_NAME_INVALID end
@@ -343,6 +436,7 @@ function NS:CreateNamedProfile(rawName)
 end
 
 function NS:DeleteNamedProfile(rawName)
+    if self:ProfileChangeBlockedByCombat() then return false, self.L.PROFILE_COMBAT_REFUSED end
     local name = self:NormalizeProfileName(rawName)
     local named, assignments = self:NamedProfileStore()
     if not named or not name or not named[name] then
@@ -383,6 +477,7 @@ function NS:RenameNamedProfile(rawOld, rawNew)
 end
 
 function NS:UseNamedProfile(rawName)
+    if self:ProfileChangeBlockedByCombat() then return false, self.L.PROFILE_COMBAT_REFUSED end
     local name = self:NormalizeProfileName(rawName)
     local named, assignments = self:NamedProfileStore()
     if not named or not name or not named[name] then return false, self.L.PROFILE_UNKNOWN end
@@ -396,6 +491,7 @@ function NS:UseNamedProfile(rawName)
 end
 
 function NS:UseOwnProfile()
+    if self:ProfileChangeBlockedByCombat() then return false, self.L.PROFILE_COMBAT_REFUSED end
     local _, assignments = self:NamedProfileStore()
     if not assignments then return false, self.L.PROFILE_UNKNOWN end
     local character = assignments[self.activeCharacterKey or ""]
@@ -407,8 +503,13 @@ end
 -- Recharger n'est pas changer de specialisation : LoadCurrentProfile sort tot
 -- quand les cles n'ont pas bouge, ce qui est exactement le cas ici.
 function NS:ReloadActiveProfile()
+    -- Effacer les cles avant un changement que le combat va refuser laissait
+    -- l'addon sans identite : ActiveNamedProfile lisait assignments[""].
+    -- Les appelants refusent deja ; ceci empeche qu'un futur appelant oublie.
+    if InCombatLockdown and InCombatLockdown() then return false end
     self.activeCharacterKey, self.activeSpecKey = nil, nil
     self:QueueProfileSwitch()
+    return true
 end
 
 function NS:GetAuraHistory()
@@ -489,6 +590,9 @@ function NS:InitializeProfiles()
         profile = raw.profiles[characterKey][specKey]
         if type(profile) ~= "table" then profile = self:NewProfileTable(characterKey) end
         raw.profiles[characterKey][specKey] = profile
+        -- Le profil propre est garanti ci-dessus et le reste ; ce n'est
+        -- qu'ensuite que l'affectation nommee est suivie.
+        profile = self:ResolveActiveProfileTable(characterKey, specKey, profile)
     else
         -- Boot on a throwaway copy so nothing is written under an unknown key.
         profile = self:NewProfileTable(characterKey)
@@ -507,6 +611,27 @@ function NS:InitializeProfiles()
     self.activeCharacterKey = characterKey
     self.activeSpecKey = specKey
     self.activeSpecName = specName
+end
+
+-- P1 de l'audit du 30/08 : cette resolution n'existait QUE dans
+-- LoadCurrentProfile. InitializeProfiles, lui, prenait directement le profil
+-- propre -- et LoadCurrentProfile sort tot quand les cles n'ont pas bouge. Une
+-- connexion ou la specialisation est deja connue au chargement laissait donc
+-- ActiveNamedProfile annoncer le profil partage pendant que self.db pointait
+-- ailleurs : les reglages partaient au mauvais endroit, sans rien dire.
+-- Il n'y a plus qu'un seul endroit ou la question se pose.
+function NS:ResolveActiveProfileTable(characterKey, specKey, ownProfile)
+    local named, assignments = self:NamedProfileStore()
+    if not named then return ownProfile end
+    local character = assignments[characterKey]
+    local assigned = type(character) == "table" and character[specKey]
+    if type(assigned) ~= "string" then return ownProfile end
+    if type(named[assigned]) == "table" then return named[assigned] end
+    -- Pointeur mort : le profil nomme a disparu d'une facon ou d'une autre. On
+    -- revient au profil propre, et on OUBLIE le pointeur -- laisse en place, il
+    -- ressusciterait le jour ou un profil reprendrait le meme nom.
+    character[specKey] = nil
+    return ownProfile
 end
 
 -- A brand-new profile inherits the migrated account-wide settings when the
@@ -555,24 +680,7 @@ function NS:LoadCurrentProfile(cloneCurrent)
         end
         profiles[characterKey][specKey] = profile
     end
-
-    -- Le profil propre vient d'etre garanti ci-dessus, et il le reste meme
-    -- quand cette specialisation pointe vers un profil nomme : revenir dessus
-    -- doit toujours etre possible, y compris apres la suppression du profil
-    -- partage. Ce n'est qu'ensuite que le pointeur est suivi.
-    local named, assignments = self:NamedProfileStore()
-    if named then
-        local character = assignments[characterKey]
-        local assigned = type(character) == "table" and character[specKey]
-        if type(assigned) == "string" and type(named[assigned]) == "table" then
-            profile = named[assigned]
-        elseif type(assigned) == "string" then
-            -- Pointeur mort : le profil nomme a disparu d'une facon ou d'une
-            -- autre. On revient au profil propre plutot que de repartir sur
-            -- les valeurs d'origine sans rien dire.
-            character[specKey] = nil
-        end
-    end
+    profile = self:ResolveActiveProfileTable(characterKey, specKey, profile)
     applyDefaults(self.profileDefaults, profile)
     normalizeProfile(profile, self.profileDefaults)
     prune(profile)

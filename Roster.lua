@@ -230,6 +230,10 @@ function NS:RebuildRoster()
     self.unitToButton = {}
     self:AssignRosterToButtons()
     self.pendingRoster = false
+    -- Entrer ou sortir d'un raid change le verdict de visibilite. Le pilote
+    -- securise le voit tout seul ; la couche non protegee ne recevait aucun
+    -- appel a ce moment-la et restait affichee au-dessus d'une grille masquee.
+    if self.UpdateCooldownOverlayVisibility then self:UpdateCooldownOverlayVisibility() end
     if self.deferRefreshes then return end
     self:RefreshAll(true)
     if self.RequestAuraSoundRefresh then

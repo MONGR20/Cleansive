@@ -6,6 +6,26 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.6.11
+
+Corrections issues d'un audit externe de la 1.6.10.
+
+**Les deux defauts serieux etaient dans les profils nommes, arrives en 1.6.9.**
+
+- **Changer de profil pendant un combat est refuse.** `use`, `own` et la suppression modifiaient la base PUIS demandaient un rechargement que le combat refuse : les cles actives restaient a rien pendant que les reglages continuaient d'ecrire dans l'ancien profil, le message annoncant le nouveau. Une seconde operation ecrivait alors sous une cle vide au lieu du personnage. Un changement de profil ne peut pas etre a moitie applique — c'est deja la regle retenue pour l'apercu en 1.6.1. Les boutons concernes sont grises pendant le combat.
+- **Un profil partage est desormais reellement charge au demarrage.** La resolution de l'affectation n'existait que dans le chemin de changement de specialisation, qui sort tot quand les cles n'ont pas bouge. Une connexion ou la specialisation est deja connue au chargement annoncait donc le profil partage tout en ecrivant dans le profil propre. Il n'y a plus qu'un seul endroit ou la question se pose.
+
+**Le reste :**
+
+- **La couche non protegee suit enfin les regles solo, groupe et raid.** « Afficher en raid » eteint, elle pouvait laisser un chiffre de recharge, le badge TEST ou la plaque d'attente seuls a l'ecran, sans grille dessous. C'est le troisieme consommateur de ce verdict apres le pilote securise et le registre sonore : il ne se calcule plus qu'a un seul endroit.
+- **Cleansive exportait un profil qu'il refusait ensuite d'importer.** Deux ensembles de 500 identifiants depassent l'ancienne borne de 8 000 caracteres. Un test tient maintenant le contrat A LA TAILLE MAXIMALE.
+- **Un nom de profil n'est plus coupe au milieu d'un caractere accentue** : la borne comptait des octets. La barre verticale est refusee — elle separe les deux noms du renommage, et dans un texte affiche par WoW elle ouvre une sequence de mise en forme.
+- **Les listes de priorite et d'exclusion sont reparees entree par entree.** Une base contenant `priority = { 42 }` faisait lever des le premier roster. Le stockage des profils nommes est nettoye de la meme facon : une cle non textuelle remontait jusqu'au tri, qui leve en comparant un nombre a une chaine.
+- **Toute suppression d'alerte native passe par un seul endroit**, donc le compteur des alertes vivantes ne derive plus apres un nettoyage d'orphelin.
+- L'apercu d'import est borne a huit lignes suivies d'un compte : il traversait les boutons de confirmation puis sortait de la fenetre. Au-dela de six profils nommes, l'avertissement se pose SOUS la liste et non par-dessus la premiere ligne. Les deux fenetres de profils suivent la mise a l'echelle et se ferment par Echap. Le README documente `/cleansive profile` et `/cleansive sound`.
+- **Non corrige, et assume :** `AddAuraSound` est toujours tente sans garde de restriction. Le risque est reel — une cle mythique garde `ChallengeMode` actif alors que `InCombatLockdown` dit non — mais toute garde que je pourrais ecrire ici couperait les alertes pendant une cle entiere dans le cas « afficher seulement en combat ». Cela demande une session en jeu pour trancher, pas une supposition de plus.
+- Tests : 1 356 a 1 397.
+
 ## 1.6.10
 
 - **Le bouton du son d'alerte est enfin verifie.** Le mecanisme etait teste depuis la 1.6.6 et le bouton pose en 1.6.7, mais rien ne verifiait qu'il etait branche sur quoi que ce soit : le debrancher ne faisait tomber aucun test. Une option qu'on ne peut atteindre que par une commande n'est pas livree. La rotation, le libelle qui suit, et la disparition du reglage quand le son est coupe sont maintenant tenus.

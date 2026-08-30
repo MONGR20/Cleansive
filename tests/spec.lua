@@ -4253,9 +4253,29 @@ do
 
     -- Un texte enorme colle par erreur n'est pas une faille -- le parseur
     -- n'execute rien -- mais c'est un gel du client pour rien.
-    local huge = "CLEANSIVE1;frameSize=30;" .. string.rep("a", 9000)
+    local huge = "CLEANSIVE1;frameSize=30;" .. string.rep("a", 21000)
     truthy(select(2, NS:AnalyzeProfileImport(huge)),
         "import : un texte demesure est refuse avec sa raison")
+
+    -- P2 de l'audit du 30/08 : la borne d'import etait plus PETITE que le plus
+    -- gros export possible. Cleansive produisait donc un texte qu'il refusait
+    -- ensuite de relire. Le contrat se verifie A LA TAILLE MAXIMALE, sinon il
+    -- ne se verifie pas du tout.
+    do
+        local before = { NS.db.ignoredAlways, NS.db.ignoredCombat }
+        NS.db.ignoredAlways, NS.db.ignoredCombat = {}, {}
+        for index = 1, 500 do
+            NS.db.ignoredAlways[1000000 + index] = true
+            NS.db.ignoredCombat[2000000 + index] = true
+        end
+        local exported = NS:ExportProfile()
+        truthy(#exported > 8000,
+            "aller-retour : l'export maximal depasse bien l'ancienne borne")
+        local analysis, refusal = NS:AnalyzeProfileImport(exported)
+        truthy(analysis, "aller-retour : ce que Cleansive exporte, il sait le relire")
+        falsy(refusal, "aller-retour : sans refus")
+        NS.db.ignoredAlways, NS.db.ignoredCombat = before[1], before[2]
+    end
     eq(NS:AnalyzeProfileImport(huge), nil, "import : et rien n'en est retenu")
 
     local manyIds = {}
@@ -5755,6 +5775,151 @@ do
 end
 
 --------------------------------------------------------------------------
+-- 1.6.11 : corrections de l'audit externe du 30/08/2026
+--------------------------------------------------------------------------
+do
+    freshProfile("PALADIN")
+    knowSpells(4987)
+    NS:UpdateSpells()
+    NS:CreateGrid()
+
+    -- P2 : la couche non protegee decidait seule, sans jamais lire showSolo,
+    -- showParty ni showRaid. « Afficher en raid » eteint, le pilote securise
+    -- masquait les cases en entrant en raid, et un chiffre de recharge ou le
+    -- badge TEST pouvait rester seul a l'ecran, sans grille dessous.
+    NS.enabled = true
+    NS.testMode = false
+    NS.gridManuallyHidden = false
+    NS.db.autoHide = false
+    NS.db.showSolo, NS.db.showParty, NS.db.showRaid = true, true, true
+    mock.state.inRaid, mock.state.inGroup = false, false
+    NS:UpdateCooldownOverlayVisibility()
+    truthy(NS.cooldownBody:IsShown(), "couche : visible quand la grille l'est")
+
+    NS.db.showRaid = false
+    mock.state.inRaid, mock.state.inGroup = true, true
+    NS:UpdateCooldownOverlayVisibility()
+    falsy(NS.cooldownBody:IsShown(),
+        "couche : masquee la ou la grille est masquee par une regle de contexte")
+    eq(NS.cooldownBody:IsShown(), NS:GridWouldBeVisible(),
+        "couche : elle dit exactement ce que dit la grille")
+
+    -- Et elle doit etre reevaluee quand le groupe change, sans qu'on la touche.
+    NS.cooldownBody:Show()
+    NS:RebuildRoster()
+    falsy(NS.cooldownBody:IsShown(),
+        "couche : entrer en raid la reevalue sans qu'on la touche")
+
+    NS.db.showRaid = true
+    mock.state.inRaid, mock.state.inGroup = false, false
+    NS:UpdateCooldownOverlayVisibility()
+
+    -- P2 : le nettoyage des poignees orphelines retirait l'enregistrement sans
+    -- decrementer le compteur des alertes vivantes. Apres un remplacement
+    -- refuse puis un nettoyage reussi, soundstatus et diag copy annoncaient
+    -- plus d'alertes vivantes qu'il n'y en avait reellement.
+    do
+        -- Le point verifie n'est pas « combien vaut le compteur » -- un
+        -- rafraichissement complet en repose d'autres au passage -- mais que
+        -- CETTE suppression passe par le point unique qui tient le compteur.
+        -- C'est ce point unique qui est la correction.
+        local realRemove = C_UnitAuras.RemoveAuraSound
+        local realHelper = NS.RemoveNativeAuraSound
+        local seen = {}
+        C_UnitAuras.RemoveAuraSound = function() return true end
+        NS.RemoveNativeAuraSound = function(target, handle)
+            seen[handle] = true
+            return realHelper(target, handle)
+        end
+        local savedLive, savedFingerprint = NS.liveNativeSounds, NS.auraSoundFingerprint
+        NS.liveNativeSounds = 5
+        NS.auraSoundOrphanHandles = { [901] = true }
+        NS.auraSoundFingerprint = nil
+        NS:RefreshAuraSoundRegistrations("nettoyage des orphelins")
+        eq(NS.auraSoundOrphanHandles[901], nil, "orphelins : la poignee est bien retiree")
+        truthy(seen[901],
+            "orphelins : et sa suppression passe par le point unique qui tient le compteur")
+
+        -- Et ce point unique decremente bien.
+        NS.RemoveNativeAuraSound = realHelper
+        NS.liveNativeSounds = 5
+        truthy(NS:RemoveNativeAuraSound(902), "orphelins : la suppression reussit")
+        eq(NS.liveNativeSounds, 4, "orphelins : le compteur descend d'exactement une")
+
+        -- Ce bloc a fait un vrai rafraichissement : il laisse donc des
+        -- enregistrements derriere lui. Les tests suivants repartent d'un
+        -- registre vide, et un registre deja plein leur ferait mesurer zero
+        -- nouvelle pose sans qu'aucun defaut existe.
+        C_UnitAuras.RemoveAuraSound = realRemove
+        NS.liveNativeSounds, NS.auraSoundFingerprint = savedLive, savedFingerprint
+        NS.auraSoundOrphanHandles = {}
+        NS.auraSoundHandles, NS.auraSoundRegistered = {}, {}
+        NS.auraSoundHandleChannels, NS.auraSoundChannel = {}, nil
+        NS.auraSoundFingerprint = nil
+    end
+
+    -- P2 : le nom d'un profil etait coupe a l'OCTET. Trente et un caracteres
+    -- ASCII suivis d'un accent se coupaient au milieu de la sequence UTF-8 :
+    -- le nom devenu invalide etait impossible a retaper.
+    local accented = string.rep("a", 31) .. "\195\169"
+    local cut = NS:NormalizeProfileName(accented)
+    truthy(cut, "nom : un nom trop long reste utilisable")
+    -- 31 « a » puis un « e accent aigu » sur DEUX octets : le caractere ne
+    -- tient pas dans le 32e octet, la coupe doit donc reculer avant lui. Une
+    -- coupe a l'octet aurait garde 32 octets dont un demi-caractere -- et
+    -- verifier « le dernier octet vaut au moins 194 » ne le voyait pas, 195
+    -- etant justement le PREMIER octet de cette sequence.
+    eq(#cut, 31, "nom : la coupe recule avant le caractere qui ne tient pas")
+    truthy(cut:byte(#cut) < 128, "nom : et ne laisse aucune demi-sequence UTF-8")
+
+    -- La barre verticale sert de separateur au renommage et ouvre une sequence
+    -- de couleur dans un texte WoW : un nom bien choisi pourrait masquer la
+    -- ligne entiere.
+    eq(NS:NormalizeProfileName("Ra|cffff0000id"), "Racffff0000id",
+        "nom : la barre verticale est retiree")
+    falsy(NS:NormalizeProfileName("|"), "nom : un nom qui n'en contient que ne passe pas")
+
+    -- P2 : une base abimee faisait lever EntryMatches des le premier roster.
+    do
+        NS.db.priority = { 42, { kind = "PLAYER" }, { kind = "INCONNU", value = "x" },
+            { kind = "CLASS", value = "PALADIN" } }
+        NS.db.skip = { "n'importe quoi", { kind = "GROUP", value = 3 } }
+        NS:InitializeProfiles()
+        eq(#NS.db.priority, 1, "listes : seules les entrees utilisables survivent")
+        -- Sans reparation, priority[1] vaut 42 : lire .kind dessus leve. Le
+        -- repli evite qu'un defaut isole emporte la suite de la suite.
+        eq(type(NS.db.priority[1]) == "table" and NS.db.priority[1].kind or "?", "CLASS",
+            "listes : et c'est la bonne")
+        eq(#NS.db.skip, 1, "listes : idem pour les exclusions")
+        eq(type(NS.db.skip[1]) == "table" and NS.db.skip[1].value or "?", "3",
+            "listes : un nombre devient une chaine utilisable")
+        -- Ce qui compte vraiment : le roster ne leve plus.
+        local ok = pcall(function() NS:RebuildRoster() end)
+        truthy(ok, "listes : et le roster se reconstruit sans lever")
+    end
+
+    -- P2 : une cle non textuelle dans « named » remontait jusqu'au tri, qui
+    -- leve en comparant un nombre a une chaine.
+    do
+        local raw = NS.dbRoot
+        raw.named = { [1] = {}, [""] = {}, Bon = {}, Casse = "pas une table" }
+        raw.assignments = { [2] = {}, ["Perso"] = { ["1"] = 7, ["2"] = "Bon" } }
+        raw.namedStoreChecked = nil
+        local named, assignments = NS:NamedProfileStore()
+        eq(named[1], nil, "stockage : une cle numerique est retiree")
+        eq(named[""], nil, "stockage : une cle vide aussi")
+        eq(named.Casse, nil, "stockage : une valeur qui n'est pas une table aussi")
+        truthy(named.Bon, "stockage : le profil valide reste")
+        eq(assignments[2], nil, "stockage : un personnage sans nom est retire")
+        eq(assignments.Perso["1"], nil, "stockage : une affectation non textuelle aussi")
+        eq(assignments.Perso["2"], "Bon", "stockage : la bonne reste")
+        local ok = pcall(function() return NS:NamedProfiles() end)
+        truthy(ok, "stockage : et la liste se trie sans lever")
+        raw.named, raw.assignments = {}, {}
+    end
+end
+
+--------------------------------------------------------------------------
 -- 1.6.9 : profils nommes
 --
 -- Deux regles portent tout le reste. Le profil propre d'une specialisation
@@ -5853,6 +6018,62 @@ do
     falsy(NS:ActiveNamedProfile(), "commande : own revient au profil propre")
     NS:HandleSlash("profile delete Soins 2")
     eq(#NS:NamedProfiles(), 0, "commande : delete le retire")
+
+    -- P1 de l'audit du 30/08 : ces operations changeaient la base PUIS
+    -- demandaient un rechargement que le combat refuse. Les cles actives
+    -- restaient a nil, self.db pointait sur l'ancienne table, et une SECONDE
+    -- operation ecrivait dans assignments[""] au lieu du personnage.
+    do
+        NS:CreateNamedProfile("Combat")
+        NS:UseNamedProfile("Combat")
+        local _, assignments = NS:NamedProfileStore()
+        local character = NS.activeCharacterKey
+        local spec = NS.activeSpecKey
+        truthy(character and spec, "combat : le personnage et la spe sont connus avant l'essai")
+
+        mock.state.inCombat = true
+        falsy(NS:UseOwnProfile(), "combat : revenir a son profil est refuse")
+        eq(assignments[character][spec], "Combat",
+            "combat : et l'affectation n'a PAS ete touchee")
+        truthy(NS.activeCharacterKey, "combat : l'addon n'a pas perdu son identite")
+
+        NS:CreateNamedProfile("Second")
+        falsy(NS:UseNamedProfile("Second"), "combat : changer de profil est refuse")
+        eq(NS:ActiveNamedProfile(), "Combat", "combat : le profil actif n'a pas bouge")
+        falsy(NS:DeleteNamedProfile("Combat"), "combat : supprimer est refuse")
+        eq(#NS:NamedProfiles(), 2, "combat : et rien n'a disparu de la base")
+        -- Le piege exact de l'audit : une seconde operation apres une premiere
+        -- qui aurait efface les cles. Il ne doit RIEN exister sous la cle vide.
+        falsy(assignments[""], "combat : rien n'a ete ecrit sous une cle vide")
+
+        mock.state.inCombat = false
+        truthy(NS:UseOwnProfile(), "hors combat : on peut de nouveau revenir au sien")
+        NS:DeleteNamedProfile("Combat")
+        NS:DeleteNamedProfile("Second")
+    end
+
+    -- P1 de l'audit : la resolution de l'affectation n'existait QUE dans
+    -- LoadCurrentProfile, qui sort tot quand les cles n'ont pas bouge. Une
+    -- connexion ou la specialisation est deja connue au chargement annoncait
+    -- donc le profil partage tout en ecrivant dans le profil propre.
+    do
+        NS:CreateNamedProfile("AuDemarrage")
+        NS:UseNamedProfile("AuDemarrage")
+        NS.db.frameSize = 39
+
+        -- Une connexion : tout est relu depuis la base sauvegardee.
+        NS.dbRoot, NS.db = nil, nil
+        NS.activeCharacterKey, NS.activeSpecKey = nil, nil
+        NS:InitializeProfiles()
+
+        eq(NS:ActiveNamedProfile(), "AuDemarrage",
+            "demarrage : le profil partage est bien annonce actif")
+        eq(NS.db.frameSize, 39,
+            "demarrage : et c'est BIEN lui qui est charge, pas le profil propre")
+        NS.db.frameSize = 22
+        NS:UseOwnProfile()
+        NS:DeleteNamedProfile("AuDemarrage")
+    end
 
     -- La fenetre. Ce qui compte : chaque rangee agit sur SON profil -- une
     -- fermeture qui capturerait l'index plutot que le nom ferait agir le
