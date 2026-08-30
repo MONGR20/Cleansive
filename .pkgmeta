@@ -12,8 +12,13 @@ enable-nolib-creation: no
 
 # Use the changelog the addon ships instead of letting the packager paste a
 # commit log into the release notes.
+# Les notes de version, PAS l'historique complet. GitHub refuse un corps de
+# release au-dela de 125 000 caracteres, et CHANGELOG.md a franchi cette limite
+# a la v1.6.13 : CurseForge et Wago avaient bien recu l'archive, seule la
+# release GitHub echouait. RELEASE_NOTES.md ne garde que les dernieres versions
+# et renvoie au fichier complet, qui reste livre avec l'addon.
 manual-changelog:
-  filename: CHANGELOG.md
+  filename: RELEASE_NOTES.md
   markup-type: markdown
 
 # Everything not listed here is packaged. The addon folder holds no build

@@ -494,6 +494,29 @@ const packageOffenders = [];
     packageOffenders.push("aucun CHANGELOG.md dans le dossier livre");
   }
 
+  // Le fichier declare dans .pkgmeta sert de corps a la release GitHub, qui
+  // refuse au-dela de 125 000 caracteres. La v1.6.13 l'a franchie : CurseForge
+  // et Wago avaient bien recu l'archive, seule la release GitHub echouait --
+  // une chaine a moitie reussie, qui est le pire des resultats.
+  // Un paquet construit n'embarque pas .pkgmeta : la question ne se pose que
+  // dans le depot.
+  if (fs.existsSync(pkgmeta)) {
+    const declared = (fs.readFileSync(pkgmeta, "utf8")
+      .match(/manual-changelog:\s*\n\s*filename:\s*(\S+)/) || [])[1];
+    if (declared) {
+      const notes = entries.find(e => e.name === declared);
+      if (!notes) {
+        packageOffenders.push(`le .pkgmeta annonce ${declared}, absent du dossier livre`);
+      } else {
+        const size = fs.statSync(notes.full).size;
+        if (size > 125000) {
+          packageOffenders.push(
+            `${declared} fait ${size} caracteres : GitHub refuse une release au-dela de 125000`);
+        }
+      }
+    }
+  }
+
   // Le README affiche la version en titre. Deux sources de verite divergent
   // toujours : celle du .toc gagne, l'autre doit la suivre.
   const readme = entries.find(e => /^readme\.md$/i.test(e.name));
