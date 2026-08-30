@@ -3525,17 +3525,34 @@ do
     freshProfile("PALADIN")
     mock.state.inCombat = false
     mock.state.restrictions = {}
-    eq(NS:RestrictionSnapshot(), "lock=0|none",
+    eq(NS:RestrictionSnapshot(), "lock=0 / none",
         "restrictions : au repos, rien n'est actif")
 
     mock.state.restrictions[Enum.AddOnRestrictionType.ChallengeMode] = true
-    eq(NS:RestrictionSnapshot(), "lock=0|ChallengeMode",
+    eq(NS:RestrictionSnapshot(), "lock=0 / ChallengeMode",
         "restrictions : la cle reste active hors combat -- le cas non modelise")
 
     mock.state.inCombat = true
     mock.state.restrictions[Enum.AddOnRestrictionType.Combat] = true
-    eq(NS:RestrictionSnapshot(), "lock=1|Combat,ChallengeMode",
+    eq(NS:RestrictionSnapshot(), "lock=1 / Combat,ChallengeMode",
         "restrictions : combat et cle se cumulent")
+
+    -- 1.6.13, releve EN JEU sur la 1.6.12 : le separateur etait une barre
+    -- verticale, et « |none » se lit « |n » puis « one » -- « |n » etant un
+    -- RETOUR A LA LIGNE pour le moteur de texte de WoW. Le rapport affichait
+    -- « lock=0 » puis « one » sur la ligne suivante. Aucune valeur de ce
+    -- rapport ne doit contenir de barre verticale.
+    do
+        -- L'etat est rendu tel qu'il a ete trouve : la suite de ce bloc compte
+        -- sur la cle encore active.
+        local saved = mock.state.restrictions
+        for _, situation in ipairs({ {}, { [Enum.AddOnRestrictionType.Map] = true } }) do
+            mock.state.restrictions = situation
+            falsy(NS:RestrictionSnapshot():find("|", 1, true),
+                "restrictions : le releve ne contient aucune barre verticale")
+        end
+        mock.state.restrictions = saved
+    end
 
     -- Un echec de stylage doit emporter son contexte, groupe : la question
     -- n'est pas a quoi ressemblait le dernier refus, mais s'ils arrivent tous
@@ -3547,7 +3564,7 @@ do
     NS:NoteStyleFailure("interdit", 9)
     NS:NoteStyleFailure("interdit", 9)
     local record = NS:GetDiagnostics()
-    eq(record.styleContext["lock=0|ChallengeMode"], 2,
+    eq(record.styleContext["lock=0 / ChallengeMode"], 2,
         "restrictions : les refus sont comptes par contexte")
     eq(record.styleSteps, 18, "restrictions : et les etapes perdues s'additionnent")
 end

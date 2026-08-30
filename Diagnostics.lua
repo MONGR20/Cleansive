@@ -83,8 +83,14 @@ function NS:RestrictionSnapshot()
     end
     -- The lock flag is the whole point of the comparison: a refusal recorded
     -- with lock=0 and a restriction active is the case the code does not model.
+    -- Le separateur etait une barre verticale. Dans un texte affiche par WoW,
+    -- « | » ouvre une sequence d'echappement : « |none » se lit « |n » suivi de
+    -- « one », et « |n » veut dire RETOUR A LA LIGNE. Le rapport affichait donc
+    -- « lock=0 » puis « one » sur la ligne suivante -- vu en jeu le 30/08 sur
+    -- la 1.6.12 publiee. Une barre oblique ne veut rien dire pour le moteur de
+    -- texte, et se lit aussi bien.
     return "lock=" .. ((InCombatLockdown and InCombatLockdown()) and "1" or "0")
-        .. "|" .. (active[1] and table.concat(active, ",") or "none")
+        .. " / " .. (active[1] and table.concat(active, ",") or "none")
 end
 
 -- The client tells an addon when it forbids one of its calls, with the name of
