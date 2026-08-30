@@ -6,6 +6,20 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.6.21
+
+**Le refus des 690 n'avait pas diminue : il avait change d'appel.**
+
+Releve d'une seconde cle mythique, le 30/08/2026, sur la 1.6.20 :
+`style failures=690 steps=6210`, exactement le meme chiffre que la clé
+precedente -- mais l'erreur nommait cette fois `SetMouseMotionEnabled`, la
+1.6.16 ayant traite `SetFrameLevel`.
+
+- La correction precedente portait sur **l'appel** qui echouait, pas sur le **motif** : reposer une valeur inchangee, a chaque passe, sur un objet qui appartient au moteur d'auras. Le niveau de cadre corrige, l'appel suivant de la meme fonction a simplement repris le compte, a l'identique.
+- L'etat de la souris suit donc le meme traitement : il n'est pose que s'il a change, et un refus deja constate n'est plus retente. La memoire ne coute rien -- l'appel n'a jamais eu d'effet sur cet objet, donc l'etat de la souris n'y suivait deja pas l'option d'infobulle.
+- Le releve de la meme cle est par ailleurs sain : 82 boutons prets, 246/246 emplacements, 138/138 sons enregistres, 0 relance, 0 unite sautee, aucun evenement refuse. `lock=0` sur les 690 : aucun verrou de restriction, de la contamination ordinaire.
+- Tests : 1 574 a 1 577.
+
 ## 1.6.20
 
 **Ce qu'un combat doit refuser, il doit le refuser en entier.** Quatre

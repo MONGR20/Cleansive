@@ -3502,6 +3502,37 @@ do
     truthy(#motion >= 2,
         "souris : elle continue d'etre reglee malgre le refus du niveau de cadre")
     eq(motion[#motion], true, "souris : et elle suit la valeur de l'option")
+
+    -- 1.6.21, releve d'une SECONDE cle mythique le 30/08 sur la 1.6.20 :
+    -- failures=690 steps=6210, le MEME chiffre qu'avant -- mais l'erreur nomme
+    -- desormais SetMouseMotionEnabled. Le refus n'avait pas diminue, il avait
+    -- change d'appel : une fois le niveau de cadre traite, celui-ci a pris le
+    -- relais du compte. Il etait pose a chaque passe, avec la meme valeur, sur
+    -- le meme objet du moteur.
+    local posed = 0
+    rawset(visual.auraButton, "SetMouseMotionEnabled", function() posed = posed + 1 end)
+    visual.motionRefused, visual.wantedMotion = nil, nil
+    for _ = 1, 6 do NS:StyleAuraVisual(button, auraType, visual) end
+    eq(posed, 1, "souris : six passes, une seule pose -- la valeur n'a pas bouge")
+
+    -- Et le refus, comme celui du niveau, se retient. La memoire ne coute
+    -- rien : l'appel n'a jamais eu d'effet sur cet objet, donc l'etat de la
+    -- souris n'y suivait deja pas l'option.
+    local refused = 0
+    rawset(visual.auraButton, "SetMouseMotionEnabled", function()
+        refused = refused + 1
+        error("Attempt to access forbidden object from code tainted by an AddOn")
+    end)
+    visual.motionRefused, visual.wantedMotion = nil, nil
+    local beforeMotion = NS:GetDiagnostics().styleFailures
+    for index = 1, 6 do
+        NS.db.showTooltips = index % 2 == 0
+        NS:StyleAuraVisual(button, auraType, visual)
+    end
+    eq(refused, 1, "souris : un refus constate n'est plus jamais retente")
+    eq(NS:GetDiagnostics().styleFailures, beforeMotion + 1,
+        "souris : et le releve ne se gonfle plus de six cent quatre-vingt-dix echecs")
+    NS.db.showTooltips = true
 end
 
 --------------------------------------------------------------------------

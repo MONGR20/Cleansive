@@ -768,11 +768,33 @@ function NS:StyleAuraVisual(button, auraType, visual)
     -- la seconde -- puis levelRefused sautait les deux pour toujours, et l'etat
     -- de la souris ne suivait plus jamais l'option d'infobulle. « Pour cette
     -- etape seule » ne valait que si l'etape n'en contenait qu'une.
-    step(function()
-        if visual.auraButton.SetMouseMotionEnabled then
-            visual.auraButton:SetMouseMotionEnabled(enabled and self.db.showTooltips)
-        end
-    end)
+    -- Releve d'une SECONDE cle mythique, le 30/08/2026, sur la 1.6.20 :
+    --   style failures=690 steps=6210
+    --   error=Frames.lua:773 calling 'SetMouseMotionEnabled' on bad self
+    --   styleContext lock=0 / ChallengeMode,Map,Chat count=630
+    --                lock=0 / Encounter,ChallengeMode,Map,Chat count=60
+    --
+    -- Exactement le meme chiffre qu'avant : le refus n'a pas diminue, il a
+    -- CHANGE D'APPEL. Une fois le niveau de cadre traite, c'est celui-ci qui a
+    -- pris le relais -- meme objet du moteur, meme refus, et pose a chaque
+    -- passe avec la meme valeur. Corriger un appel sans corriger le motif
+    -- laisse le suivant reprendre le compte.
+    --
+    -- Le meme traitement, donc, et pour la meme raison : une valeur qui n'a
+    -- pas bouge n'a rien a etre reposee, et un refus deja constate n'a rien a
+    -- etre retente. Ce que la memoire coute est nul : l'appel n'a jamais eu
+    -- d'effet sur cet objet, donc l'etat de la souris n'y suivait deja pas
+    -- l'option d'infobulle.
+    local wantedMotion = (enabled and self.db.showTooltips) and true or false
+    if not visual.motionRefused and visual.wantedMotion ~= wantedMotion then
+        visual.wantedMotion = wantedMotion
+        local applied = step(function()
+            if visual.auraButton.SetMouseMotionEnabled then
+                visual.auraButton:SetMouseMotionEnabled(wantedMotion)
+            end
+        end)
+        if not applied then visual.motionRefused = true end
+    end
     -- Le niveau demande ne change qu'avec la priorite du type, c'est-a-dire
     -- presque jamais. Il etait pourtant repose a CHAQUE passe : c'est ce qui a
     -- transforme un refus en 690 refus sur une seule cle. Une valeur qui n'a pas
