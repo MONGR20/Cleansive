@@ -7669,6 +7669,62 @@ do
 end
 
 --------------------------------------------------------------------------
+-- 1.6.21 : la poignee « C » suit la grille
+--
+-- Signale en raid le 30/08/2026 : « le petit C est toujours visible meme s'il
+-- est desactive en raid ». La poignee ne suivait que le verrou et l'etat
+-- active, jamais le contexte -- elle restait donc seule a l'ecran, sans rien
+-- dessous. C'est le quatrieme consommateur de GridWouldBeVisible.
+--------------------------------------------------------------------------
+do
+    freshProfile("PALADIN")
+    knowSpells(4987)
+    NS:UpdateSpells()
+    NS:CreateGrid()
+    mock.state.inCombat = false
+    mock.state.inRaid, mock.state.inGroup = false, false
+    NS.db.locked = false
+    NS.db.showSolo, NS.db.showParty, NS.db.showRaid = true, true, true
+    NS.db.autoHide = false
+    if NS.optionsFrame then NS.optionsFrame:Hide() end
+    NS.testMode = false
+    NS:UpdateGridVisibilityDriver()
+
+    local anchor = NS.gridAnchor
+    truthy(anchor.handle:IsShown(), "poignee : deverrouillee et grille visible, elle est la")
+
+    -- LE cas signale : la grille est eteinte en raid.
+    NS.db.showRaid = false
+    mock.state.inRaid, mock.state.inGroup = true, true
+    NS:UpdateGridVisibilityDriver()
+    falsy(anchor.handle:IsShown(), "poignee : la grille eteinte en raid, elle s'efface aussi")
+    falsy(anchor.mark:IsShown(), "poignee : la lettre avec elle")
+    falsy(anchor.accentLine:IsShown(), "poignee : et le trait d'accent")
+
+    -- Mais la fenetre de reglages force le verdict : on doit pouvoir placer la
+    -- grille meme la ou le contexte la masque, sinon le reglage est un piege.
+    if NS.optionsFrame then
+        NS.optionsFrame:Show()
+        NS:UpdateGridVisibilityDriver()
+        truthy(anchor.handle:IsShown(),
+            "poignee : les reglages ouverts, elle revient pour qu'on puisse placer la grille")
+        NS.optionsFrame:Hide()
+    end
+
+    -- Et le verrou garde le dernier mot : verrouillee, elle reste invisible
+    -- meme la ou la grille s'affiche.
+    NS.db.showRaid = true
+    NS.db.locked = true
+    NS:UpdateGridVisibilityDriver()
+    falsy(anchor.handle:IsShown(), "poignee : verrouillee, elle reste invisible")
+
+    NS.db.locked = false
+    mock.state.inRaid, mock.state.inGroup = false, false
+    NS:UpdateGridVisibilityDriver()
+    truthy(anchor.handle:IsShown(), "poignee : et elle revient la ou la grille s'affiche")
+end
+
+--------------------------------------------------------------------------
 -- report
 --------------------------------------------------------------------------
 local lines = {}

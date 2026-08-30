@@ -485,6 +485,9 @@ end
 function NS:UpdateGridVisibilityDriver()
     if not self.gridAnchor then return end
     if self.UpdateCooldownOverlayVisibility then self:UpdateCooldownOverlayVisibility() end
+    -- La poignee suit le meme verdict : elle doit donc etre reevaluee ici,
+    -- avant le report de combat, comme la couche de recharge.
+    if self.UpdateGridAnchorAppearance then self:UpdateGridAnchorAppearance() end
     -- Un seul endroit : toute bascule de visibilite passe par ici, donc le
     -- registre sonore est reevalue quel que soit l'appelant.
     if self.RequestAuraSoundRefresh then self:RequestAuraSoundRefresh("visibility rules") end

@@ -237,7 +237,20 @@ end
 function NS:UpdateGridAnchorAppearance()
     local anchor = self.gridAnchor
     if not anchor then return end
-    local shown = not (self.db and self.db.locked)
+    -- La poignee « C » ne suivait que le verrou. Une grille masquee par le
+    -- contexte -- « afficher en raid » eteint, ou la regle de combat -- la
+    -- laissait donc seule a l'ecran, sans rien dessous. Signale en raid le
+    -- 30/08/2026 : « le petit C est toujours visible meme s'il est desactive
+    -- en raid ».
+    --
+    -- Elle pose maintenant la meme question que les cases. C'est le quatrieme
+    -- consommateur de ce verdict, apres le pilote securise, le registre sonore
+    -- et la couche de recharge -- et la raison est la meme a chaque fois : une
+    -- couche non protegee qui decide seule finit par contredire la grille.
+    --
+    -- L'apercu et la fenetre de reglages forcent deja le verdict a vrai, donc
+    -- la poignee reste attrapable exactement quand on place la grille.
+    local shown = not (self.db and self.db.locked) and self:GridWouldBeVisible()
     -- EnableMouse is protected on this secure anchor. Apply it immediately
     -- out of combat and defer only that protected operation when necessary.
     if InCombatLockdown and InCombatLockdown() then

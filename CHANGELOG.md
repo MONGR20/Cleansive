@@ -6,6 +6,16 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.6.22
+
+**La poignee « C » restait seule a l'ecran quand la grille etait masquee.**
+Signale en raid le 30/08/2026.
+
+- Elle ne suivait que le verrou et l'etat active. « Afficher en raid » eteint, les cases disparaissaient et la poignee restait -- une lettre posee sur rien. La regle « afficher seulement en combat » donnait le meme resultat.
+- Elle pose maintenant exactement la meme question que les cases. C'est le quatrieme consommateur de ce verdict apres le pilote securise, le registre sonore et la couche de recharge, et la raison ne change pas : une couche non protegee qui decide seule finit par contredire la grille.
+- L'apercu et la fenetre de reglages forcent deja ce verdict a vrai : la poignee reste donc attrapable exactement quand on place la grille, y compris la ou le contexte la masque.
+- Tests : 1 577 a 1 584.
+
 ## 1.6.21
 
 **Le refus des 690 n'avait pas diminue : il avait change d'appel.**
