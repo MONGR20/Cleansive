@@ -1030,8 +1030,13 @@ function NS:CreateOptions()
     infoTitle:SetPoint("LEFT", dot, "RIGHT", 9, 0)
     -- Le nom du profil passe sur la meme ligne que son titre : la carte tient
     -- alors en une rangee, et les deux phrases d'etat ont la place au-dessus.
+    local manage = button(info, self.L.PROFILE_MANAGER, 110, 24)
+    manage:SetPoint("RIGHT", -16, 0)
+    manage:SetScript("OnClick", function() self:ShowProfileManager() end)
+    attachHelp(manage, self.L.PROFILE_MANAGER, self.L.PROFILE_MANAGER_HINT)
+
     local infoText = text(info, "", 11, C.dim)
-    infoText:SetPoint("RIGHT", -16, 0)
+    infoText:SetPoint("RIGHT", manage, "LEFT", -12, 0)
     infoText:SetWidth(230)
     infoText:SetJustifyH("RIGHT")
     self.profileLabel = infoText
@@ -1910,6 +1915,157 @@ end
 -- Read, show, then ask again. An import that lands on the first click is a
 -- configuration lost with no way back, and the string usually comes from
 -- someone else.
+-- Une fenetre a part plutot qu'une section de plus dans les reglages : ces
+-- boutons touchent des reglages PARTAGES entre personnages, et ce n'est pas le
+-- meme geste que deplacer un curseur. La suppression est armee en deux clics,
+-- comme les autres actions irreversibles de l'addon.
+function NS:ShowProfileManager()
+    local frame = self.profileManagerFrame
+    if not frame then
+        frame = CreateFrame("Frame", "CleansiveProfileManagerFrame", UIParent)
+        frame:SetSize(520, 420)
+        frame:SetPoint("CENTER")
+        self:RestoreWindowPosition(frame, "profiles")
+        frame:SetFrameStrata("DIALOG")
+        frame:SetClampedToScreen(true)
+        frame:EnableMouse(true)
+        frame:SetMovable(true)
+        frame:RegisterForDrag("LeftButton")
+        frame:SetScript("OnDragStart", frame.StartMoving)
+        frame:SetScript("OnDragStop", function(moved)
+            moved:StopMovingOrSizing()
+            self:SaveWindowPosition(moved, "profiles")
+        end)
+        addPanelBackground(frame)
+
+        local accentBar = solid(frame, "BORDER", accent())
+        accentBar:SetPoint("TOPLEFT")
+        accentBar:SetPoint("TOPRIGHT")
+        accentBar:SetHeight(2)
+
+        frame.title = text(frame, self.L.PROFILE_MANAGER, 17, C.text)
+        frame.title:SetPoint("TOPLEFT", 22, -20)
+        local close = button(frame, "×", 34, 30)
+        close:SetPoint("TOPRIGHT", -14, -13)
+        close:SetScript("OnClick", function() frame:Hide() end)
+
+        frame.hint = text(frame, self.L.PROFILE_MANAGER_HINT, 11, C.dim)
+        frame.hint:SetPoint("TOPLEFT", 22, -52)
+        frame.hint:SetWidth(476)
+        frame.hint:SetHeight(42)
+        frame.hint:SetJustifyH("LEFT")
+
+        frame.active = text(frame, "", 12, C.text)
+        frame.active:SetPoint("TOPLEFT", 22, -104)
+        frame.active:SetWidth(476)
+        frame.active:SetHeight(14)
+        frame.active:SetJustifyH("LEFT")
+
+        -- Une saisie unique sert a creer ET a renommer : deux champs pour deux
+        -- verbes qui prennent le meme argument auraient double la surface sans
+        -- rien clarifier.
+        local nameBg = solid(frame, "BACKGROUND", C.panelDeep[1], C.panelDeep[2], C.panelDeep[3], 0.80)
+        nameBg:SetPoint("TOPLEFT", 22, -126)
+        nameBg:SetSize(300, 26)
+        frame.nameBox = CreateFrame("EditBox", nil, frame)
+        frame.nameBox:SetPoint("TOPLEFT", 22, -126)
+        frame.nameBox:SetSize(300, 26)
+        frame.nameBox:SetAutoFocus(false)
+        frame.nameBox:SetFontObject(ChatFontNormal)
+        frame.nameBox:SetTextInsets(6, 6, 0, 0)
+        frame.nameBox:SetMaxLetters(32)
+        frame.nameBox:SetScript("OnEscapePressed", function(box) box:ClearFocus() end)
+
+        local create = button(frame, self.L.PROFILE_CREATE, 140, 26)
+        create:SetPoint("TOPLEFT", 332, -126)
+        create:SetScript("OnClick", function()
+            local ok, message = self:CreateNamedProfile(frame.nameBox:GetText())
+            self:Print(message)
+            if ok then frame.nameBox:SetText("") end
+            self:RefreshProfileManager()
+        end)
+
+        frame.rows = {}
+        for index = 1, 6 do
+            local row = CreateFrame("Frame", nil, frame)
+            row:SetSize(476, 30)
+            row:SetPoint("TOPLEFT", 22, -166 - ((index - 1) * 34))
+            solid(row, "BACKGROUND", 0, 0, 0, index % 2 == 0 and 0.20 or 0.10):SetAllPoints()
+            row.label = text(row, "", 12, C.text)
+            row.label:SetPoint("LEFT", 10, 0)
+            row.label:SetWidth(210)
+            row.label:SetJustifyH("LEFT")
+            row.use = button(row, self.L.PROFILE_USE, 80, 22)
+            row.use:SetPoint("LEFT", 226, 0)
+            row.rename = button(row, self.L.PROFILE_RENAME, 90, 22)
+            row.rename:SetPoint("LEFT", 312, 0)
+            row.delete = button(row, self.L.PROFILE_DELETE, 68, 22)
+            row.delete:SetPoint("LEFT", 408, 0)
+            frame.rows[index] = row
+        end
+
+        frame.empty = text(frame, self.L.PROFILE_NONE, 11, C.dim)
+        frame.empty:SetPoint("TOPLEFT", 22, -172)
+        frame.empty:SetWidth(476)
+        frame.empty:SetHeight(14)
+        frame.empty:SetJustifyH("LEFT")
+
+        local own = button(frame, self.L.PROFILE_USE_OWN, 220, 28)
+        own:SetPoint("BOTTOMLEFT", 22, 20)
+        own:SetScript("OnClick", function()
+            local _, message = self:UseOwnProfile()
+            self:Print(message)
+            self:RefreshProfileManager()
+        end)
+        frame.ownButton = own
+
+        self.profileManagerFrame = frame
+    end
+    self:RefreshProfileManager()
+    frame:Show()
+end
+
+function NS:RefreshProfileManager()
+    local frame = self.profileManagerFrame
+    if not frame then return end
+    frame.active:SetText(string.format(self.L.PROFILE_ACTIVE, self:GetActiveProfileLabel()))
+    local names = self:NamedProfiles()
+    local active = self:ActiveNamedProfile()
+    frame.empty:SetShown(#names == 0)
+    for index, row in ipairs(frame.rows) do
+        local name = names[index]
+        row:SetShown(name ~= nil)
+        if name then
+            row.label:SetText((name == active and "> " or "") .. name)
+            row.use:SetEnabled(name ~= active)
+            row.use:SetScript("OnClick", function()
+                local _, message = self:UseNamedProfile(name)
+                self:Print(message)
+                self:RefreshProfileManager()
+            end)
+            row.rename:SetScript("OnClick", function()
+                local _, message = self:RenameNamedProfile(name, frame.nameBox:GetText())
+                self:Print(message)
+                self:RefreshProfileManager()
+            end)
+            armConfirm(row.delete, self.L.PROFILE_DELETE, self.L.PROFILE_DELETE_ARMED, function()
+                local _, message = self:DeleteNamedProfile(name)
+                self:Print(message)
+                self:RefreshProfileManager()
+            end)
+        end
+    end
+    frame.ownButton:SetEnabled(active ~= nil)
+    -- Plus de six profils est un cas que la liste ne montre pas. Le dire plutot
+    -- que de laisser croire qu'il n'y en a que six.
+    if #names > #frame.rows then
+        frame.empty:SetShown(true)
+        frame.empty:SetText(string.format(self.L.PROFILE_TOO_MANY, #names - #frame.rows))
+    else
+        frame.empty:SetText(self.L.PROFILE_NONE)
+    end
+end
+
 function NS:ShowProfileTransfer()
     local frame = self.profileTransferFrame
     if not frame then

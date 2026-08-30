@@ -5755,6 +5755,147 @@ do
 end
 
 --------------------------------------------------------------------------
+-- 1.6.9 : profils nommes
+--
+-- Deux regles portent tout le reste. Le profil propre d'une specialisation
+-- n'est JAMAIS supprime quand elle pointe ailleurs -- sinon supprimer un
+-- profil partage laisserait des personnages sans rien. Et rien ne bascule tout
+-- seul : le point 304 de l'inventaire interdit les profils automatiques.
+--------------------------------------------------------------------------
+do
+    freshProfile("PALADIN")
+    knowSpells(4987)
+    NS:UpdateSpells()
+
+    falsy(NS:NormalizeProfileName(""), "nom : une chaine vide est refusee")
+    falsy(NS:NormalizeProfileName("   "), "nom : des espaces seuls aussi")
+    falsy(NS:NormalizeProfileName(nil), "nom : et une absence de nom")
+    eq(NS:NormalizeProfileName("  Raid  "), "Raid", "nom : les espaces de bord sont rognes")
+    eq(NS:NormalizeProfileName("Ra\nid"), "Raid", "nom : les caracteres de controle sont retires")
+    eq(#NS:NormalizeProfileName(string.rep("a", 200)), 32, "nom : la longueur est bornee")
+
+    -- Le profil propre garde 22 tout du long : c'est lui le temoin. Le partage
+    -- sera modifie APRES avoir ete active, sinon on ecrirait dans le temoin.
+    eq(NS.db.frameSize, 22, "profil : le profil propre part de sa valeur d'origine")
+    local created, message = NS:CreateNamedProfile("Raid")
+    truthy(created, "profil : la creation reussit")
+    truthy(message:find("Raid", 1, true), "profil : et le dit avec son nom")
+    falsy(NS:CreateNamedProfile("Raid"), "profil : deux profils ne portent pas le meme nom")
+    falsy(NS:CreateNamedProfile("  "), "profil : ni un nom vide")
+
+    eq(#NS:NamedProfiles(), 1, "profil : il apparait dans la liste")
+    falsy(NS:ActiveNamedProfile(), "profil : creer n'est pas utiliser")
+
+    truthy(NS:UseNamedProfile("Raid"), "profil : on peut l'utiliser")
+    eq(NS:ActiveNamedProfile(), "Raid", "profil : il devient le profil actif")
+    eq(NS.db.frameSize, 22, "profil : cree a partir des reglages courants, il les porte")
+    truthy(NS:GetActiveProfileLabel():find("Raid", 1, true),
+        "profil : le libelle affiche annonce le profil partage")
+
+    -- LE point qui compte : le profil propre n'est pas touche pendant qu'un
+    -- profil partage sert, et il n'est jamais supprime.
+    NS.db.frameSize = 33
+    truthy(NS:UseOwnProfile(), "profil : on revient au profil propre")
+    falsy(NS:ActiveNamedProfile(), "profil : plus aucun profil nomme actif")
+    eq(NS.db.frameSize, 22,
+        "profil : et le profil propre a garde SES valeurs, pas celles du partage")
+
+    NS:UseNamedProfile("Raid")
+    eq(NS.db.frameSize, 33, "profil : ce qu'on modifie dans un profil partage y reste")
+
+    truthy(NS:RenameNamedProfile("Raid", "Mythique"), "profil : on peut le renommer")
+    eq(NS:ActiveNamedProfile(), "Mythique", "profil : le pointeur suit le nouveau nom")
+    falsy(NS:RenameNamedProfile("PasUnProfil", "X"), "profil : renommer l'inconnu est refuse")
+
+    -- Un AUTRE personnage pointe aussi dessus. C'est lui qui compte : pour la
+    -- specialisation active, le pointeur mort est rattrape au chargement, donc
+    -- supprimer sans desaffecter n'aurait rien casse de visible ici -- et
+    -- l'aurait casse chez l'autre, a sa prochaine connexion.
+    local _, assignments = NS:NamedProfileStore()
+    assignments["Autre-Royaume"] = { ["2"] = "Mythique" }
+
+    truthy(NS:DeleteNamedProfile("Mythique"), "profil : on peut le supprimer")
+    falsy(assignments["Autre-Royaume"]["2"],
+        "profil : et AUCUN autre personnage ne garde un pointeur vers le disparu")
+    falsy(NS:ActiveNamedProfile(), "profil : il n'est plus actif")
+    eq(#NS:NamedProfiles(), 0, "profil : ni dans la liste")
+    eq(NS.db.frameSize, 22,
+        "profil : et la specialisation est revenue a SON profil, intact")
+    falsy(NS:DeleteNamedProfile("Mythique"), "profil : supprimer deux fois est refuse")
+
+    -- Un pointeur mort ne doit pas faire repartir sur les valeurs d'origine, et
+    -- surtout il doit etre OUBLIE. Laisse en place, il ressusciterait tout seul
+    -- le jour ou un profil reprendrait le meme nom -- une specialisation
+    -- basculerait alors sans que personne ne l'ait demande, ce qu'interdit le
+    -- point 304 de l'inventaire.
+    NS:CreateNamedProfile("Temporaire")
+    NS:UseNamedProfile("Temporaire")
+    NS.db.frameSize = 40
+    local named = NS:NamedProfileStore()
+    named["Temporaire"] = nil
+    NS:ReloadActiveProfile()
+    falsy(NS:ActiveNamedProfile(), "profil : un pointeur mort est oublie")
+    eq(NS.db.frameSize, 22, "profil : et on revient au profil propre, pas aux valeurs d'origine")
+
+    NS:CreateNamedProfile("Temporaire")
+    NS:ReloadActiveProfile()
+    falsy(NS:ActiveNamedProfile(),
+        "profil : un nom repris ne ressuscite pas un ancien pointeur")
+    NS:DeleteNamedProfile("Temporaire")
+
+    NS:HandleSlash("profile new Soins")
+    eq(#NS:NamedProfiles(), 1, "commande : new cree le profil")
+    NS:HandleSlash("profile use Soins")
+    eq(NS:ActiveNamedProfile(), "Soins", "commande : use l'active")
+    NS:HandleSlash("profile rename Soins | Soins 2")
+    eq(NS:ActiveNamedProfile(), "Soins 2", "commande : rename accepte les deux noms")
+    NS:HandleSlash("profile own")
+    falsy(NS:ActiveNamedProfile(), "commande : own revient au profil propre")
+    NS:HandleSlash("profile delete Soins 2")
+    eq(#NS:NamedProfiles(), 0, "commande : delete le retire")
+
+    -- La fenetre. Ce qui compte : chaque rangee agit sur SON profil -- une
+    -- fermeture qui capturerait l'index plutot que le nom ferait agir le
+    -- bouton sur le voisin des que la liste se reordonne -- et la suppression
+    -- demande deux clics, comme toute action irreversible de l'addon.
+    NS:CreateNamedProfile("Alpha")
+    NS:CreateNamedProfile("Beta")
+    NS:ShowProfileManager()
+    local window = NS.profileManagerFrame
+    truthy(window and window:IsShown(), "fenetre : elle s'ouvre")
+    eq(window.rows[1].label.__text, "Alpha", "fenetre : les profils sont listes dans l'ordre")
+    eq(window.rows[2].label.__text, "Beta", "fenetre : et tous les deux")
+    falsy(window.rows[3]:IsShown(), "fenetre : les rangees inutiles sont cachees")
+    falsy(window.empty:IsShown(), "fenetre : rien n'annonce une liste vide")
+    falsy(window.ownButton:IsEnabled(),
+        "fenetre : sans profil partage actif, revenir au sien ne sert a rien")
+
+    window.rows[2].use:GetScript("OnClick")(window.rows[2].use)
+    eq(NS:ActiveNamedProfile(), "Beta", "fenetre : la deuxieme rangee active BIEN le deuxieme profil")
+    truthy(window.ownButton:IsEnabled(), "fenetre : revenir au sien devient possible")
+    falsy(window.rows[2].use:IsEnabled(), "fenetre : et le profil actif ne se re-active pas")
+
+    -- Renommer prend le texte de la saisie unique.
+    window.nameBox:SetText("Beta 2")
+    window.rows[2].rename:GetScript("OnClick")(window.rows[2].rename)
+    eq(NS:ActiveNamedProfile(), "Beta 2", "fenetre : renommer suit le pointeur")
+
+    -- Supprimer : un premier clic arme, un second agit.
+    local target = window.rows[1].delete
+    target:GetScript("OnClick")(target)
+    eq(#NS:NamedProfiles(), 2, "fenetre : le premier clic ne supprime rien")
+    eq(target.__text, NS.L.PROFILE_DELETE_ARMED, "fenetre : il demande confirmation")
+    target:GetScript("OnClick")(target)
+    eq(#NS:NamedProfiles(), 1, "fenetre : le second clic supprime")
+
+    window.rows[1].delete:GetScript("OnClick")(window.rows[1].delete)
+    window.rows[1].delete:GetScript("OnClick")(window.rows[1].delete)
+    eq(#NS:NamedProfiles(), 0, "fenetre : et la liste peut se vider")
+    truthy(window.empty:IsShown(), "fenetre : une liste vide le dit")
+    window:Hide()
+end
+
+--------------------------------------------------------------------------
 -- 1.6.8 : taille et espacement separes en groupe et en raid
 --
 -- Quarante cases a la taille d'un groupe de cinq ne tiennent nulle part. Dix-

@@ -590,6 +590,50 @@ function NS:PrintAlertSounds()
     end
 end
 
+-- Un seul verbe par ligne, et le resultat dit ce qui s'est passe : ces
+-- operations touchent des reglages partages entre personnages, et un silence
+-- apres « supprimer » serait la pire des reponses.
+function NS:HandleProfileCommand(rest)
+    local verb, argument = rest:match("^(%S*)%s*(.-)$")
+    verb = string.lower(verb or "")
+
+    if verb == "" or verb == "list" then
+        local active = self:ActiveNamedProfile()
+        self:Print(string.format(self.L.PROFILE_ACTIVE, self:GetActiveProfileLabel()))
+        for _, name in ipairs(self:NamedProfiles()) do
+            self:Print((name == active and "> " or "   ") .. name)
+        end
+        self:Print(self.L.PROFILE_COMMAND_HINT)
+        return
+    end
+
+    local ok, message
+    if verb == "new" then
+        ok, message = self:CreateNamedProfile(argument)
+    elseif verb == "use" then
+        ok, message = self:UseNamedProfile(argument)
+    elseif verb == "own" then
+        ok, message = self:UseOwnProfile()
+    elseif verb == "delete" then
+        ok, message = self:DeleteNamedProfile(argument)
+    elseif verb == "rename" then
+        -- Deux noms sur une ligne : le separateur est une barre verticale, un
+        -- caractere qu'un nom ne peut pas contenir puisqu'il sert deja de
+        -- separateur dans l'export.
+        local from, to = argument:match("^(.-)%s*|%s*(.-)$")
+        if not from or from == "" then
+            self:Print(self.L.PROFILE_RENAME_HINT)
+            return
+        end
+        ok, message = self:RenameNamedProfile(from, to)
+    else
+        self:Print(self.L.PROFILE_COMMAND_HINT)
+        return
+    end
+    self:Print(message)
+    if ok and self.RefreshOptions then self:RefreshOptions() end
+end
+
 function NS:PlayAfflictionAlert(preview)
     if not self.db or not self.db.sound or not self.enabled then return false end
     -- Une alerte d'essai est un geste du joueur : elle se joue toujours. Une
@@ -1026,6 +1070,8 @@ function NS:HandleSlash(message)
         self:SetEnabled(false)
     elseif command == "soundtest" then
         self:PlayAfflictionAlert(true)
+    elseif command == "profile" then
+        self:HandleProfileCommand(rest)
     elseif command == "sound" then
         if rest == "" or not self:SetAlertSound(string.upper(rest)) then
             self:PrintAlertSounds()

@@ -268,10 +268,147 @@ local function absorbHistory(global, profile)
 end
 
 function NS:GetActiveProfileLabel()
+    local named = self:ActiveNamedProfile()
+    if named then return named .. "  -  " .. self.L.PROFILE_SHARED end
     local specName = self.activeSpecName
     if not specName then specName = select(2, self:GetSpecializationProfileKey()) end
     return tostring(self.activeCharacterKey or self:GetCharacterProfileKey())
         .. "  -  " .. tostring(specName or "Default")
+end
+
+--------------------------------------------------------------------------
+-- Profils nommes
+--
+-- Le modele d'origine ne connait qu'une adresse : personnage + specialisation.
+-- Un profil nomme est une SECONDE adresse, account-wide, vers laquelle une
+-- specialisation peut pointer. Deux regles tiennent tout le reste :
+--
+--   1. Le profil propre d'une specialisation n'est JAMAIS supprime quand elle
+--      pointe ailleurs. Revenir dessus doit toujours etre possible, y compris
+--      apres la suppression du profil nomme -- sinon supprimer un profil
+--      partage laisserait des personnages sans rien.
+--   2. Rien ne bascule tout seul. Le point 304 de l'inventaire est explicite :
+--      pas de profils automatiques incomprehensibles. Une specialisation ne
+--      pointe vers un profil nomme que si on le lui a demande.
+--------------------------------------------------------------------------
+local MAX_PROFILE_NAME = 32
+
+function NS:NamedProfileStore()
+    local raw = self.dbRoot
+    if not raw then return nil end
+    if type(raw.named) ~= "table" then raw.named = {} end
+    if type(raw.assignments) ~= "table" then raw.assignments = {} end
+    return raw.named, raw.assignments
+end
+
+-- Un nom venu d'une saisie libre : longueur bornee, espaces rognes, et aucun
+-- caractere de controle -- un retour a la ligne dans un nom casserait la liste
+-- et l'export sans que rien ne le dise.
+function NS:NormalizeProfileName(raw)
+    if type(raw) ~= "string" then return nil end
+    local name = raw:gsub("%c", ""):gsub("^%s+", ""):gsub("%s+$", "")
+    if name == "" then return nil end
+    if #name > MAX_PROFILE_NAME then name = name:sub(1, MAX_PROFILE_NAME) end
+    return name
+end
+
+function NS:NamedProfiles()
+    local named = self:NamedProfileStore()
+    local list = {}
+    if not named then return list end
+    for name in pairs(named) do list[#list + 1] = name end
+    table.sort(list)
+    return list
+end
+
+function NS:ActiveNamedProfile()
+    local named, assignments = self:NamedProfileStore()
+    if not named then return nil end
+    local character = assignments[self.activeCharacterKey or ""]
+    local name = type(character) == "table" and character[self.activeSpecKey or ""]
+    if type(name) == "string" and named[name] then return name end
+    return nil
+end
+
+function NS:CreateNamedProfile(rawName)
+    local name = self:NormalizeProfileName(rawName)
+    if not name then return false, self.L.PROFILE_NAME_INVALID end
+    local named = self:NamedProfileStore()
+    if not named then return false, self.L.PROFILE_NAME_INVALID end
+    if named[name] then return false, string.format(self.L.PROFILE_NAME_TAKEN, name) end
+    -- Cree a partir des reglages COURANTS : creer un profil vide obligerait a
+    -- tout re-regler, et personne ne cree un profil pour repartir de zero.
+    named[name] = deepCopy(self.db)
+    return true, string.format(self.L.PROFILE_CREATED, name)
+end
+
+function NS:DeleteNamedProfile(rawName)
+    local name = self:NormalizeProfileName(rawName)
+    local named, assignments = self:NamedProfileStore()
+    if not named or not name or not named[name] then
+        return false, self.L.PROFILE_UNKNOWN
+    end
+    local wasActive = self:ActiveNamedProfile() == name
+    named[name] = nil
+    -- Toute specialisation qui pointait dessus revient a SON profil, qui n'a
+    -- jamais ete supprime. Laisser un pointeur mort ferait repartir un autre
+    -- personnage sur les valeurs d'origine a sa prochaine connexion, sans que
+    -- rien ne le dise.
+    for _, character in pairs(assignments) do
+        if type(character) == "table" then
+            for spec, assigned in pairs(character) do
+                if assigned == name then character[spec] = nil end
+            end
+        end
+    end
+    if wasActive then self:ReloadActiveProfile() end
+    return true, string.format(self.L.PROFILE_DELETED, name)
+end
+
+function NS:RenameNamedProfile(rawOld, rawNew)
+    local old, new = self:NormalizeProfileName(rawOld), self:NormalizeProfileName(rawNew)
+    local named, assignments = self:NamedProfileStore()
+    if not named or not old or not named[old] then return false, self.L.PROFILE_UNKNOWN end
+    if not new then return false, self.L.PROFILE_NAME_INVALID end
+    if new ~= old and named[new] then return false, string.format(self.L.PROFILE_NAME_TAKEN, new) end
+    named[new], named[old] = named[old], nil
+    for _, character in pairs(assignments) do
+        if type(character) == "table" then
+            for spec, assigned in pairs(character) do
+                if assigned == old then character[spec] = new end
+            end
+        end
+    end
+    return true, string.format(self.L.PROFILE_RENAMED, old, new)
+end
+
+function NS:UseNamedProfile(rawName)
+    local name = self:NormalizeProfileName(rawName)
+    local named, assignments = self:NamedProfileStore()
+    if not named or not name or not named[name] then return false, self.L.PROFILE_UNKNOWN end
+    local characterKey = self.activeCharacterKey or self:GetCharacterProfileKey()
+    local specKey = self.activeSpecKey or select(1, self:GetSpecializationProfileKey())
+    if not specKey then return false, self.L.PROFILE_UNKNOWN end
+    assignments[characterKey] = type(assignments[characterKey]) == "table" and assignments[characterKey] or {}
+    assignments[characterKey][specKey] = name
+    self:ReloadActiveProfile()
+    return true, string.format(self.L.PROFILE_IN_USE, name)
+end
+
+function NS:UseOwnProfile()
+    local _, assignments = self:NamedProfileStore()
+    if not assignments then return false, self.L.PROFILE_UNKNOWN end
+    local character = assignments[self.activeCharacterKey or ""]
+    if type(character) == "table" then character[self.activeSpecKey or ""] = nil end
+    self:ReloadActiveProfile()
+    return true, self.L.PROFILE_OWN_IN_USE
+end
+
+-- Recharger n'est pas changer de specialisation : LoadCurrentProfile sort tot
+-- quand les cles n'ont pas bouge, ce qui est exactement le cas ici.
+function NS:ReloadActiveProfile()
+    self.activeCharacterKey, self.activeSpecKey = nil, nil
+    self:QueueProfileSwitch()
 end
 
 function NS:GetAuraHistory()
@@ -417,6 +554,24 @@ function NS:LoadCurrentProfile(cloneCurrent)
             profile = self:NewProfileTable(characterKey)
         end
         profiles[characterKey][specKey] = profile
+    end
+
+    -- Le profil propre vient d'etre garanti ci-dessus, et il le reste meme
+    -- quand cette specialisation pointe vers un profil nomme : revenir dessus
+    -- doit toujours etre possible, y compris apres la suppression du profil
+    -- partage. Ce n'est qu'ensuite que le pointeur est suivi.
+    local named, assignments = self:NamedProfileStore()
+    if named then
+        local character = assignments[characterKey]
+        local assigned = type(character) == "table" and character[specKey]
+        if type(assigned) == "string" and type(named[assigned]) == "table" then
+            profile = named[assigned]
+        elseif type(assigned) == "string" then
+            -- Pointeur mort : le profil nomme a disparu d'une facon ou d'une
+            -- autre. On revient au profil propre plutot que de repartir sur
+            -- les valeurs d'origine sans rien dire.
+            character[specKey] = nil
+        end
     end
     applyDefaults(self.profileDefaults, profile)
     normalizeProfile(profile, self.profileDefaults)

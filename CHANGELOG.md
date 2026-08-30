@@ -6,6 +6,17 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.6.9
+
+**Profils nommes.** Un profil qu'on nomme, et que plusieurs personnages et specialisations peuvent utiliser en meme temps.
+
+- Creer depuis les reglages courants, utiliser, renommer, supprimer — par la fenetre **Profils** (bouton sur la carte de profil, page General) ou par `/cleansive profile`.
+- **Deux regles portent tout le reste.** Le profil propre d'une specialisation n'est JAMAIS supprime quand elle pointe vers un profil partage : revenir dessus reste toujours possible, y compris apres la suppression du partage — sinon supprimer un profil partage laisserait des personnages sans rien. Et **rien ne bascule tout seul** : le point 304 de l'inventaire interdit les profils automatiques, et une specialisation ne pointe vers un profil nomme que si on le lui a demande.
+- **Supprimer desaffecte tout le monde**, pas seulement le personnage connecte. Un pointeur laisse en place aurait fait repartir un autre personnage sur les valeurs d'origine a sa prochaine connexion, sans que rien ne le dise — et pire, il aurait ressuscite tout seul le jour ou un profil aurait repris le meme nom.
+- Un nom vient d'une saisie libre : longueur bornee a 32, espaces de bord rognes, caracteres de controle retires. Un retour a la ligne dans un nom aurait casse la liste et l'export en silence.
+- La suppression demande deux clics, comme toute action irreversible de l'addon. La fenetre montre six profils ; au-dela, elle le dit plutot que de laisser croire qu'il n'y en a que six.
+- Tests : 1 292 a 1 345. Neuf injections de defaut verifiees, dont deux qui ne tombaient pas au premier essai : elles visaient le bon cas sans l'exercer.
+
 ## 1.6.8
 
 **Taille et espacement separes en groupe et en raid.** Quarante cases a la taille d'un groupe de cinq ne tiennent nulle part.
