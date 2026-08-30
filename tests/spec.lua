@@ -3402,6 +3402,31 @@ do
     local record = NS:GetDiagnostics()
     eq(record.styleFailures, before + 1, "style : l'echec est compte une fois")
     eq(record.styleSteps, 1, "style : une seule etape perdue sur la passe")
+
+    -- 1.6.14, releve d'une VRAIE cle mythique le 30/08 : failures=690 pour
+    -- steps=6210, soit une etape sur neuf, six cent quatre-vingt-dix fois. Les
+    -- deux garde-fous au-dessus n'avaient rien vu -- l'objet n'est pas DECLARE
+    -- interdit, et la permission etait accordee. Le seul temoin fiable est
+    -- l'echec lui-meme : il est retenu, et l'etape n'est plus retentee.
+    local calls = 0
+    rawset(visual.auraButton, "SetFrameLevel", function()
+        calls = calls + 1
+        error("Attempt to access forbidden object from code tainted by an AddOn")
+    end)
+    truthy(visual.levelRefused, "cle : le refus est retenu sur le visuel")
+
+    local afterFirst = NS:GetDiagnostics().styleFailures
+    rawset(visual.overlay, "__color", nil)
+    for _ = 1, 5 do NS:StyleAuraVisual(button, auraType, visual) end
+    eq(calls, 0, "cle : l'etape refusee n'est plus jamais retentee")
+    eq(NS:GetDiagnostics().styleFailures, afterFirst,
+        "cle : et le releve ne se gonfle plus de six cent quatre-vingt-dix echecs")
+
+    -- Le reste du visuel doit continuer a s'appliquer : abandonner tout le
+    -- visuel pour une etape sur neuf aurait coute le voile, la bande de type,
+    -- les charges et la lettre de clic.
+    truthy(rawget(visual.overlay, "__color") ~= nil,
+        "cle : les huit autres etapes s'appliquent toujours")
 end
 
 --------------------------------------------------------------------------

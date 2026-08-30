@@ -6,6 +6,17 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.6.14
+
+**Premier releve d'une vraie cle mythique**, le 30/08/2026. Il repond aux deux
+questions que deux audits laissaient ouvertes.
+
+- **Le registre sonore natif tient sous restriction.** `sound registered=230/230` puis `92/92`, `retries=0`, aucun refus, pendant toute une cle avec `ChallengeMode` actif. `AddAuraSound` n'est donc PAS refuse dans ce contexte : la garde que les audits recommandaient aurait coupe les alertes d'une cle entiere pour un risque qui ne se realise pas. Elle n'est pas ajoutee, et ce n'est plus une supposition.
+- **Le niveau de cadre du moteur, lui, est bien refuse -- 690 fois en une cle.** `style failures=690 steps=6210` : neuf etapes par passe, **une seule** echoue. Le voile, la bande de type, les charges et la lettre de clic s'appliquaient donc correctement ; seul `SetFrameLevel` etait refuse, avec « Attempt to access forbidden object from code tainted by an AddOn », et toujours avec `lock=0` -- l'addon se croyait libre.
+- Les deux garde-fous en place n'ont rien vu : `IsForbidden` repond que l'objet n'est pas **declare** interdit, et `CheckAllowProtectedFunctions` a accorde la permission. **Le seul temoin fiable est l'echec lui-meme.** Il est desormais retenu, pour cette etape seule, et n'est plus retente : 690 echecs, c'etait 690 relances inutiles. Les huit autres etapes continuent de s'appliquer -- abandonner tout le visuel aurait coute bien plus que le niveau de cadre.
+- La memoire meurt avec le visuel : une reconstruction du moteur redonne sa chance a l'objet suivant.
+- Tests : 1 433 a 1 437.
+
 ## 1.6.13
 
 **Le defilement des pages de reglages ne fonctionnait pas en jeu.** Signale sur
@@ -79,17 +90,5 @@ Corrections issues d'un audit externe de la 1.6.10.
 - Un nom vient d'une saisie libre : longueur bornee a 32, espaces de bord rognes, caracteres de controle retires. Un retour a la ligne dans un nom aurait casse la liste et l'export en silence.
 - La suppression demande deux clics, comme toute action irreversible de l'addon. La fenetre montre six profils ; au-dela, elle le dit plutot que de laisser croire qu'il n'y en a que six.
 - Tests : 1 292 a 1 345. Neuf injections de defaut verifiees, dont deux qui ne tombaient pas au premier essai : elles visaient le bon cas sans l'exercer.
-
-## 1.6.8
-
-**Taille et espacement separes en groupe et en raid.** Quarante cases a la taille d'un groupe de cinq ne tiennent nulle part.
-
-- Nouvelle bascule sur la page Apparence, **eteinte par defaut** : un raid garde alors les valeurs du groupe, exactement comme avant. Activee, il prend sa propre taille de case et son propre espacement. Le changement s'applique en entrant ou en sortant d'un raid — et pendant un combat, a la fin de celui-ci, redimensionner une case etant une modification protegee.
-- **L'apercu suit.** Il existe pour regler une grille de raid SANS raid : au-dela de cinq cases simulees, il montre donc la geometrie de raid, sinon il ne sert plus a ce pour quoi il a ete fait.
-- **Dix-huit endroits lisaient la taille et l'espacement directement.** Ils passent tous par un seul accesseur : c'est la seule facon que la geometrie ne se decide qu'a un endroit, et c'etait la vraie raison pour laquelle ce chantier etait reporte depuis la 1.6.
-- **Les deux curseurs de raid sont grises, jamais caches.** Un controle qui disparait laisse un trou et ne dit plus qu'il existe — et surtout, un controle cache echappe au controle de recouvrement, qui ne mesure que ce qui s'affiche.
-- **Un garde-fou ecrit puis retire.** J'avais ajoute une fonction pour redessiner a l'entree en raid ; son injection de defaut est restee VERTE, ce qui voulait dire qu'elle ne servait a rien : `RebuildRoster` redessine deja par `AssignRosterToButtons`. Lister les appelants avant d'ajouter une garde, pas apres.
-- La page Apparence passe a 670 px de haut. Sans le defilement de la 1.6.7, ces quatre reglages n'auraient eu nulle part ou aller.
-- Tests : 1 265 a 1 292.
 
 L'historique complet est dans `CHANGELOG.md`, livre avec l'addon.

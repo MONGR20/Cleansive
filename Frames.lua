@@ -729,15 +729,38 @@ function NS:StyleAuraVisual(button, auraType, visual)
             failures = failures + 1
             firstError = firstError or err
         end
+        return ok
     end
 
-    -- The engine's own frame: the one that was refused in the field.
-    step(function()
-        visual.auraButton:SetFrameLevel(level)
-        if visual.auraButton.SetMouseMotionEnabled then
-            visual.auraButton:SetMouseMotionEnabled(enabled and self.db.showTooltips)
-        end
-    end)
+    -- Releve d'une VRAIE cle mythique, le 30/08/2026 :
+    --   style failures=690 steps=6210
+    --   error=Frames.lua:736 calling 'SetFrameLevel' on bad self
+    --         (Attempt to access forbidden object from code tainted by an AddOn)
+    --   styleContext lock=0 / ChallengeMode,Map,Chat count=675
+    --   styleContext lock=0 / Encounter,ChallengeMode,Map,Chat count=15
+    --
+    -- 6210 / 690 = 9 : les neuf etapes s'executent, et UNE SEULE echoue. Le
+    -- reste du visuel -- le voile, la bande de type, les charges, la lettre --
+    -- s'applique donc correctement. C'est bien pour cela qu'il ne faut pas
+    -- abandonner tout le visuel ici.
+    --
+    -- Les deux garde-fous au-dessus n'ont rien vu : IsForbidden repond que
+    -- l'objet n'est pas DECLARE interdit, et CheckAllowProtectedFunctions a
+    -- laisse passer. Le seul temoin fiable est l'echec lui-meme. Il est donc
+    -- retenu, POUR CETTE ETAPE SEULE, et n'est plus retente : 690 fois en une
+    -- cle, c'etait 690 relances de pendingAuraStyle pour rien.
+    if not visual.levelRefused then
+        local applied = step(function()
+            visual.auraButton:SetFrameLevel(level)
+            if visual.auraButton.SetMouseMotionEnabled then
+                visual.auraButton:SetMouseMotionEnabled(enabled and self.db.showTooltips)
+            end
+        end)
+        -- L'objet ne redevient jamais accessible : cinq sessions le confirment
+        -- pour le mecanisme voisin. La memoire meurt avec le visuel, donc une
+        -- reconstruction du moteur redonne sa chance a l'objet suivant.
+        if not applied then visual.levelRefused = true end
+    end
     step(function()
         visual.overlay:SetColorTexture(clickColor[1], clickColor[2], clickColor[3], alpha)
     end)
