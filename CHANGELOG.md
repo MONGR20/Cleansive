@@ -6,6 +6,12 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.6.10
+
+- **Le bouton du son d'alerte est enfin verifie.** Le mecanisme etait teste depuis la 1.6.6 et le bouton pose en 1.6.7, mais rien ne verifiait qu'il etait branche sur quoi que ce soit : le debrancher ne faisait tomber aucun test. Une option qu'on ne peut atteindre que par une commande n'est pas livree. La rotation, le libelle qui suit, et la disparition du reglage quand le son est coupe sont maintenant tenus.
+- Le nombre de sons proposes n'est PAS ecrit dans le test : il depend du client. Le figer aurait fait tomber ce test le jour ou la liste change, sans qu'aucun defaut existe.
+- Tests : 1 345 a 1 356.
+
 ## 1.6.9
 
 **Profils nommes.** Un profil qu'on nomme, et que plusieurs personnages et specialisations peuvent utiliser en meme temps.

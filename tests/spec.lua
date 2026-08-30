@@ -6331,6 +6331,55 @@ do
         "mise en page : aucun controle n'en recouvre un autre")
 end
 
+-- 1.6.10 : le bouton du son d'alerte. Le mecanisme etait teste depuis la
+-- 1.6.6, le bouton pose en 1.6.7 -- et personne ne verifiait qu'il etait
+-- branche sur quoi que ce soit. Une option qu'on ne peut atteindre que par une
+-- commande n'est pas livree.
+do
+    local control = NS.alertSoundButton
+    truthy(control, "son : le bouton existe sur la page General")
+
+    NS.db.sound = true
+    NS.db.alertSound = "DEFAULT"
+    NS:RefreshOptions()
+    eq(control.__text, NS.L.ALERT_SOUND_DEFAULT, "son : le bouton porte le son courant")
+
+    -- Un tour complet revient au point de depart, et ne s'arrete jamais sur un
+    -- son que ce client ignore. Le nombre de sons proposes n'est PAS ecrit
+    -- ici : il depend du client, et le figer ferait tomber ce test le jour ou
+    -- la liste change, sans qu'aucun defaut existe.
+    local available = NS:AvailableAlertSounds()
+    truthy(#available >= 2, "son : ce client propose au moins deux sons")
+
+    -- Un bouton non branche fait tomber l'assertion ci-dessous ; sans ce
+    -- repli, il ferait aussi tomber la SUITE de la suite, et un defaut isole
+    -- masquerait tout le reste.
+    local click = control:GetScript("OnClick") or function() end
+    truthy(control:GetScript("OnClick"), "son : le bouton est branche")
+    click(control)
+    eq(NS.db.alertSound, available[2].key, "son : un clic passe au suivant")
+    eq(control.__text, NS.L["ALERT_SOUND_" .. available[2].key],
+        "son : et le libelle suit")
+
+    local offered = {}
+    for _, entry in ipairs(available) do offered[entry.key] = true end
+    for _ = 2, #available do
+        click(control)
+        truthy(offered[NS.db.alertSound],
+            "son : le tour ne s'arrete jamais sur un son que le client ignore")
+    end
+    eq(NS.db.alertSound, "DEFAULT", "son : et un tour complet revient au premier")
+
+    -- Un reglage qui ne s'applique pas ne doit pas rester la a suggerer qu'il
+    -- s'applique : son coupe, tout ce qui le regle disparait.
+    NS.db.sound = false
+    NS:RefreshOptions()
+    falsy(control:IsShown(), "son : le bouton disparait quand le son est coupe")
+    NS.db.sound = true
+    NS:RefreshOptions()
+    truthy(control:IsShown(), "son : et revient avec lui")
+end
+
 --------------------------------------------------------------------------
 -- 1.6.1 : l'apercu est refuse en combat, pas reporte
 --
