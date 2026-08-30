@@ -6604,15 +6604,38 @@ do
         for index = 1, 7 do NS:CreateNamedProfile("P" .. index) end
         NS:RefreshProfileManager()
         eq(#NS:NamedProfiles(), 7, "debordement : sept profils existent")
-        truthy(window.overflow:IsShown(), "debordement : l'avertissement parait")
         falsy(window.empty:IsShown(),
-            "debordement : et ce n'est PAS le texte de liste vide")
-        -- Ce qui compte : il ne doit pas se dessiner sur la premiere rangee.
-        local first = window.rows[1].__lastPoint
-        local warn = window.overflow.__lastPoint
-        truthy(first and warn, "debordement : les deux sont poses")
-        truthy(warn.y < first.y - 30,
-            "debordement : il est SOUS la liste, pas par-dessus la premiere ligne")
+            "debordement : ce n'est PAS le texte de liste vide")
+
+        -- 1.6.24 : le septieme profil n'etait ni selectionnable, ni renommable,
+        -- ni supprimable -- un texte renvoyait aux commandes. Un cul-de-sac
+        -- dans une fonction presentee comme graphique. Les six rangees se
+        -- recyclent maintenant.
+        truthy(window.nextPage:IsShown(), "pagination : une seconde page est proposee")
+        truthy(window.pageLabel:GetText():find("2", 1, true),
+            "pagination : et le compteur annonce deux pages")
+        falsy(window.previousPage:IsEnabled(), "pagination : on est sur la premiere")
+        eq(window.rows[1].label:GetText(), NS:NamedProfiles()[1],
+            "pagination : la premiere page part du premier profil")
+
+        window.nextPage:GetScript("OnClick")(window.nextPage)
+        eq(window.rows[1].label:GetText(), NS:NamedProfiles()[7],
+            "pagination : la seconde page atteint le septieme profil")
+        truthy(window.rows[1]:IsShown(), "pagination : sa rangee est bien dessinee")
+        falsy(window.rows[2]:IsShown(), "pagination : et la page ne montre rien de plus")
+        falsy(window.nextPage:IsEnabled(), "pagination : il n'y a pas de troisieme page")
+
+        -- Supprimer le seul profil d'une page laissait la liste sur une page
+        -- vide, sans aucun moyen d'en revenir. La page est donc bornee au
+        -- rafraichissement, pas au clic.
+        local seul = window.rows[1].delete
+        seul:GetScript("OnClick")(seul)
+        seul:GetScript("OnClick")(seul)
+        eq(#NS:NamedProfiles(), 6, "pagination : le septieme profil se supprime depuis sa page")
+        eq(window.listOffset, 0, "pagination : et la liste revient sur une page qui existe")
+        falsy(window.nextPage:IsShown(), "pagination : six profils tiennent sur une page")
+        NS:CreateNamedProfile("P7")
+        NS:RefreshProfileManager()
 
         -- Et les trois boutons qui changent un profil sont grises en combat.
         -- Par l'EVENEMENT reel, pas par un appel direct : la fonction savait
@@ -7139,7 +7162,7 @@ do
     -- de profils a grandi de cent pixels pour loger les lieux, et une section
     -- ajoutee au jugé se pose volontiers sur le bouton d'en dessous.
     measured = measured + inspect("profils", NS.profileManagerFrame,
-        { left = 0, top = 0, right = 520, bottom = 520 })
+        { left = 0, top = 0, right = 520, bottom = 560 })
     NS.profileManagerFrame:Hide()
 
     measured = measured + inspect("clics", NS.clickBindingFrame,
@@ -7567,6 +7590,37 @@ do
     falsy(NS:EnvironmentOverride("dungeon"),
         "lieux : le tour complet revient a aucun profil")
 
+    -- 1.6.24 : un nom peut faire trente-deux octets, le bouton d'un lieu en
+    -- faisait cent douze de large, et son libelle n'avait ni largeur, ni
+    -- limite de ligne. « donjon : <nom long> » debordait donc sur le bouton
+    -- voisin, a six pixels de la.
+    do
+        local control = frame.environmentButtons.raid
+        local label = control.uxLabel
+        truthy(label, "lieux : le bouton a bien un libelle")
+        local width = rawget(label, "__width")
+        truthy(width, "lieux : ce libelle est borne en largeur")
+        -- Sans garde, l'absence de largeur ferait TOMBER la suite au lieu de
+        -- la faire echouer : un test qui plante ne dit pas ce qui ne va pas.
+        truthy(width and width <= rawget(control, "__lastSize").width - 8,
+            "lieux : et sa borne tient dans le bouton")
+        eq(rawget(label, "__wordWrap"), false,
+            "lieux : il rogne plutot que de passer a la ligne")
+
+        -- Le cas reel : le nom le plus long que le reglage autorise.
+        local longName = NS:NormalizeProfileName(string.rep("Mistral", 8))
+        eq(#longName, 32, "lieux : le nom le plus long fait bien trente-deux octets")
+        NS:CreateNamedProfile(longName)
+        NS:SetEnvironmentOverride("raid", longName)
+        NS:RefreshProfileManager()
+        truthy(control:GetText():find(longName, 1, true),
+            "lieux : le bouton porte le nom en entier, c'est l'affichage qui le rogne")
+        eq(rawget(label, "__width"), width, "lieux : et sa largeur n'a pas bouge")
+        NS:SetEnvironmentOverride("raid", nil)
+        NS:DeleteNamedProfile(longName)
+        NS:RefreshProfileManager()
+    end
+
     -- LE point : profil charge ici, profil habituel, surcharge. Trois choses.
     NS:SetEnvironmentOverride("dungeon", "Donjon")
     mock.state.instanceType = "party"
@@ -7789,6 +7843,155 @@ do
         "vide : la saisie est videe apres la creation, l'invite revient")
 
     frame:Hide()
+end
+
+--------------------------------------------------------------------------
+-- 1.6.24 : aucune combinaison ne doit deborder de sa cellule
+--
+-- La plaque grandissait avec le nombre de caracteres sans jamais regarder la
+-- cellule : 31,46 px sur une case de 22 pour « ALT-CTRL-SHIFT-2 », donc du
+-- texte pose sur la case voisine. Le test d'avant ne connaissait que les trois
+-- gestes par defaut -- il ne pouvait donc pas le voir.
+--
+-- Ce test-ci parcourt TOUTES les combinaisons que le reglage autorise, a
+-- TOUTES les tailles de cellule. C'est la seule facon de ne pas recommencer.
+--------------------------------------------------------------------------
+do
+    freshProfile("PALADIN")
+    local MODIFIERS = {
+        {}, { "ALT" }, { "CTRL" }, { "SHIFT" },
+        { "ALT", "CTRL" }, { "ALT", "SHIFT" }, { "CTRL", "SHIFT" },
+        { "ALT", "CTRL", "SHIFT" },
+    }
+    local debordements, mesures, dessines = {}, 0, 0
+    for cell = 12, 40 do
+        for _, modifiers in ipairs(MODIFIERS) do
+            for boutton = 1, 5 do
+                local parts = {}
+                for _, modifier in ipairs(modifiers) do parts[#parts + 1] = modifier end
+                parts[#parts + 1] = tostring(boutton)
+                local binding = table.concat(parts, "-")
+                local hint = NS:ClickShortHint(binding)
+                local width = NS:ClickHintMetrics(hint, cell)
+                mesures = mesures + 1
+                if width then
+                    dessines = dessines + 1
+                    if width > cell - 2 then
+                        debordements[#debordements + 1] = string.format(
+                            "%s a %d px : %.2f px de plaque", binding, cell, width)
+                    end
+                end
+            end
+        end
+    end
+    eq(mesures, 29 * 8 * 5, "cellule : les 1160 combinaisons possibles sont mesurees")
+    eq(table.concat(debordements, " | "), "",
+        "cellule : aucune combinaison ne deborde de sa case")
+    truthy(dessines > 0, "cellule : et la plupart sont bel et bien dessinees")
+
+    -- Les trois gestes par defaut a la taille par defaut : rien ne doit avoir
+    -- bouge pour eux, c'est le cas de la quasi-totalite des joueurs.
+    for _, binding in ipairs({ "1", "2", "CTRL-1" }) do
+        local width, plate, font = NS:ClickHintMetrics(NS:ClickShortHint(binding), 22)
+        truthy(width, "defaut : « " .. binding .. " » se dessine a 22 px")
+        eq(plate, NS:CellFontSize("plate", 22), "defaut : sa plaque garde sa taille")
+        eq(font, NS:CellFontSize("hint", 22), "defaut : et sa police aussi")
+    end
+
+    -- LE cas mesure par l'audit : trois modificateurs sur une petite case.
+    -- Il ne peut pas tenir lisiblement, donc il n'est pas dessine -- et
+    -- l'infobulle de la case nomme deja le geste de chaque dissipation.
+    falsy(NS:ClickHintMetrics(NS:ClickShortHint("ALT-CTRL-SHIFT-2"), 22),
+        "long : quatre caracteres sur une case de 22 px ne sont pas dessines")
+    truthy(NS:ClickHintMetrics(NS:ClickShortHint("ALT-CTRL-SHIFT-2"), 40),
+        "long : la meme combinaison tient sur une grande case")
+
+    -- Et la reduction est SOLIDAIRE : une plaque retrecie avec une police
+    -- restee grande donnerait du texte hors de sa plaque.
+    local wide, widePlate, wideFont = NS:ClickHintMetrics(NS:ClickShortHint("ALT-CTRL-2"), 22)
+    truthy(wide, "reduction : deux modificateurs tiennent encore a 22 px")
+    truthy(widePlate < NS:CellFontSize("plate", 22),
+        "reduction : la plaque a bien ete reduite")
+    truthy(wideFont < NS:CellFontSize("hint", 22),
+        "reduction : et la police avec elle, pas l'une sans l'autre")
+end
+
+--------------------------------------------------------------------------
+-- 1.6.24 : ce qui doit se reveiller a l'entree en combat
+--
+-- Trois surfaces lisaient le bon verdict et n'etaient jamais rappelees quand
+-- ce verdict changeait. Les evenements de combat sont le seul moment ou il
+-- change tout seul, et c'est precisement le moment ou une interface qui ment
+-- coute le plus cher.
+--------------------------------------------------------------------------
+do
+    freshProfile("PALADIN")
+    knowSpells(4987)
+    NS:UpdateSpells()
+    NS:CreateGrid()
+    NS:CreateOptions()
+    local fire = NS.eventFrame:GetScript("OnEvent")
+
+    -- 1. La poignee, avec « afficher seulement en combat ».
+    mock.state.inCombat = false
+    mock.state.inRaid, mock.state.inGroup = false, false
+    NS.db.locked = false
+    NS.db.showSolo, NS.db.showParty, NS.db.showRaid = true, true, true
+    NS.db.autoHide = true
+    NS.testMode = false
+    if NS.optionsFrame then NS.optionsFrame:Hide() end
+    NS:UpdateGridVisibilityDriver()
+    falsy(NS.gridAnchor.handle:IsShown(),
+        "pull : hors combat, la regle « seulement en combat » cache la poignee")
+
+    -- L'evenement arrive alors que le verrou de combat repond encore « non » :
+    -- sans surcharge, la poignee restait cachee pendant que les cases
+    -- apparaissaient.
+    mock.state.inCombat = true
+    fire(NS.eventFrame, "PLAYER_REGEN_DISABLED")
+    truthy(NS.gridAnchor.handle:IsShown(),
+        "pull : au debut du combat, elle apparait avec les cases")
+    mock.state.inCombat = false
+    fire(NS.eventFrame, "PLAYER_REGEN_ENABLED")
+    falsy(NS.gridAnchor.handle:IsShown(),
+        "pull : et repart avec elles a la fin du combat")
+    NS.db.autoHide = false
+    NS:UpdateGridVisibilityDriver()
+
+    -- 2. La fenetre de remappage, ouverte avant le pull.
+    NS:ShowClickBindings()
+    truthy(NS.clickBindingFrame.rows[1].capture:IsEnabled(),
+        "pull : hors combat, la case de capture ecoute")
+    mock.state.inCombat = true
+    fire(NS.eventFrame, "PLAYER_REGEN_DISABLED")
+    falsy(NS.clickBindingFrame.rows[1].capture:IsEnabled(),
+        "pull : le combat commence, elle cesse de promettre une action refusee")
+    mock.state.inCombat = false
+    fire(NS.eventFrame, "PLAYER_REGEN_ENABLED")
+    truthy(NS.clickBindingFrame.rows[1].capture:IsEnabled(),
+        "pull : le combat fini, elle reecoute")
+    NS.clickBindingFrame:Hide()
+
+    -- 3. Le motif du refus d'import, qui flottait sans son bouton.
+    NS:ShowProfileTransfer()
+    local transfer = NS.profileTransferFrame
+    transfer.pendingImport = nil
+    transfer.apply:Hide()
+    mock.state.inCombat = true
+    NS:RefreshProfileTransferState()
+    falsy(transfer.applyHint:IsShown(),
+        "import : sans apercu, le motif du refus n'annonce plus rien")
+
+    transfer.importBox:SetText(NS:ExportProfile())
+    transfer.analyze:GetScript("OnClick")(transfer.analyze)
+    if transfer.pendingImport and transfer.apply:IsShown() then
+        truthy(transfer.applyHint:IsShown(),
+            "import : avec un apercu applicable, il explique le bouton grise")
+    end
+    mock.state.inCombat = false
+    NS:RefreshProfileTransferState()
+    falsy(transfer.applyHint:IsShown(), "import : hors combat, il disparait")
+    transfer:Hide()
 end
 
 --------------------------------------------------------------------------

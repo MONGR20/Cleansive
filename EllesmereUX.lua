@@ -2110,7 +2110,7 @@ function NS:ShowProfileManager()
     local frame = self.profileManagerFrame
     if not frame then
         frame = CreateFrame("Frame", "CleansiveProfileManagerFrame", UIParent)
-        frame:SetSize(520, 520)
+        frame:SetSize(520, 560)
         frame:SetPoint("CENTER")
         self:RestoreWindowPosition(frame, "profiles")
         frame:SetFrameStrata("DIALOG")
@@ -2222,16 +2222,27 @@ function NS:ShowProfileManager()
         frame.empty:SetHeight(28)
         frame.empty:SetJustifyH("LEFT")
 
-        -- Celui-la parle des profils qui ne tiennent pas dans la liste : il
-        -- doit se poser SOUS la sixieme rangee. Reutiliser le meme texte le
-        -- dessinait par-dessus le premier profil, exactement quand la liste est
-        -- la plus chargee.
-        frame.overflow = text(frame, "", 11, C.dim)
-        frame.overflow:SetPoint("TOPLEFT", 22, -180 - (6 * 34) - 6)
-        frame.overflow:SetWidth(476)
-        frame.overflow:SetHeight(14)
-        frame.overflow:SetJustifyH("LEFT")
-        frame.overflow:Hide()
+        -- La liste s'arretait a six profils, et renvoyait les suivants aux
+        -- commandes texte : un cul-de-sac dans une fonction desormais
+        -- presentee comme graphique. Les six rangees se recyclent maintenant.
+        frame.listOffset = 0
+        frame.previousPage = button(frame, "<", 30, 22)
+        frame.previousPage:SetPoint("TOPLEFT", 22, -386)
+        frame.previousPage:SetScript("OnClick", function()
+            frame.listOffset = math.max(0, frame.listOffset - #frame.rows)
+            self:RefreshProfileManager()
+        end)
+        frame.nextPage = button(frame, ">", 30, 22)
+        frame.nextPage:SetPoint("TOPLEFT", 130, -386)
+        frame.nextPage:SetScript("OnClick", function()
+            frame.listOffset = frame.listOffset + #frame.rows
+            self:RefreshProfileManager()
+        end)
+        frame.pageLabel = text(frame, "", 11, C.dim)
+        frame.pageLabel:SetPoint("TOPLEFT", 58, -390)
+        frame.pageLabel:SetWidth(68)
+        frame.pageLabel:SetHeight(14)
+        frame.pageLabel:SetJustifyH("CENTER")
 
         -- Les surcharges de lieu et leur verrou n'existaient que par la
         -- commande « /cleansive profile env ». Une fonction qu'aucun ecran ne
@@ -2239,7 +2250,7 @@ function NS:ShowProfileManager()
         -- pouvait pas la trouver. Un bouton par lieu, qui fait le tour des
         -- profils comme celui du son d'alerte fait le tour des sons.
         frame.environmentTitle = text(frame, self.L.PROFILE_ENVIRONMENT_TITLE, 11, C.section)
-        frame.environmentTitle:SetPoint("TOPLEFT", 22, -400)
+        frame.environmentTitle:SetPoint("TOPLEFT", 22, -416)
         frame.environmentTitle:SetWidth(476)
         frame.environmentTitle:SetHeight(14)
         frame.environmentTitle:SetJustifyH("LEFT")
@@ -2247,15 +2258,25 @@ function NS:ShowProfileManager()
         -- Quatre boutons grises sans un mot d'explication : le joueur essaie,
         -- rien ne repond, et rien ne dit pourquoi. Cette ligne le dit.
         frame.environmentNote = text(frame, "", 11, C.dim)
-        frame.environmentNote:SetPoint("TOPLEFT", 22, -414)
+        frame.environmentNote:SetPoint("TOPLEFT", 22, -432)
         frame.environmentNote:SetWidth(476)
         frame.environmentNote:SetHeight(14)
         frame.environmentNote:SetJustifyH("LEFT")
 
+        -- Quatre boutons de 112 px sur une ligne : « donjon : » plus un nom de
+        -- trente-deux octets ne pouvait pas y tenir, et le texte debordait sur
+        -- le bouton voisin, a six pixels de la. Deux colonnes, deux rangees,
+        -- et un libelle borne en largeur qui rogne plutot que de deborder.
         frame.environmentButtons = {}
         for index, place in ipairs(self.ENVIRONMENTS) do
-            local control = button(frame, "", 112, 26)
-            control:SetPoint("TOPLEFT", 22 + ((index - 1) * 118), -432)
+            local control = button(frame, "", 232, 26)
+            local column, row = (index - 1) % 2, math.floor((index - 1) / 2)
+            control:SetPoint("TOPLEFT", 22 + (column * 242), -450 - (row * 30))
+            if control.uxLabel then
+                control.uxLabel:SetWidth(216)
+                control.uxLabel:SetJustifyH("CENTER")
+                if control.uxLabel.SetWordWrap then control.uxLabel:SetWordWrap(false) end
+            end
             control:SetScript("OnClick", function()
                 local _, message = self:CycleEnvironmentProfile(place)
                 if message then self:Print(message) end
@@ -2285,7 +2306,7 @@ function NS:ShowProfileManager()
         -- de mise a l'echelle. SetClampedToScreen borne la position, pas la
         -- taille : sur un petit espace logique elles depassaient sans se
         -- reduire, et ne reagissaient a aucun changement de resolution.
-        fitToScreen(frame, 520, 520)
+        fitToScreen(frame, 520, 560)
         if type(UISpecialFrames) == "table" then
             UISpecialFrames[#UISpecialFrames + 1] = "CleansiveProfileManagerFrame"
         end
@@ -2308,11 +2329,21 @@ function NS:RefreshProfileManager()
     local active = self:ActiveNamedProfile()
     frame.usual:SetText(string.format(self.L.PROFILE_USUAL, active or self.L.PROFILE_OWN_NAME))
     frame.empty:SetShown(#names == 0)
+
+    -- La page est bornee ICI, pas au clic : supprimer le dernier profil d'une
+    -- page laissait sinon la liste sur une page vide, sans aucun moyen d'en
+    -- revenir.
+    local perPage = #frame.rows
+    local pages = math.max(1, math.ceil(#names / perPage))
+    frame.listOffset = math.max(0, math.min(frame.listOffset or 0, (pages - 1) * perPage))
+    local page = math.floor(frame.listOffset / perPage) + 1
+
     for index, row in ipairs(frame.rows) do
-        local name = names[index]
+        local name = names[frame.listOffset + index]
         row:SetShown(name ~= nil)
         if name then
             row.label:SetText((name == active and "> " or "") .. name)
+            row.label:SetWordWrap(false)
             row.use:SetEnabled(name ~= active)
             row.use:SetScript("OnClick", function()
                 local _, message = self:UseNamedProfile(name)
@@ -2337,8 +2368,9 @@ function NS:RefreshProfileManager()
     local fighting = InCombatLockdown and InCombatLockdown() and true or false
     frame.ownButton:SetEnabled(active ~= nil and not fighting)
     for index, row in ipairs(frame.rows) do
-        if names[index] then
-            row.use:SetEnabled(names[index] ~= active and not fighting)
+        local name = names[frame.listOffset + index]
+        if name then
+            row.use:SetEnabled(name ~= active and not fighting)
             row.delete:SetEnabled(not fighting)
         end
     end
@@ -2373,12 +2405,17 @@ function NS:RefreshProfileManager()
         frame.namePlaceholder:SetShown((frame.nameBox:GetText() or "") == "")
     end
 
-    -- Plus de six profils est un cas que la liste ne montre pas. Le dire plutot
-    -- que de laisser croire qu'il n'y en a que six -- et le dire SOUS la liste.
-    if #names > #frame.rows then
-        frame.overflow:SetText(string.format(self.L.PROFILE_TOO_MANY, #names - #frame.rows))
+    -- La pagination ne se montre que lorsqu'il y a une seconde page : deux
+    -- fleches mortes sous une liste de trois profils ne sont que du bruit.
+    local paginated = pages > 1
+    frame.previousPage:SetShown(paginated)
+    frame.nextPage:SetShown(paginated)
+    frame.pageLabel:SetShown(paginated)
+    if paginated then
+        frame.pageLabel:SetText(string.format(self.L.PROFILE_PAGE, page, pages))
+        frame.previousPage:SetEnabled(page > 1)
+        frame.nextPage:SetEnabled(page < pages)
     end
-    frame.overflow:SetShown(#names > #frame.rows)
 end
 
 function NS:ShowProfileTransfer()
@@ -2561,6 +2598,12 @@ function NS:RefreshOptionsStatus()
         self:RefreshProfileManager()
     end
     self:RefreshProfileTransferState()
+    -- La fenetre de remappage sait griser ses cases, mais rien ne la reveillait
+    -- aux deux evenements de combat : ouverte avant le pull, elle gardait des
+    -- boutons actifs qui ne repondaient plus que par un refus.
+    if self.clickBindingFrame and self.clickBindingFrame:IsShown() then
+        self:RefreshClickBindings()
+    end
 end
 
 -- Le bouton Appliquer d'un import suit le combat comme les boutons du
@@ -2571,7 +2614,11 @@ function NS:RefreshProfileTransferState()
     if not frame or not frame.apply then return end
     local fighting = InCombatLockdown and InCombatLockdown() and true or false
     frame.apply:SetEnabled(not fighting)
-    if frame.applyHint then frame.applyHint:SetShown(fighting) end
+    -- Le motif du refus n'a de sens qu'a cote du bouton qu'il explique. Montre
+    -- seul, il annonce l'impossibilite d'une action qui n'est pas proposee.
+    if frame.applyHint then
+        frame.applyHint:SetShown(fighting and frame.pendingImport ~= nil and frame.apply:IsShown())
+    end
 end
 
 -- Accent-insensitive, because a player types "reglage" and the label says

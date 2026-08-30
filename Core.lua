@@ -482,12 +482,12 @@ end
 -- qu'il ne servait a rien. Il est parti. Lister les appelants avant d'ajouter
 -- une garde, pas apres.
 
-function NS:UpdateGridVisibilityDriver()
+function NS:UpdateGridVisibilityDriver(combatOverride)
     if not self.gridAnchor then return end
     if self.UpdateCooldownOverlayVisibility then self:UpdateCooldownOverlayVisibility() end
     -- La poignee suit le meme verdict : elle doit donc etre reevaluee ici,
     -- avant le report de combat, comme la couche de recharge.
-    if self.UpdateGridAnchorAppearance then self:UpdateGridAnchorAppearance() end
+    if self.UpdateGridAnchorAppearance then self:UpdateGridAnchorAppearance(combatOverride) end
     -- Un seul endroit : toute bascule de visibilite passe par ici, donc le
     -- registre sonore est reevalue quel que soit l'appelant.
     if self.RequestAuraSoundRefresh then self:RequestAuraSoundRefresh("visibility rules") end
@@ -1548,11 +1548,15 @@ events:SetScript("OnEvent", function(_, event, ...)
     elseif event == "PLAYER_REGEN_DISABLED" then
         NS:EndTestModeForCombat()
         NS:UpdateCooldownOverlayVisibility(true)
+        -- La poignee lit le meme verdict que la couche de recharge : elle a
+        -- donc besoin de la meme surcharge, au meme evenement.
+        if NS.UpdateGridAnchorAppearance then NS:UpdateGridAnchorAppearance(true) end
         if NS.RefreshOptionsStatus then NS:RefreshOptionsStatus() end
         NS:RefreshAuraCandidateFilters()
         NS:RequestAuraSoundRefresh("combat started")
     elseif event == "PLAYER_REGEN_ENABLED" then
         NS:UpdateCooldownOverlayVisibility(false)
+        if NS.UpdateGridAnchorAppearance then NS:UpdateGridAnchorAppearance(false) end
         NS:OnCombatEnded()
         if NS.RefreshOptionsStatus then NS:RefreshOptionsStatus() end
     elseif event == "ADDON_RESTRICTION_STATE_CHANGED" then

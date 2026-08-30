@@ -1,4 +1,4 @@
-# Cleansive 1.6.23
+# Cleansive 1.6.24
 
 Cleansive is a standalone one-click cleansing addon for **World of Warcraft Retail 12.1** (`120100`). It provides a compact Decursive-style workflow with a dark, class-colored interface inspired by the clarity of Ellesmere UI. The interface follows the language of your WoW client, English or French; either can be picked from the General page at any time.
 
@@ -194,6 +194,11 @@ the reason on its own.
 
 ## Recent changes
 
+- **1.6.24** - external audit fixes: a long click combination no longer overflows its cell, a thirty-two byte profile name no longer overflows its place button, the drag handle and the click window wake up when combat starts, and every profile is reachable from the window instead of the seventh onward being sent to the chat box.
+- **1.6.23** - the profile window answered nothing on an empty database: the name field's background was darker than the panel, so the one control that could unlock everything was the one you could not see.
+- **1.6.22** - the drag handle follows the grid it moves: it stayed on screen alone when the cells were hidden by a group, raid or combat rule.
+- **1.6.21** - the 690 refusals had not dropped, they had moved to the next call: a value that has not changed is no longer re-applied to an engine-owned object.
+- **1.6.20** - what combat refuses, it refuses whole: remapping a click, applying an import and locking places all wrote before discovering combat forbade the rest. Every surface now names the gesture that is actually bound.
 - **1.6.19** - after a remapped click the cell could show the wrong cooldown: the internal ledger still read the old hardcoded gestures.
 - **1.6.18** - cleanse clicks can be remapped to any mouse button with any modifiers, and nothing is written while a conflict exists.
 - **1.6.17** - per-place profile overrides: open world, dungeon, raid, PvP. They carry no settings of their own, only the name of a profile you already made.

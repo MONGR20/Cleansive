@@ -73,6 +73,11 @@ local function newFrame(name)
     -- lui -- sans « AnyUp », deux tiers des combinaisons sont inatteignables.
     rawset(f, "RegisterForClicks", function(s, ...) rawset(s, "__clicks", { ... }) end)
     rawset(f, "SetAlpha", function(s, v) rawset(s, "__alpha", v) end)
+    -- Un libelle qui rogne et un libelle qui passe a la ligne rendaient la
+    -- meme chose : le bouchon avalait ce reglage sans le retenir. Huitieme
+    -- mensonge -- et c'est celui qui separe un nom de profil borne d'un nom
+    -- de profil qui deborde sur le bouton voisin.
+    rawset(f, "SetWordWrap", function(s, v) rawset(s, "__wordWrap", v and true or false) end)
     -- SetScale tombait dans le stub generique : une fenetre remise a l'echelle
     -- et une fenetre oubliee rendaient exactement la meme chose.
     rawset(f, "SetScale", function(s, v) rawset(s, "__scale", tonumber(v) or 1) end)

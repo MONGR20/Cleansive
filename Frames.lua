@@ -22,17 +22,6 @@ local function clickHint(slot)
     return short or ""
 end
 
--- La plaque sombre derriere l'indice etait CARREE : l'indice tenait sur une
--- lettre. Une combinaison a modificateur en porte deux, trois avec deux
--- modificateurs. La plaque suit donc le nombre de caracteres, sinon le texte
--- deborde sur l'icone de la case.
-local function sizeHintPlate(plate, hintText, size)
-    if not plate or not plate.SetSize then return end
-    if hintText ~= nil then plate.hintChars = math.max(1, #tostring(hintText)) end
-    local chars = plate.hintChars or 1
-    return size + (chars - 1) * size * 0.62, size
-end
-
 -- Since Retail 12.1, aura data can become secret in combat. These types are
 -- therefore also represented by Blizzard-owned AuraSlot frames. Their
 -- visibility is decided by the game engine; Cleansive never branches on a
@@ -133,6 +122,55 @@ function NS:ClickHintOffset(slot, size)
     return 0
 end
 
+-- La plaque sombre derriere l'indice etait CARREE : l'indice tenait sur une
+-- lettre. Une combinaison a modificateur en porte deux, trois avec deux
+-- modificateurs -- « ALT-CTRL-SHIFT-2 » en donne quatre.
+--
+-- Elle a ensuite grandi avec le nombre de caracteres sans jamais regarder la
+-- CELLULE : 31,46 px de plaque sur une case de 22, donc du texte pose sur la
+-- case voisine. Et ces combinaisons sont toutes valides -- ce n'est pas une
+-- entree artificielle, c'est ce que le reglage autorise deja.
+--
+-- La plaque et la police se reduisent donc ENSEMBLE jusqu'a tenir. Sous la
+-- taille minimale de la police d'indice, l'indice n'est pas dessine du tout :
+-- une bouillie illisible vaut moins que rien, et l'infobulle de la case nomme
+-- deja le geste de chaque dissipation.
+local HINT_ADVANCE = 0.62
+
+function NS:ClickHintMetrics(hintText, size)
+    local cell = tonumber(size) or self:CellSize()
+    local chars = math.max(1, #tostring(hintText or ""))
+    local plate = self:CellFontSize("plate", cell)
+    local font = self:CellFontSize("hint", cell)
+    if not plate or not font then return nil end
+    -- La plaque est ancree a 1 px : ce pixel compte des deux cotes.
+    local available = cell - 2
+    local width = plate * (1 + HINT_ADVANCE * (chars - 1))
+    if width > available and width > 0 then
+        local factor = available / width
+        plate = math.floor(plate * factor)
+        font = math.floor(font * factor)
+        width = plate * (1 + HINT_ADVANCE * (chars - 1))
+    end
+    if plate < 1 or font < FONT_RULES.hint.min then return nil end
+    return width, plate, font
+end
+
+-- Pose la plaque, sa police et son texte d'un seul geste, et rend faux quand
+-- la combinaison ne peut pas tenir : c'est le seul endroit qui decide.
+function NS:ApplyClickHint(hint, plate, hintText, size)
+    local width, plateSize, font = self:ClickHintMetrics(hintText, size)
+    if plate then plate.hintText = hintText end
+    if not width then return false end
+    if hint then
+        if hint.SetText then hint:SetText(hintText) end
+        local face = self.GetUXFont and self:GetUXFont()
+        if face and hint.SetFont then tryCall(hint.SetFont, hint, face, font, "OUTLINE") end
+    end
+    if plate and plate.SetSize then tryCall(plate.SetSize, plate, width, plateSize) end
+    return true
+end
+
 function NS:CellShowsNames()
     if not self.db or not self.db.showNames then return false end
     return self:CellSize() >= NAME_MIN_CELL
@@ -157,15 +195,18 @@ function NS:ApplyCellFonts(button)
             tryCall(region.SetFont, region, font, self:CellFontSize(role, size), flags or "")
         end
     end
-    local function setPlate(region)
-        if region and region.SetSize then
-            tryCall(region.SetSize, region, sizeHintPlate(region, nil, plate))
-        end
+    -- L'indice et sa plaque ne passent PAS par setFont : leur taille depend du
+    -- texte pose, pas seulement du role. Une combinaison longue doit reduire
+    -- les deux ensemble, sinon la police d'indice reste grande dans une plaque
+    -- retrecie -- ou l'inverse.
+    local function setHint(hint, region)
+        local hintText = region and region.hintText
+        if hintText == nil and hint and hint.GetText then hintText = hint:GetText() end
+        self:ApplyClickHint(hint, region, hintText or "", size)
     end
     setFont(button.nameText, "name")
     setFont(button.center, "stack")
-    setFont(button.clickHint, "hint", "OUTLINE")
-    setPlate(button.clickHintPlate)
+    setHint(button.clickHint, button.clickHintPlate)
     local cooldown = button.cooldown
     if cooldown and cooldown.GetCountdownFontString then
         setFont(cooldown:GetCountdownFontString(), "countdown", "OUTLINE")
@@ -175,8 +216,7 @@ function NS:ApplyCellFonts(button)
         for _, visual in ipairs(visuals) do
             setFont(visual.unitName, "name")
             setFont(visual.stack, "stack")
-            setFont(visual.clickHint, "hint", "OUTLINE")
-            setPlate(visual.clickHintPlate)
+            setHint(visual.clickHint, visual.clickHintPlate)
         end
     end
 end
@@ -226,7 +266,7 @@ end
 
 -- Volontairement loin des couleurs de dissipation : une entrave n'est pas une
 -- affliction a dissiper, et la confondre ferait cliquer pour rien.
-CONTROL_COLOR = { 0.62, 0.82, 0.95 }
+local CONTROL_COLOR = { 0.62, 0.82, 0.95 }
 
 local function setBorderColor(frame, r, g, b, a)
     for _, texture in ipairs(frame.border) do
@@ -234,7 +274,7 @@ local function setBorderColor(frame, r, g, b, a)
     end
 end
 
-function NS:UpdateGridAnchorAppearance()
+function NS:UpdateGridAnchorAppearance(combatOverride)
     local anchor = self.gridAnchor
     if not anchor then return end
     -- La poignee « C » ne suivait que le verrou. Une grille masquee par le
@@ -250,14 +290,27 @@ function NS:UpdateGridAnchorAppearance()
     --
     -- L'apercu et la fenetre de reglages forcent deja le verdict a vrai, donc
     -- la poignee reste attrapable exactement quand on place la grille.
-    local shown = not (self.db and self.db.locked) and self:GridWouldBeVisible()
+    -- La surcharge compte a l'ENTREE en combat : l'evenement arrive alors que
+    -- InCombatLockdown repond encore « non », donc sans elle la poignee restait
+    -- cachee au pull pendant que les cases apparaissaient. C'est la meme
+    -- surcharge que la couche de recharge recoit, au meme evenement.
+    local shown = not (self.db and self.db.locked) and self:GridWouldBeVisible(combatOverride)
     -- EnableMouse is protected on this secure anchor. Apply it immediately
     -- out of combat and defer only that protected operation when necessary.
-    if InCombatLockdown and InCombatLockdown() then
-        self:MarkPending("pendingAnchorAppearance")
-    else
-        anchor:EnableMouse(shown)
-        self.pendingAnchorAppearance = false
+    --
+    -- « Quand c'est necessaire » se lisait « a chaque appel en combat ». Depuis
+    -- que la poignee suit le verdict de la grille, elle est reevaluee aux deux
+    -- evenements de combat : un report etait donc inscrit a chaque pull, pour
+    -- une valeur qui n'avait pas bouge. Troisieme fois que ce motif se paie --
+    -- apres le niveau de cadre et l'etat de la souris des visuels d'aura.
+    if anchor.mouseEnabled == nil or anchor.mouseEnabled ~= shown then
+        if InCombatLockdown and InCombatLockdown() then
+            self:MarkPending("pendingAnchorAppearance")
+        else
+            anchor:EnableMouse(shown)
+            anchor.mouseEnabled = shown
+            self.pendingAnchorAppearance = false
+        end
     end
     if anchor.handle then anchor.handle:SetShown(shown) end
     if anchor.mark then anchor.mark:SetShown(shown) end
@@ -847,22 +900,23 @@ function NS:StyleAuraVisual(button, auraType, visual)
         end)
     end
     local visualHint = slot and clickHint(slot) or (manual and "!" or "")
+    -- La combinaison peut ne pas tenir dans la cellule : la mesure le dit, et
+    -- l'indice n'est alors pas dessine du tout plutot que de deborder.
+    local hintFits = self:ApplyClickHint(visual.clickHint, visual.clickHintPlate, visualHint)
+    local hintVisible = hintShown and hintFits
     if visual.clickHint then
         step(function()
             visual.clickHint:ClearAllPoints()
             visual.clickHint:SetPoint("TOPLEFT", button, "TOPLEFT", 2 + (hintOffset or 0), -1)
-            visual.clickHint:SetText(visualHint)
             -- Manual abilities use an exclamation mark, never a click letter.
-            visual.clickHint:SetShown(hintShown)
+            visual.clickHint:SetShown(hintVisible)
         end)
     end
     if visual.clickHintPlate then
         step(function()
             visual.clickHintPlate:ClearAllPoints()
             visual.clickHintPlate:SetPoint("TOPLEFT", button, "TOPLEFT", 1 + (hintOffset or 0), -1)
-            visual.clickHintPlate:SetSize(sizeHintPlate(visual.clickHintPlate, visualHint,
-                self:CellFontSize("plate")))
-            visual.clickHintPlate:SetShown(hintShown)
+            visual.clickHintPlate:SetShown(hintVisible)
         end)
     end
     -- Nos deux couches se placaient par rapport au niveau DEMANDE, en supposant
@@ -1947,12 +2001,13 @@ function NS:SetButtonState(button, aura, auraType, slot, secret, charmed)
     if button.lastClickHintShown ~= hintShown or button.lastClickHintText ~= hintText then
         button.lastClickHintShown = hintShown
         button.lastClickHintText = hintText
-        button.clickHint:SetText(hintText)
-        button.clickHint:SetShown(hintShown)
+        -- La combinaison peut ne pas tenir : la mesure le dit, et l'indice
+        -- n'est alors pas dessine du tout plutot que de deborder sur la case
+        -- voisine. L'infobulle nomme deja le geste de chaque dissipation.
+        local fits = self:ApplyClickHint(button.clickHint, button.clickHintPlate, hintText)
+        button.clickHint:SetShown(hintShown and fits)
         if button.clickHintPlate then
-            button.clickHintPlate:SetSize(sizeHintPlate(button.clickHintPlate, hintText,
-                self:CellFontSize("plate")))
-            button.clickHintPlate:SetShown(hintShown)
+            button.clickHintPlate:SetShown(hintShown and fits)
         end
     end
 

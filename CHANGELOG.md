@@ -6,6 +6,34 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.6.24
+
+**Corrections de l'audit externe de la 1.6.23.** Aucun defaut du coeur : ce
+sont les valeurs extremes que le reglage autorise deja, et les etats
+transitoires de l'interface.
+
+**Deux debordements, tous deux mesures.**
+
+- La plaque de l'indice de clic grandissait avec le nombre de caracteres **sans jamais regarder la cellule** : 31,46 px sur une case de 22 px pour « ALT-CTRL-SHIFT-2 », donc du texte pose sur la case voisine. Toutes ces combinaisons sont valides ; le test qui la gardait ne connaissait que les trois gestes par defaut. La plaque et la police se reduisent maintenant **ensemble** jusqu'a tenir, et sous la taille minimale l'indice n'est pas dessine du tout -- une bouillie illisible vaut moins que rien, et l'infobulle nomme deja le geste. Le nouveau test parcourt les **1 160** combinaisons possibles, a toutes les tailles de cellule.
+- Un nom de profil peut faire trente-deux octets ; les boutons de lieu faisaient cent douze pixels de large et leur libelle n'avait ni largeur ni limite de ligne. Ils passent en deux colonnes de 232 px, avec un libelle borne qui rogne au lieu de deborder sur le bouton voisin.
+
+**Trois surfaces ne se reveillaient pas a l'entree en combat**, le seul moment
+ou leur verdict change tout seul, et celui ou une interface qui ment coute le
+plus cher.
+
+- La poignee de deplacement recoit desormais la meme surcharge de combat que la couche de recharge : avec « afficher seulement en combat », les cases apparaissaient au pull et elle restait cachee.
+- La fenetre de remappage garde des boutons actifs si elle est ouverte avant le pull. Les donnees etaient sures -- la logique refuse avant toute ecriture -- mais l'interface promettait une action qui ne finissait qu'en refus.
+- Le motif « pas pendant un combat » de l'import s'affichait meme sans apercu applicable, donc sans bouton a expliquer.
+
+**Et le reste.**
+
+- Au-dela de six profils, la fenetre renvoyait aux commandes texte : un cul-de-sac dans une fonction presentee comme graphique. Les six rangees se recyclent, avec une pagination bornee au rafraichissement -- supprimer le dernier profil d'une page laissait sinon la liste sur une page vide.
+- `CONTROL_COLOR` etait la seule globale Lua non necessaire de l'addon. Elle est locale.
+- Le report de la poignee etait inscrit **a chaque pull** pour une valeur qui n'avait pas bouge. Troisieme fois que ce motif se paie, apres le niveau de cadre et l'etat de la souris.
+- La liste des changements du README s'arretait a la 1.6.19. Elle couvre les cinq versions suivantes.
+- **Huitieme mensonge du bouchon :** `SetWordWrap` n'etait pas retenu, donc un libelle qui rogne et un libelle qui deborde rendaient la meme chose.
+- Tests : 1 597 a 1 637.
+
 ## 1.6.23
 
 **La fenetre des profils ne repondait a rien sur une base vide.** Signale en
