@@ -1555,6 +1555,9 @@ events:SetScript("OnEvent", function(_, event, ...)
         NS:RefreshAuraCandidateFilters()
         NS:RequestAuraSoundRefresh("combat started")
     elseif event == "PLAYER_REGEN_ENABLED" then
+        -- Le verrou de combat est une restriction comme les autres : sa levee
+        -- ouvre la meme generation.
+        if NS.ReleaseRestrictionGeneration then NS:ReleaseRestrictionGeneration() end
         NS:UpdateCooldownOverlayVisibility(false)
         if NS.UpdateGridAnchorAppearance then NS:UpdateGridAnchorAppearance(false) end
         NS:OnCombatEnded()
@@ -1565,8 +1568,12 @@ events:SetScript("OnEvent", function(_, event, ...)
         local _, state = ...
         local inactive = Enum and Enum.AddOnRestrictionState
             and Enum.AddOnRestrictionState.Inactive
-        if state == inactive and not (InCombatLockdown and InCombatLockdown()) then
-            NS:OnCombatEnded()
+        if state == inactive then
+            -- Une restriction vient de tomber : les regions refusees SOUS
+            -- restriction ont droit a une nouvelle tentative, une seule. Les
+            -- refus survenus hors restriction gardent leur marque definitive.
+            if NS.ReleaseRestrictionGeneration then NS:ReleaseRestrictionGeneration() end
+            if not (InCombatLockdown and InCombatLockdown()) then NS:OnCombatEnded() end
         end
     elseif event == "UI_SCALE_CHANGED" or event == "DISPLAY_SIZE_CHANGED" then
         if NS.RefitWindows then NS:RefitWindows() end

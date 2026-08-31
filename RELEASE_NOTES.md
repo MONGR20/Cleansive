@@ -6,6 +6,43 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.6.31
+
+**« lock=0 » ne veut pas dire « aucune restriction ».** La 1.6.30 tranchait sur
+le seul verrou de combat : refus sous verrou = temporaire, refus hors verrou =
+definitif. Le releve du 31/08 disait deja le contraire, dans la ligne meme que
+j'avais ecrite pour ca :
+
+```
+styleContext lock=0 / ChallengeMode,Map,Chat  count=5571
+```
+
+Cinq mille cinq cent soixante-et-onze refus hors verrou de combat, avec trois
+restrictions actives. Une cle mythique garde `ChallengeMode` d'un bout a
+l'autre, y compris entre les packs -- exactement la ou l'addon se croit libre.
+La 1.6.30 les condamnait donc definitivement, et une couleur ou une police
+refusee pendant la cle ne revenait plus apres.
+
+- **Toute restriction compte**, pas le seul verrou de combat : `Combat`, `Encounter`, `ChallengeMode`, `PvPMatch`, `Map`, `Chat`. Un refus sous restriction porte la **generation** courante et donne droit a UNE nouvelle tentative quand la restriction tombe -- pas une par passe. Un refus sans aucune restriction reste definitif.
+- `ADDON_RESTRICTION_STATE_CHANGED` et la fin du combat ouvrent cette generation.
+
+**Tous les chemins passent enfin par la meme regle.** Le niveau de cadre,
+l'etat de la souris, l'indice, sa plaque, le balayage de duree et la couche de
+libelles avaient chacun leur variable, ou aucune. Une region, une cle, un
+helper. La plaque, notamment, etait marquee refusee sans que sa marque soit
+jamais relue.
+
+**L'empreinte d'import voyait « table » partout.** Les types actives, l'ordre
+des types, les combinaisons de clics et les deux listes d'ignores pouvaient
+donc changer entierement sans invalider l'apercu. Elle utilise desormais la
+serialisation canonique de l'export.
+
+**Et le reste.**
+
+- L'option des indices eteinte, `ApplyCellFonts` preparait encore texte, police et taille pour ce que personne ne voit. Le chemin de style le respectait deja ; celui-la non.
+- Le resume du README gardait la cause refutee de la 1.6.28. Il raconte maintenant l'histoire, pas l'erreur.
+- Tests : 1 753 a 1 774.
+
 ## 1.6.30
 
 **Une seule memoire de refus, pour toutes les regions que le moteur nous

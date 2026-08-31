@@ -70,6 +70,36 @@ local RESTRICTION_TYPES = {
     "Combat", "Encounter", "ChallengeMode", "PvPMatch", "Map", "Chat",
 }
 
+-- « lock=0 » ne veut PAS dire « aucune restriction ». Le commentaire ci-dessus
+-- le disait deja, et le releve du 31/08 l'a prouve : 5 571 refus sur 5 601
+-- portaient lock=0 avec ChallengeMode, Map et Chat actives. La 1.6.30 a
+-- pourtant conclu de « pas de verrou de combat » que le refus etait definitif.
+-- L'instrument avait la reponse ; c'est la lecture qui etait fausse.
+function NS:AnyRestrictionActive()
+    if InCombatLockdown and InCombatLockdown() then return true end
+    local api = C_RestrictedActions
+    local types = Enum and Enum.AddOnRestrictionType
+    if not (api and api.IsAddOnRestrictionActive and types) then return false end
+    for _, name in ipairs(RESTRICTION_TYPES) do
+        local value = types[name]
+        if value ~= nil then
+            local ok, isActive = pcall(api.IsAddOnRestrictionActive, value)
+            if ok and isActive then return true end
+        end
+    end
+    return false
+end
+
+-- Une generation par levee de restriction. Un refus survenu sous restriction
+-- porte la generation courante : a la suivante, il ne compte plus et la region
+-- a droit a UNE nouvelle tentative. Sans ce compteur, « temporaire » voudrait
+-- dire « retente a chaque passe », ce qui est le motif qu'on cherche a tuer.
+NS.restrictionGeneration = 0
+
+function NS:ReleaseRestrictionGeneration()
+    self.restrictionGeneration = (self.restrictionGeneration or 0) + 1
+end
+
 function NS:RestrictionSnapshot()
     local api = C_RestrictedActions
     local types = Enum and Enum.AddOnRestrictionType
@@ -158,6 +188,9 @@ function NS:NoteStyleFailure(err, steps, operation)
         local known = 0
         for _ in pairs(record.styleCauses) do known = known + 1 end
         if known >= STYLE_CAUSE_LIMIT then
+            -- Compte les REFUS tombes au-dela de la limite, pas le nombre de
+            -- causes distinctes perdues : deux refus d'une meme neuvieme
+            -- operation comptent deux.
             record.styleCausesDropped = (record.styleCausesDropped or 0) + 1
             key = nil
         else

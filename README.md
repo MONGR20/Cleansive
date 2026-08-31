@@ -1,4 +1,4 @@
-# Cleansive 1.6.30
+# Cleansive 1.6.31
 
 Cleansive is a standalone one-click cleansing addon for **World of Warcraft Retail 12.1** (`120100`). It provides a compact Decursive-style workflow with a dark, class-colored interface inspired by the clarity of Ellesmere UI. The interface follows the language of your WoW client, English or French; either can be picked from the General page at any time.
 
@@ -194,9 +194,10 @@ the reason on its own.
 
 ## Recent changes
 
+- **1.6.31** - a mythic key keeps ChallengeMode active throughout, so "no combat lockdown" never meant "no restriction": 5 571 refusals were being condemned as permanent when a restriction could still lift. Every restriction now counts, and every path goes through the same rule.
 - **1.6.30** - one refusal memory for every region the engine lends us, instead of one flag per defect found. A refusal under combat lockdown is replayed; a refusal outside it is remembered, because combat was not the cause.
 - **1.6.29** - the refusal memory was stored ON the forbidden region, so it was refused too and the flag never held: 846 repeats in one session. It lives on our own table now. The cause 1.6.28 announced was wrong, and this entry says why.
-- **1.6.28** - the click hint read its text back from the engine's own region and handed it straight back: a value the client owns, refused as a bad argument 846 times in one session. It now reads from our own plate, and only a string ever reaches SetText.
+- **1.6.28** - the click hint stopped reading its text back from the engine's own region. The reason given at the time — that the returned value was what the client refused — was wrong, and 1.6.29 says why.
 - **1.6.27** - external audit fixes: an import could write a profile you were no longer looking at, a region the client refuses is now abandoned whole rather than retried every pass, an absorbed refusal is counted instead of vanishing, and the cooldown diagnostic no longer invents an error on success.
 - **1.6.26** - `SetText` was the one unguarded protected call in the click hint, and the client refused it in game: it took its caller down with it, up to and including the whole button layout.
 - **1.6.25** - interface review fixes: a click hint that cannot fit now falls back to the cleanse number instead of vanishing, section titles reach 4.5:1, a truncated profile name is readable in its tooltip, and seven controls added since 1.6.20 finally explain themselves.

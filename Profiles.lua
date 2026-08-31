@@ -1151,13 +1151,27 @@ function NS:ProfileImportFingerprint(analysis)
     if not self.db then return nil end
     local parts = { tostring(self:GetActiveProfileLabel()) }
     if analysis and analysis.accepted then
+        -- Toute table rendait le mot « table » : les types actives, l'ordre
+        -- des types, les combinaisons de clics et les deux listes d'ignores
+        -- pouvaient donc changer entierement sans que l'empreinte bouge. La
+        -- serialisation canonique de l'export existe deja, elle sert ici.
+        local byKey = {}
+        for _, field in ipairs(TRANSFER_FIELDS) do byKey[field.key] = field end
         local keys = {}
         for key in pairs(analysis.accepted) do keys[#keys + 1] = key end
         table.sort(keys)
         for _, key in ipairs(keys) do
-            local value = self.db[key]
-            if type(value) == "table" then value = "table" end
-            parts[#parts + 1] = key .. "=" .. tostring(value)
+            local value, field = self.db[key], byKey[key]
+            local encoded
+            if value == nil then
+                encoded = "nil"
+            elseif field then
+                local ok, text = pcall(encodeValue, field, value)
+                encoded = ok and text or "?"
+            else
+                encoded = tostring(value)
+            end
+            parts[#parts + 1] = key .. "=" .. tostring(encoded)
         end
     end
     return table.concat(parts, "\30")

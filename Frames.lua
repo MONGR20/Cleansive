@@ -122,7 +122,13 @@ end
 function NS:RegionUsable(state, key)
     if not state then return true end
     local refused = state.regionRefused
-    return not (refused and refused[key])
+    local mark = refused and refused[key]
+    if not mark then return true end
+    -- true = definitif. Un nombre = la generation de restriction sous laquelle
+    -- le refus est survenu : une levee de restriction lui redonne une chance,
+    -- une seule.
+    if mark == true then return false end
+    return mark ~= (self.restrictionGeneration or 0)
 end
 
 -- Deux refus qui se ressemblent et qui n'appellent pas la meme reponse.
@@ -134,12 +140,16 @@ end
 -- tous « lock=0 » : les rejouer ne pouvait rien donner, et c'est exactement ce
 -- que faisaient les 450 reports de cette session.
 function NS:NoteRegionRefusal(state, key, why, operation)
-    if InCombatLockdown and InCombatLockdown() then
-        self:MarkPending("pendingAuraStyle", true)
-    elseif state then
+    -- TOUTE restriction, pas le seul verrou de combat. Une cle mythique garde
+    -- ChallengeMode active d'un bout a l'autre, y compris entre les packs --
+    -- exactement la ou l'addon se croit libre d'agir.
+    local temporary = self.AnyRestrictionActive and self:AnyRestrictionActive()
+    if state then
         state.regionRefused = type(state.regionRefused) == "table" and state.regionRefused or {}
-        state.regionRefused[key] = true
+        state.regionRefused[key] = temporary and (self.restrictionGeneration or 0) or true
     end
+    -- Un report n'a de sens que si quelque chose peut le liberer.
+    if temporary then self:MarkPending("pendingAuraStyle", true) end
     if self.NoteStyleFailure then self:NoteStyleFailure(why, 1, operation or key) end
 end
 
@@ -232,7 +242,7 @@ function NS:ApplyClickHint(hint, plate, hintText, size, state)
     -- valeur sur un objet que le client peut interdire ; on n'y ECRIT pas non
     -- plus, pas meme un champ Lua a nous.
     state = state or {}
-    if state.hintRefused then return false end
+    if not self:RegionUsable(state, "clickHint") then return false end
 
     local width, plateSize, font = self:ClickHintMetrics(hintText, size)
     if plate then state.hintText = hintText end
@@ -243,8 +253,7 @@ function NS:ApplyClickHint(hint, plate, hintText, size, state)
         if not wrote then
             -- Le pcall de l'etape REUSSIT quand on absorbe l'erreur ici :
             -- l'indice disparaissait donc avec un diagnostic parfaitement sain.
-            state.hintRefused = true
-            if self.NoteStyleFailure then self:NoteStyleFailure(why, 1, "SetText") end
+            self:NoteRegionRefusal(state, "clickHint", why, "SetText")
             return false
         end
         -- Le retour de la police etait jete. Un appel protege dont personne ne
@@ -253,17 +262,17 @@ function NS:ApplyClickHint(hint, plate, hintText, size, state)
         if face and hint.SetFont then
             local sized, reason = tryCall(hint.SetFont, hint, face, font, "OUTLINE")
             if not sized then
-                state.hintRefused = true
-                if self.NoteStyleFailure then self:NoteStyleFailure(reason, 1, "SetFont") end
+                self:NoteRegionRefusal(state, "clickHint", reason, "SetFont")
                 return false
             end
         end
     end
-    if plate and plate.SetSize then
+    -- La plaque etait marquee refusee et sa marque n'etait jamais relue : six
+    -- passes donnaient six SetSize refuses.
+    if plate and plate.SetSize and self:RegionUsable(state, "clickHintPlate") then
         local resized, reason = tryCall(plate.SetSize, plate, width, plateSize)
         if not resized then
-            state.plateRefused = true
-            if self.NoteStyleFailure then self:NoteStyleFailure(reason, 1, "SetSize") end
+            self:NoteRegionRefusal(state, "clickHintPlate", reason, "SetSize")
             return false
         end
     end
@@ -317,7 +326,12 @@ function NS:ApplyCellFonts(button)
     -- le meme refus du MEME receveur s'ecrit « bad argument #1 ». Les deux
     -- messages disent la meme chose : la region est interdite. Le message a
     -- change parce que l'appel etait passe par tryCall, pas la cause.
+    -- L'option eteinte, ce chemin preparait encore texte, police et taille
+    -- pour un indice que personne ne voit -- et s'exposait aux memes refus que
+    -- cette version cherche a reduire. A la reactivation, la passe de style
+    -- repose tout.
     local function setHint(hint, region, state)
+        if not (self.db and self.db.showClickHints) then return end
         local hintText = state and state.hintText
         if type(hintText) ~= "string" then hintText = "" end
         self:ApplyClickHint(hint, region, hintText, size, state)
@@ -935,6 +949,17 @@ function NS:StyleAuraVisual(button, auraType, visual)
         return ok
     end
 
+    -- Une region, une cle, une seule regle. Ces refus ne passent PAS par le
+    -- compteur d'etapes : c'est NoteRegionRefusal qui decide s'il faut poser un
+    -- report -- seulement quand une restriction peut encore etre levee.
+    -- Compter les deux fois gonflait le releve d'un facteur deux.
+    local function styleRegion(key, operation, fn)
+        if not self:RegionUsable(visual, key) then return false end
+        local ok, why = pcall(fn)
+        if not ok then self:NoteRegionRefusal(visual, key, why, operation or key) end
+        return ok
+    end
+
     -- Releve d'une VRAIE cle mythique, le 30/08/2026 :
     --   style failures=690 steps=6210
     --   error=Frames.lua:736 calling 'SetFrameLevel' on bad self
@@ -974,48 +999,38 @@ function NS:StyleAuraVisual(button, auraType, visual)
     -- d'effet sur cet objet, donc l'etat de la souris n'y suivait deja pas
     -- l'option d'infobulle.
     local wantedMotion = (enabled and self.db.showTooltips) and true or false
-    if not visual.motionRefused and visual.wantedMotion ~= wantedMotion then
+    if visual.wantedMotion ~= wantedMotion then
         visual.wantedMotion = wantedMotion
-        local applied = step(function()
+        -- La valeur voulue est oubliee sur un refus, pour qu'une levee de
+        -- restriction la repose vraiment au lieu de la croire deja posee.
+        if not styleRegion("auraMotion", "SetMouseMotionEnabled", function()
             if visual.auraButton.SetMouseMotionEnabled then
                 visual.auraButton:SetMouseMotionEnabled(wantedMotion)
             end
-        end)
-        if not applied then visual.motionRefused = true end
+        end) then visual.wantedMotion = nil end
     end
     -- Le niveau demande ne change qu'avec la priorite du type, c'est-a-dire
     -- presque jamais. Il etait pourtant repose a CHAQUE passe : c'est ce qui a
     -- transforme un refus en 690 refus sur une seule cle. Une valeur qui n'a pas
     -- bouge n'a rien a etre reappliquee.
-    if not visual.levelRefused and visual.wantedLevel ~= level then
+    if visual.wantedLevel ~= level then
         visual.wantedLevel = level
-        local applied = step(function()
+        -- La memoire meurt avec le visuel : une reconstruction du moteur
+        -- redonne sa chance a l'objet suivant.
+        if not styleRegion("auraLevel", "SetFrameLevel", function()
             visual.auraButton:SetFrameLevel(level)
-        end)
-        -- L'objet ne redevient jamais accessible : cinq sessions le confirment
-        -- pour le mecanisme voisin. La memoire meurt avec le visuel, donc une
-        -- reconstruction du moteur redonne sa chance a l'objet suivant.
-        if not applied then visual.levelRefused = true end
+        end) then visual.wantedLevel = nil end
     end
     -- Chaque region a sa cle. Une seule regle pour toutes : refusee une fois,
     -- plus touchee. Le voile et la bande de type comptaient 450 refus par
     -- session -- un par passe, pas un par region.
-    -- Ces refus ne passent PAS par le compteur d'etapes, et ne posent donc
-    -- aucun report : un report sert a rejouer plus tard ce que le combat
-    -- empeche maintenant. Une region definitivement refusee ne sera jamais
-    -- reussie, la rejouer a chaque passe etait le motif des 450.
-    local function styleRegion(key, fn)
-        if not self:RegionUsable(visual, key) then return end
-        local ok, why = pcall(fn)
-        if not ok then self:NoteRegionRefusal(visual, key, why, key) end
-    end
-    styleRegion("overlay", function()
+    styleRegion("overlay", nil, function()
         visual.overlay:SetColorTexture(clickColor[1], clickColor[2], clickColor[3], alpha)
     end)
-    styleRegion("typeMark", function()
+    styleRegion("typeMark", nil, function()
         visual.typeMark:SetColorTexture(typeColor[1], typeColor[2], typeColor[3], enabled and 1 or 0)
     end)
-    styleRegion("stack", function()
+    styleRegion("stack", nil, function()
         visual.stack:ClearAllPoints()
         if slot == 2 then
             visual.stack:SetPoint("RIGHT", button, "RIGHT", -1, 0)
@@ -1027,7 +1042,7 @@ function NS:StyleAuraVisual(button, auraType, visual)
         visual.stack:SetShown(enabled and self.db.showStacks and not self:CellShowsNames())
     end)
     if visual.unitName then
-        styleRegion("unitName", function()
+        styleRegion("unitName", nil, function()
             visual.unitName:SetWidth(math.max(8, self:CellSize() - 4))
             visual.unitName:SetText(button.descriptor and button.descriptor.displayName or button.unit or "")
             visual.unitName:SetShown(enabled and self:CellShowsNames())
@@ -1048,27 +1063,27 @@ function NS:StyleAuraVisual(button, auraType, visual)
     -- aux refus pour un resultat que personne ne voit. Seule la transition de
     -- visibilite reste necessaire.
     local hintFits = false
-    if hintShown and not visual.hintRefused then
+    if hintShown and self:RegionUsable(visual, "clickHint") then
         step(function()
             hintFits = self:ApplyClickHint(visual.clickHint, visual.clickHintPlate,
                 visualHint, nil, visual)
         end)
     end
     local hintVisible = hintShown and hintFits and visualHint ~= ""
-    if visual.clickHint and not visual.hintRefused then
-        if not step(function()
+    if visual.clickHint then
+        styleRegion("clickHint", nil, function()
             visual.clickHint:ClearAllPoints()
             visual.clickHint:SetPoint("TOPLEFT", button, "TOPLEFT", 2 + (hintOffset or 0), -1)
             -- Manual abilities use an exclamation mark, never a click letter.
             visual.clickHint:SetShown(hintVisible)
-        end) then visual.hintRefused = true end
+        end)
     end
-    if visual.clickHintPlate and not (visual.hintRefused or visual.plateRefused) then
-        if not step(function()
+    if visual.clickHintPlate and self:RegionUsable(visual, "clickHint") then
+        styleRegion("clickHintPlate", nil, function()
             visual.clickHintPlate:ClearAllPoints()
             visual.clickHintPlate:SetPoint("TOPLEFT", button, "TOPLEFT", 1 + (hintOffset or 0), -1)
             visual.clickHintPlate:SetShown(hintVisible)
-        end) then visual.plateRefused = true end
+        end)
     end
     -- Nos deux couches se placaient par rapport au niveau DEMANDE, en supposant
     -- que la demande avait ete honoree. Quand le client la refuse -- 690 fois
@@ -1082,13 +1097,14 @@ function NS:StyleAuraVisual(button, auraType, visual)
         if read and type(actual) == "number" then anchorLevel = actual end
     end
     if visual.durationCooldown then
-        step(function()
+        styleRegion("durationCooldown", "SetFrameLevel", function()
             visual.durationCooldown:SetFrameLevel(anchorLevel + 1)
             visual.durationCooldown:SetDrawSwipe(enabled and self.db.showDuration ~= false)
         end)
     end
     if visual.labelLayer then
-        step(function() visual.labelLayer:SetFrameLevel(anchorLevel + 3) end)
+        styleRegion("labelLayer", "SetFrameLevel",
+            function() visual.labelLayer:SetFrameLevel(anchorLevel + 3) end)
     end
     -- Silent, and deliberately so. This restyles labels the protected engine
     -- owns, and 12.1 can declare them forbidden to addon code: a real session

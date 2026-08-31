@@ -1174,8 +1174,23 @@ do
     local button = NS.buttons[1]
     eq(button.nameText.__font and button.nameText.__font.height, NS:CellFontSize("name", 40),
         "polices : le curseur de taille repeint les libelles")
+
+    -- 1.6.31 : l'indice eteint n'est plus prepare du tout. La plaque garde donc
+    -- sa taille de creation tant que l'option est fermee.
+    local born = button.clickHintPlate.__lastSize and button.clickHintPlate.__lastSize.width
+    falsy(NS.db.showClickHints, "polices : les indices sont eteints par defaut")
+    NS.db.showClickHints = true
+    NS:LayoutButtons()
     eq(button.clickHintPlate.__lastSize and button.clickHintPlate.__lastSize.width,
-        NS:CellFontSize("plate", 40), "polices : et redimensionne la plaque")
+        NS:CellFontSize("plate", 40), "polices : allumee, l'option redimensionne la plaque")
+    NS.db.showClickHints = false
+    NS.db.frameSize = 22
+    NS:LayoutButtons()
+    eq(button.clickHintPlate.__lastSize and button.clickHintPlate.__lastSize.width,
+        NS:CellFontSize("plate", 40),
+        "polices : eteinte, elle ne touche plus a rien -- pas meme pour retrecir")
+    truthy(born, "polices : la plaque avait bien une taille de depart")
+    NS.db.frameSize = 40
     NS.db.frameSize = 22
     NS.GetUXFont = realGetUXFont
 end
@@ -3439,11 +3454,13 @@ do
         calls = calls + 1
         error("Attempt to access forbidden object from code tainted by an AddOn")
     end)
-    truthy(visual.levelRefused, "cle : le refus est retenu sur le visuel")
+    -- 1.6.31 : le drapeau a un nom et une table communs a toutes les regions.
+    truthy(visual.regionRefused and visual.regionRefused.auraLevel,
+        "cle : le refus est retenu sur le visuel")
 
     -- 1.6.16 : le niveau etait repose a CHAQUE passe alors qu'il ne change
     -- qu'avec la priorite du type. C'est ce qui a transforme un refus en 690.
-    visual.levelRefused, visual.wantedLevel = nil, nil
+    visual.regionRefused, visual.wantedLevel = nil, nil
     NS:StyleAuraVisual(button, auraType, visual)
     eq(calls, 1, "niveau : une premiere passe tente une fois")
     for _ = 1, 5 do NS:StyleAuraVisual(button, auraType, visual) end
@@ -3456,7 +3473,7 @@ do
         accepted = accepted + 1
         rawset(target, "__level", value)
     end)
-    visual.levelRefused, visual.wantedLevel = nil, nil
+    visual.regionRefused, visual.wantedLevel = nil, nil
     for _ = 1, 6 do NS:StyleAuraVisual(button, auraType, visual) end
     eq(accepted, 1, "niveau : six passes, une seule pose -- la valeur n'a pas bouge")
 
@@ -3465,12 +3482,12 @@ do
     -- posees par rapport a une valeur qui n'existe pas.
     rawset(visual.auraButton, "SetFrameLevel", function() end)
     rawset(visual.auraButton, "__level", 500)
-    visual.levelRefused, visual.wantedLevel = nil, nil
+    visual.regionRefused, visual.wantedLevel = nil, nil
     NS:StyleAuraVisual(button, auraType, visual)
     eq(rawget(visual.labelLayer, "__level"), 503,
         "niveau : nos couches suivent le niveau REEL du bouton, pas celui demande")
 
-    visual.levelRefused = true
+    visual.regionRefused = { auraLevel = true }
 
     local afterFirst = NS:GetDiagnostics().styleFailures
     rawset(visual.overlay, "__color", nil)
@@ -3501,7 +3518,8 @@ do
     rawset(visual.auraButton, "SetMouseMotionEnabled", function(_, value)
         motion[#motion + 1] = value and true or false
     end)
-    truthy(visual.levelRefused, "souris : le niveau de cadre est bien deja abandonne")
+    truthy(visual.regionRefused and visual.regionRefused.auraLevel,
+        "souris : le niveau de cadre est bien deja abandonne")
     NS.db.showTooltips = false
     NS:StyleAuraVisual(button, auraType, visual)
     NS.db.showTooltips = true
@@ -3518,7 +3536,7 @@ do
     -- le meme objet du moteur.
     local posed = 0
     rawset(visual.auraButton, "SetMouseMotionEnabled", function() posed = posed + 1 end)
-    visual.motionRefused, visual.wantedMotion = nil, nil
+    visual.regionRefused, visual.wantedMotion = nil, nil
     for _ = 1, 6 do NS:StyleAuraVisual(button, auraType, visual) end
     eq(posed, 1, "souris : six passes, une seule pose -- la valeur n'a pas bouge")
 
@@ -3530,7 +3548,7 @@ do
         refused = refused + 1
         error("Attempt to access forbidden object from code tainted by an AddOn")
     end)
-    visual.motionRefused, visual.wantedMotion = nil, nil
+    visual.regionRefused, visual.wantedMotion = nil, nil
     local beforeMotion = NS:GetDiagnostics().styleFailures
     for index = 1, 6 do
         NS.db.showTooltips = index % 2 == 0
@@ -8491,7 +8509,7 @@ do
         for _ = 1, 8 do NS:StyleAuraVisual(button, auraType, visual) end
         eq(attempts, 1,
             "memoire : huit passes, une seule tentative -- le drapeau ne vit plus sur la region")
-        truthy(visual.hintRefused,
+        truthy(visual.regionRefused and visual.regionRefused.clickHint,
             "memoire : il vit sur le visuel, qui nous appartient")
         setmetatable(visual.clickHint, nil)
     end
@@ -8501,7 +8519,7 @@ do
         local visual2 = visuals and visuals[2] or visual
         local writes = 0
         rawset(visual2.clickHint, "SetText", function() writes = writes + 1 end)
-        visual2.hintRefused = nil
+        visual2.regionRefused = nil
         NS.db.showClickHints = false
         for _ = 1, 6 do NS:StyleAuraVisual(button, auraType, visual2) end
         eq(writes, 0,
@@ -8665,22 +8683,146 @@ do
         end)
         NS:StyleAuraVisual(button, auraType, victim)
         truthy(NS.pendingAuraStyle,
-            "combat : un refus sous verrou pose un report -- le combat peut en etre la cause")
-        falsy(victim.regionRefused and victim.regionRefused.unitName,
-            "combat : et ne condamne pas la region")
+            "restriction : un refus sous restriction pose un report -- elle peut en etre la cause")
+        -- La marque est la GENERATION de restriction, pas « definitif » : la
+        -- region a droit a une nouvelle tentative quand la restriction tombe.
+        local mark = victim.regionRefused and victim.regionRefused.unitName
+        truthy(type(mark) == "number",
+            "restriction : la region est marquee temporairement, pas condamnee")
 
-        -- Hors verrou, le combat n'y est pour rien : la region est retenue.
-        mock.state.inCombat = false
-        NS.pendingAuraStyle = false
-        NS:StyleAuraVisual(button, auraType, victim)
-        truthy(victim.regionRefused and victim.regionRefused.unitName,
-            "hors combat : la region est retenue")
-        falsy(NS.pendingAuraStyle,
-            "hors combat : et aucun report n'est pose")
-        local after = tries
+        -- Sous la MEME restriction, on ne retente pas a chaque passe.
+        local underRestriction = tries
         for _ = 1, 6 do NS:StyleAuraVisual(button, auraType, victim) end
-        eq(tries, after, "hors combat : six passes de plus ne retentent rien")
+        eq(tries, underRestriction,
+            "restriction : six passes de plus ne retentent rien tant qu'elle dure")
+
+        -- La restriction tombe : UNE nouvelle tentative, pas six.
+        mock.state.inCombat = false
+        NS:ReleaseRestrictionGeneration()
+        NS.pendingAuraStyle = false
+        for _ = 1, 6 do NS:StyleAuraVisual(button, auraType, victim) end
+        eq(tries, underRestriction + 1,
+            "levee : une seule nouvelle tentative, pas une par passe")
+        eq(victim.regionRefused.unitName, true,
+            "levee : refusee hors restriction, la region est cette fois condamnee")
+        falsy(NS.pendingAuraStyle,
+            "levee : et aucun report n'est pose pour un refus definitif")
         rawset(victim.unitName, "SetShown", function() end)
+    end
+end
+
+--------------------------------------------------------------------------
+-- 1.6.31 : « lock=0 » ne veut pas dire « aucune restriction »
+--
+-- La 1.6.30 tranchait sur le seul verrou de combat : refus sous verrou =
+-- temporaire, refus hors verrou = definitif. Le releve du 31/08 disait deja le
+-- contraire, dans la ligne meme que j'avais ecrite pour ca :
+--
+--   styleContext lock=0 / ChallengeMode,Map,Chat  count=5571
+--
+-- Cinq mille cinq cent soixante-et-onze refus hors verrou de combat, avec trois
+-- restrictions actives. Une cle mythique garde ChallengeMode d'un bout a
+-- l'autre -- exactement la ou l'addon se croit libre.
+--------------------------------------------------------------------------
+do
+    freshProfile("PALADIN")
+    knowSpells(4987)
+    mock.state.auraEngine.loaded = true
+    NS:UpdateSpells()
+    NS:RebuildRoster()
+    NS:CreateGrid()
+    mock.state.inCombat = false
+    mock.state.restrictions = {}
+
+    local button = NS.buttons[1]
+    local auraType, visuals = next(button.auraSlotVisuals or {})
+    local visual = visuals and visuals[1]
+    truthy(visual, "restrictions : un visuel du moteur existe")
+
+    falsy(NS:AnyRestrictionActive(), "restrictions : aucune n'est active au depart")
+    mock.state.restrictions[Enum.AddOnRestrictionType.ChallengeMode] = true
+    truthy(NS:AnyRestrictionActive(),
+        "restrictions : une cle mythique en active une, verrou de combat ou non")
+    falsy(InCombatLockdown(), "restrictions : et le verrou de combat, lui, repond non")
+
+    -- Refuse SOUS ChallengeMode, hors verrou de combat : temporaire.
+    local tries = 0
+    rawset(visual.overlay, "SetColorTexture", function()
+        tries = tries + 1
+        error("Attempt to access forbidden object from code tainted by an AddOn")
+    end)
+    NS.pendingAuraStyle = false
+    NS:StyleAuraVisual(button, auraType, visual)
+    eq(tries, 1, "restrictions : une tentative")
+    truthy(type(visual.regionRefused.overlay) == "number",
+        "restrictions : marquee temporairement, pas condamnee -- c'est le defaut de la 1.6.30")
+    truthy(NS.pendingAuraStyle, "restrictions : et un report est pose")
+
+    for _ = 1, 6 do NS:StyleAuraVisual(button, auraType, visual) end
+    eq(tries, 1, "restrictions : six passes de plus ne retentent rien tant qu'elle dure")
+
+    -- La restriction tombe. UNE nouvelle tentative.
+    mock.state.restrictions = {}
+    NS:ReleaseRestrictionGeneration()
+    for _ = 1, 6 do NS:StyleAuraVisual(button, auraType, visual) end
+    eq(tries, 2, "levee : une seule nouvelle tentative")
+    eq(visual.regionRefused.overlay, true,
+        "levee : refusee hors restriction, elle est cette fois condamnee")
+    rawset(visual.overlay, "SetColorTexture", function() end)
+
+    -- L'evenement REEL de levee ouvre bien une generation.
+    do
+        local before = NS.restrictionGeneration
+        local fire = NS.eventFrame:GetScript("OnEvent")
+        fire(NS.eventFrame, "ADDON_RESTRICTION_STATE_CHANGED", 0,
+            Enum.AddOnRestrictionState.Inactive)
+        truthy(NS.restrictionGeneration > before,
+            "evenement : une restriction levee ouvre une generation")
+        local after = NS.restrictionGeneration
+        fire(NS.eventFrame, "ADDON_RESTRICTION_STATE_CHANGED", 0,
+            Enum.AddOnRestrictionState.Active)
+        eq(NS.restrictionGeneration, after,
+            "evenement : une restriction qui s'ACTIVE n'en ouvre aucune")
+    end
+
+    -- Le balayage de duree et la couche de libelles avaient droit au meme
+    -- traitement que les autres regions, et ne l'avaient pas.
+    do
+        local victim = visuals and visuals[2] or visual
+        victim.regionRefused = nil
+        local swept = 0
+        rawset(victim.durationCooldown, "SetFrameLevel", function()
+            swept = swept + 1
+            error("Attempt to access forbidden object from code tainted by an AddOn")
+        end)
+        for _ = 1, 6 do NS:StyleAuraVisual(button, auraType, victim) end
+        eq(swept, 1, "duree : le balayage a sa cle, une seule tentative")
+        rawset(victim.durationCooldown, "SetFrameLevel", function() end)
+    end
+
+    -- L'empreinte d'import doit voir le CONTENU des tables.
+    do
+        NS:ShowProfileTransfer()
+        local transfer = NS.profileTransferFrame
+        NS.db.frameSize = 22
+        NS.db.enabledTypes.Magic = true
+        local exportA = NS:ExportProfile()
+        NS.db.frameSize = 23
+
+        transfer.importBox:SetText(exportA)
+        transfer.analyze:GetScript("OnClick")(transfer.analyze)
+        truthy(transfer.pendingImport, "empreinte : l'analyse aboutit")
+
+        -- Un champ TABULAIRE change sous l'apercu. Toute table rendait le mot
+        -- « table » : les types actives pouvaient basculer sans rien invalider.
+        NS.db.enabledTypes.Magic = false
+        transfer.apply:GetScript("OnClick")(transfer.apply)
+        falsy(NS.db.enabledTypes.Magic,
+            "empreinte : un type desactive sous l'apercu bloque l'application")
+        eq(NS.db.frameSize, 23, "empreinte : et rien d'autre n'a ete ecrit")
+        falsy(transfer.pendingImport, "empreinte : la confirmation perimee est retiree")
+        NS.db.enabledTypes.Magic = true
+        transfer:Hide()
     end
 end
 
