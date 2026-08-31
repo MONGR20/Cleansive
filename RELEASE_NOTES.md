@@ -6,6 +6,43 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.6.29
+
+**Ce que la 1.6.28 annoncait comme cause etait faux.** L'audit externe l'a
+demontre, et la demonstration se rejoue dans la suite.
+
+`luaL_argerror` n'ecrit « calling X on bad self » que pour un appel de la forme
+`objet:Methode()`. Par `pcall(f, objet, ...)`, le meme refus du **meme
+receveur** s'ecrit « bad argument #1 ». Les deux messages disent donc la meme
+chose : **la region est interdite**. Le message avait change parce que l'appel
+etait passe par `tryCall` en 1.6.26, pas parce que la valeur etait en cause.
+
+**La vraie cause des 846 refus : la memoire du refus etait posee SUR la region
+interdite.** Ecrire `hint.textRefused = true` sur un objet que le client refuse
+est refuse aussi. Le drapeau n'etait donc jamais pose et chaque passe
+recommencait. Il vit desormais sur le visuel, une table qui nous appartient.
+
+On ne LIT pas une valeur sur un objet que le client peut interdire ; on n'y
+ECRIT pas non plus, pas meme un champ Lua a nous.
+
+**Un import pouvait ecrire dans un profil que son apercu n'avait jamais
+decrit.** Comparer le texte protegeait d'une edition du texte, pas d'un
+changement de profil entre l'analyse et la confirmation -- ni d'un reglage
+modifie entre-temps, absent de l'apercu parce qu'il etait alors identique.
+L'analyse retient l'empreinte de sa cible et de tous les champs qu'elle
+ecrirait, verifiee au moment d'ecrire. Et l'apercu nomme le profil qui recevra.
+
+**« 846 refus » ne disait pas 846 fois quoi.** Le compteur additionnait des
+refus de natures differentes et ne gardait qu'une cause -- la premiere. Une
+seconde table, **bornee a huit**, compte par operation et retient un exemple de
+chacune. Ce qui ne rentre pas est annonce, pas taise.
+
+**Et le reste.**
+
+- L'option des indices eteinte, plus rien n'est prepare : ecrire un texte, calculer une police et redimensionner une plaque invisibles coutait une exposition aux refus pour un resultat que personne ne voit.
+- **Six appels proteges jetaient leur retour** -- la police des cases et les cinq reglages du bouton du moteur. Un appel protege dont personne ne lit le resultat prouve seulement qu'il n'a pas fait tomber l'addon. Le controle statique ne connaissait que le mot `pcall` et laissait passer `tryCall` : il voit les deux.
+- Tests : 1 723 a 1 742.
+
 ## 1.6.28
 
 **La valeur venait du moteur, pas la region.** Releve en jeu le 31/08/2026,

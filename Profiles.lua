@@ -1142,6 +1142,27 @@ function NS:AnalyzeProfileImport(text)
     return { accepted = accepted, changes = changes, rejected = rejected }
 end
 
+-- L'empreinte de la cible ET des champs que l'import va ecrire. Comparer le
+-- texte protegeait contre une edition du texte ; rien ne protegeait contre un
+-- changement de PROFIL entre l'analyse et la confirmation -- ni contre un
+-- reglage modifie entre-temps, absent de l'apercu parce qu'il etait identique
+-- au moment de l'analyse.
+function NS:ProfileImportFingerprint(analysis)
+    if not self.db then return nil end
+    local parts = { tostring(self:GetActiveProfileLabel()) }
+    if analysis and analysis.accepted then
+        local keys = {}
+        for key in pairs(analysis.accepted) do keys[#keys + 1] = key end
+        table.sort(keys)
+        for _, key in ipairs(keys) do
+            local value = self.db[key]
+            if type(value) == "table" then value = "table" end
+            parts[#parts + 1] = key .. "=" .. tostring(value)
+        end
+    end
+    return table.concat(parts, "\30")
+end
+
 function NS:ApplyProfileImport(analysis)
     if not analysis or not analysis.accepted or not self.db then return false end
     -- Avant la premiere ecriture. Un import porte les clics, la taille, la

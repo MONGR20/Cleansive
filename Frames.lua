@@ -178,45 +178,55 @@ end
 
 -- Pose la plaque, sa police et son texte d'un seul geste, et rend faux quand
 -- la combinaison ne peut pas tenir : c'est le seul endroit qui decide.
-function NS:ApplyClickHint(hint, plate, hintText, size)
+function NS:ApplyClickHint(hint, plate, hintText, size, state)
     -- Ceinture : rien d'autre qu'une chaine ne descend jusqu'a SetText, quelle
     -- que soit la provenance de l'appelant.
     if type(hintText) ~= "string" then hintText = "" end
+
+    -- LA memoire des refus vit sur une table qui nous appartient -- le visuel,
+    -- ou la case -- jamais sur la region du moteur.
+    --
+    -- Elle y vivait, et c'est ce qui a produit 846 refus en une session : la
+    -- region est interdite, donc « hint.textRefused = true » l'est aussi. Le
+    -- drapeau n'etait jamais pose, chaque passe recommencait. On ne LIT pas une
+    -- valeur sur un objet que le client peut interdire ; on n'y ECRIT pas non
+    -- plus, pas meme un champ Lua a nous.
+    state = state or {}
+    if state.hintRefused then return false end
+
     local width, plateSize, font = self:ClickHintMetrics(hintText, size)
-    if plate then plate.hintText = hintText end
+    if plate then state.hintText = hintText end
     if not width then return false end
-    if hint then
-        -- SetText etait le SEUL appel non protege de cette fonction. Tous ses
-        -- voisins passent par tryCall ; celui-la partait nu, et le client l'a
-        -- refuse en jeu le 31/08 sur une FontString appartenant au moteur.
-        -- Il emportait alors son appelant : ApplyCellFonts, donc LayoutButtons,
-        -- dont le drapeau d'attente n'est efface qu'a sa derniere ligne. C'est
-        -- exactement le defaut de police de la 1.5.35, au meme endroit qu'il
-        -- avait ete corrige ailleurs.
-        if not hint.textRefused and hint.SetText then
-            local wrote, why = tryCall(hint.SetText, hint, hintText)
-            if wrote then
-                local face = self.GetUXFont and self:GetUXFont()
-                if face and hint.SetFont then tryCall(hint.SetFont, hint, face, font, "OUTLINE") end
-            else
-                -- L'objet ne redevient jamais accessible. Retenir le refus
-                -- evite de le rejouer a chaque passe -- six cent quatre-vingt-
-                -- dix fois par cle, trois fois deja dans cet addon.
-                -- Le pcall de l'etape REUSSIT quand on absorbe l'erreur ici :
-                -- l'indice disparaissait donc avec un diagnostic parfaitement
-                -- sain. Ne pas tracer un refus, c'est le rendre introuvable --
-                -- et c'est exactement ce qui a laisse celui du 31/08 dormir
-                -- dans le grabber pendant que le rapport annoncait zero.
-                hint.textRefused = true
-                hint.regionRefused = true
-                if self.NoteStyleFailure then self:NoteStyleFailure(why, 1) end
+
+    if hint and hint.SetText then
+        local wrote, why = tryCall(hint.SetText, hint, hintText)
+        if not wrote then
+            -- Le pcall de l'etape REUSSIT quand on absorbe l'erreur ici :
+            -- l'indice disparaissait donc avec un diagnostic parfaitement sain.
+            state.hintRefused = true
+            if self.NoteStyleFailure then self:NoteStyleFailure(why, 1, "SetText") end
+            return false
+        end
+        -- Le retour de la police etait jete. Un appel protege dont personne ne
+        -- lit le resultat prouve seulement qu'il n'a pas fait tomber l'addon.
+        local face = self.GetUXFont and self:GetUXFont()
+        if face and hint.SetFont then
+            local sized, reason = tryCall(hint.SetFont, hint, face, font, "OUTLINE")
+            if not sized then
+                state.hintRefused = true
+                if self.NoteStyleFailure then self:NoteStyleFailure(reason, 1, "SetFont") end
                 return false
             end
-        elseif hint.textRefused then
+        end
+    end
+    if plate and plate.SetSize then
+        local resized, reason = tryCall(plate.SetSize, plate, width, plateSize)
+        if not resized then
+            state.plateRefused = true
+            if self.NoteStyleFailure then self:NoteStyleFailure(reason, 1, "SetSize") end
             return false
         end
     end
-    if plate and plate.SetSize then tryCall(plate.SetSize, plate, width, plateSize) end
     return true
 end
 
@@ -239,32 +249,40 @@ function NS:ApplyCellFonts(button)
     -- A cosmetic font must never be able to take the layout down with it. When
     -- the client refuses, the engine's copy simply keeps the size it was built
     -- with; that is a smaller loss than a grid that never lays out again.
+    -- Le retour partait a la poubelle : un appel protege dont personne ne lit
+    -- le resultat prouve seulement qu'il n'a pas fait tomber l'addon. Le refus
+    -- est desormais compte, avec le nom de l'operation.
     local function setFont(region, role, flags)
-        if region and region.SetFont then
-            tryCall(region.SetFont, region, font, self:CellFontSize(role, size), flags or "")
+        if not (region and region.SetFont) then return end
+        local sized, reason = tryCall(region.SetFont, region,
+            font, self:CellFontSize(role, size), flags or "")
+        if not sized and self.NoteStyleFailure then
+            self:NoteStyleFailure(reason, 1, "SetFont")
         end
+        return sized
     end
     -- L'indice et sa plaque ne passent PAS par setFont : leur taille depend du
     -- texte pose, pas seulement du role. Une combinaison longue doit reduire
     -- les deux ensemble, sinon la police d'indice reste grande dans une plaque
     -- retrecie -- ou l'inverse.
-    -- Le texte de l'indice se lit sur NOTRE plaque, jamais sur la region du
-    -- moteur. Le repli par GetText, ecrit en 1.6.24, rendait une valeur
-    -- appartenant au client -- et la repasser a SetText leve « bad argument
-    -- #1 » sur un objet interdit. Proteger la LECTURE ne servait a rien : la
-    -- lecture reussissait, c'est la valeur qui etait empoisonnee.
+    -- Le texte de l'indice se lit sur NOTRE table, jamais sur la region du
+    -- moteur : relire une valeur au client pour la lui rendre n'a aucune
+    -- raison d'etre, et le repli par GetText ecrit en 1.6.24 faisait cela.
     --
-    -- Releve du 31/08/2026 sur la 1.6.27 : 846 refus portant exactement cette
-    -- signature. Ils etaient la avant, invisibles ; le compteur pose la veille
-    -- les a fait apparaitre des sa premiere session.
-    local function setHint(hint, region)
-        local hintText = region and region.hintText
+    -- CORRECTION de ce que la 1.6.28 affirmait ici. « bad argument #1 » ne
+    -- designe PAS le texte. luaL_argerror n'ecrit « calling X on bad self »
+    -- que pour un appel de la forme « objet:Methode() » ; par pcall(f, objet),
+    -- le meme refus du MEME receveur s'ecrit « bad argument #1 ». Les deux
+    -- messages disent la meme chose : la region est interdite. Le message a
+    -- change parce que l'appel etait passe par tryCall, pas la cause.
+    local function setHint(hint, region, state)
+        local hintText = state and state.hintText
         if type(hintText) ~= "string" then hintText = "" end
-        self:ApplyClickHint(hint, region, hintText, size)
+        self:ApplyClickHint(hint, region, hintText, size, state)
     end
     setFont(button.nameText, "name")
     setFont(button.center, "stack")
-    setHint(button.clickHint, button.clickHintPlate)
+    setHint(button.clickHint, button.clickHintPlate, button)
     local cooldown = button.cooldown
     if cooldown and cooldown.GetCountdownFontString then
         setFont(cooldown:GetCountdownFontString(), "countdown", "OUTLINE")
@@ -274,7 +292,7 @@ function NS:ApplyCellFonts(button)
         for _, visual in ipairs(visuals) do
             setFont(visual.unitName, "name")
             setFont(visual.stack, "stack")
-            setHint(visual.clickHint, visual.clickHintPlate)
+            setHint(visual.clickHint, visual.clickHintPlate, visual)
         end
     end
 end
@@ -967,32 +985,36 @@ function NS:StyleAuraVisual(button, auraType, visual)
     -- premier venu.
     -- DANS une etape : tout ce qui touche aux regions du moteur passe par la,
     -- pour qu'un refus n'emporte pas les huit autres etapes du visuel.
+    -- Une region dont le client refuse UNE operation est abandonnee EN ENTIER,
+    -- et la memoire de ce refus vit sur le visuel -- pas sur la region, qui est
+    -- justement celle qu'on n'a pas le droit de toucher.
+    --
+    -- L'option eteinte, on ne prepare RIEN : ecrire un texte, calculer une
+    -- police et redimensionner une plaque invisibles coutait une exposition
+    -- aux refus pour un resultat que personne ne voit. Seule la transition de
+    -- visibilite reste necessaire.
     local hintFits = false
-    step(function()
-        hintFits = self:ApplyClickHint(visual.clickHint, visual.clickHintPlate, visualHint)
-    end)
-    -- Retenir le refus du TEXTE ne suffisait pas : le placement et l'affichage
-    -- de la meme region repartaient a chaque passe, et se faisaient refuser a
-    -- chaque passe. C'est le motif des 690, sur les operations voisines. Une
-    -- region dont le client refuse une operation est abandonnee EN ENTIER,
-    -- pas operation par operation -- l'objet ne redevient jamais accessible.
-    local hintUsable = visual.clickHint and not visual.clickHint.regionRefused
-    local plateUsable = visual.clickHintPlate and not visual.clickHintPlate.regionRefused
+    if hintShown and not visual.hintRefused then
+        step(function()
+            hintFits = self:ApplyClickHint(visual.clickHint, visual.clickHintPlate,
+                visualHint, nil, visual)
+        end)
+    end
     local hintVisible = hintShown and hintFits and visualHint ~= ""
-    if hintUsable then
+    if visual.clickHint and not visual.hintRefused then
         if not step(function()
             visual.clickHint:ClearAllPoints()
             visual.clickHint:SetPoint("TOPLEFT", button, "TOPLEFT", 2 + (hintOffset or 0), -1)
             -- Manual abilities use an exclamation mark, never a click letter.
             visual.clickHint:SetShown(hintVisible)
-        end) then visual.clickHint.regionRefused = true end
+        end) then visual.hintRefused = true end
     end
-    if plateUsable then
+    if visual.clickHintPlate and not (visual.hintRefused or visual.plateRefused) then
         if not step(function()
             visual.clickHintPlate:ClearAllPoints()
             visual.clickHintPlate:SetPoint("TOPLEFT", button, "TOPLEFT", 1 + (hintOffset or 0), -1)
             visual.clickHintPlate:SetShown(hintVisible)
-        end) then visual.clickHintPlate.regionRefused = true end
+        end) then visual.plateRefused = true end
     end
     -- Nos deux couches se placaient par rapport au niveau DEMANDE, en supposant
     -- que la demande avait ete honoree. Quand le client la refuse -- 690 fois
@@ -1023,7 +1045,7 @@ function NS:StyleAuraVisual(button, auraType, visual)
     -- written down where it can be read afterwards.
     if failures > 0 then
         self:MarkPending("pendingAuraStyle", true)
-        if self.NoteStyleFailure then self:NoteStyleFailure(firstError, failures) end
+        if self.NoteStyleFailure then self:NoteStyleFailure(firstError, failures, "step") end
     end
 end
 
@@ -1128,11 +1150,27 @@ function NS:AddAuraSlotForType(button, auraType)
             local auraPriority = self:GetTypePriority(auraType)
             local auraLevel = button:GetFrameLevel() + 110 + (math.max(0, 10 - auraPriority) * 4)
             auraButton:SetFrameLevel(auraLevel)
-            tryCall(auraButton.SetMouseClickEnabled, auraButton, false)
-            tryCall(auraButton.SetMouseMotionEnabled, auraButton, self.db.showTooltips)
-            tryCall(auraButton.SetPassThroughButtons, auraButton,
+            -- Quatre reglages du bouton du moteur, poses une fois a la
+            -- construction. Leurs refus partaient a la poubelle : le releve ne
+            -- disait donc pas si le moteur avait accepte ce sur quoi tout le
+            -- reste s'appuie -- le passage des clics jusqu'a la couche
+            -- securisee, notamment.
+            local function noteSetup(name, ok, reason)
+                if not ok and self.NoteStyleFailure then
+                    self:NoteStyleFailure(reason, 1, name)
+                end
+            end
+            local clickOk, clickWhy = tryCall(auraButton.SetMouseClickEnabled, auraButton, false)
+            noteSetup("SetMouseClickEnabled", clickOk, clickWhy)
+            local motionOk, motionWhy = tryCall(auraButton.SetMouseMotionEnabled,
+                auraButton, self.db.showTooltips)
+            noteSetup("SetMouseMotionEnabled", motionOk, motionWhy)
+            local passOk, passWhy = tryCall(auraButton.SetPassThroughButtons, auraButton,
                 "LeftButton", "RightButton", "MiddleButton", "Button4", "Button5")
-            tryCall(auraButton.SetTooltipAnchorPoint, auraButton, "ANCHOR_RIGHT")
+            noteSetup("SetPassThroughButtons", passOk, passWhy)
+            local anchorOk, anchorWhy = tryCall(auraButton.SetTooltipAnchorPoint,
+                auraButton, "ANCHOR_RIGHT")
+            noteSetup("SetTooltipAnchorPoint", anchorOk, anchorWhy)
 
             local auraHover = auraButton:CreateTexture(nil, "HIGHLIGHT")
             auraHover:SetAllPoints(button)
@@ -1154,7 +1192,10 @@ function NS:AddAuraSlotForType(button, auraType)
             local stack = labelLayer:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
             stack:SetPoint("TOPRIGHT", button, "TOPRIGHT", -1, -1)
             if auraButton.SetApplicationCount then
-                tryCall(auraButton.SetApplicationCount, auraButton, stack, {})
+                local counted, reason = tryCall(auraButton.SetApplicationCount, auraButton, stack, {})
+                if not counted and self.NoteStyleFailure then
+                    self:NoteStyleFailure(reason, 1, "SetApplicationCount")
+                end
             end
 
             local durationCooldown
@@ -2092,7 +2133,8 @@ function NS:SetButtonState(button, aura, auraType, slot, secret, charmed)
         -- La combinaison peut ne pas tenir : la mesure le dit, et l'indice
         -- n'est alors pas dessine du tout plutot que de deborder sur la case
         -- voisine. L'infobulle nomme deja le geste de chaque dissipation.
-        local fits = self:ApplyClickHint(button.clickHint, button.clickHintPlate, hintText)
+        local fits = hintShown and self:ApplyClickHint(button.clickHint,
+            button.clickHintPlate, hintText, nil, button)
         local visible = hintShown and fits and hintText ~= ""
         button.clickHint:SetShown(visible)
         if button.clickHintPlate then

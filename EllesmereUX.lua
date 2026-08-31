@@ -2570,8 +2570,12 @@ function NS:ShowProfileTransfer()
                 return
             end
             frame.pendingImport = analysis
-            -- Le texte SUR LEQUEL la confirmation est donnee.
+            -- Le texte SUR LEQUEL la confirmation est donnee, et l'etat de la
+            -- CIBLE au meme instant : changer de profil entre l'analyse et la
+            -- confirmation ecrivait dans un profil que l'apercu n'avait jamais
+            -- decrit.
             frame.pendingText = frame.importBox:GetText()
+            frame.pendingFingerprint = self:ProfileImportFingerprint(analysis)
             -- P2 de l'audit du 30/08 : un import qui change presque tout
             -- produisait des dizaines de lignes dans un texte sans hauteur
             -- bornee. Il traversait les boutons de confirmation puis sortait
@@ -2616,6 +2620,9 @@ function NS:ShowProfileTransfer()
                 end
                 lines[#lines + 1] = string.format(self.L.IMPORT_REJECTED, text)
             end
+            -- La fenetre nomme le profil qui recevra l'import. Sans cela, un
+            -- apercu ne dit pas OU il va.
+            lines[#lines + 1] = string.format(self.L.IMPORT_TARGET, self:GetActiveProfileLabel())
             frame.result:SetText(table.concat(lines, "\n"))
             frame.apply:SetShown(#analysis.changes > 0)
             self:RefreshProfileTransferState()
@@ -2628,6 +2635,12 @@ function NS:ShowProfileTransfer()
             -- celui sur lequel la confirmation a ete donnee.
             if frame.pendingText ~= frame.importBox:GetText() then
                 self:ResetProfileImport(self.L.IMPORT_STALE)
+                return
+            end
+            if frame.pendingFingerprint ~= self:ProfileImportFingerprint(frame.pendingImport) then
+                -- Le profil charge a change, ou l'un des reglages que cet
+                -- import va ecrire. L'apercu ne decrit plus ce qui arriverait.
+                self:ResetProfileImport(self.L.IMPORT_MOVED)
                 return
             end
             if not self:ApplyProfileImport(frame.pendingImport) then
@@ -2661,6 +2674,7 @@ function NS:ResetProfileImport(message)
     local frame = self.profileTransferFrame
     if not frame then return end
     frame.pendingImport, frame.pendingText = nil, nil
+    frame.pendingFingerprint = nil
     frame.apply:Hide()
     if message ~= nil then frame.result:SetText(message) end
     self:RefreshProfileTransferState()

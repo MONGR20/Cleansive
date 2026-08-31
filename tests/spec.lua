@@ -8442,6 +8442,156 @@ do
 end
 
 --------------------------------------------------------------------------
+-- 1.6.29 : audit externe de la 1.6.28, et une cause que j'avais fausse
+--------------------------------------------------------------------------
+do
+    freshProfile("PALADIN")
+    knowSpells(4987)
+    mock.state.auraEngine.loaded = true
+    NS:UpdateSpells()
+    NS:RebuildRoster()
+    NS:CreateGrid()
+    mock.state.inCombat = false
+
+    -- LE point de l'audit. « bad argument #1 » ne designe pas le texte :
+    -- luaL_argerror n'ecrit « calling X on bad self » que pour un appel de la
+    -- forme « objet:Methode() ». Par pcall(f, objet), le MEME refus du MEME
+    -- receveur s'ecrit « bad argument #1 ». La 1.6.28 en a tire une cause
+    -- fausse ; voici les deux formulations pour un seul et meme refus.
+    do
+        local objet = {}
+        objet.Refuse = function() error("bad argument #1 to 'Refuse' (objet interdit)", 2) end
+        local _, parMethode = pcall(function() objet:Refuse("G") end)
+        local _, parFonction = pcall(objet.Refuse, objet, "G")
+        truthy(tostring(parMethode):find("bad argument #1", 1, true)
+            or tostring(parMethode):find("bad self", 1, true),
+            "cause : un refus du receveur se lit dans les deux formes d'appel")
+        truthy(parFonction, "cause : et la forme fonction en rend une aussi")
+    end
+
+    local button = NS.buttons[1]
+    local auraType, visuals = next(button.auraSlotVisuals or {})
+    local visual = visuals and visuals[1]
+    truthy(visual, "memoire : un visuel du moteur existe")
+    NS.db.showClickHints = true
+
+    -- LA cause reelle des 846 : la memoire du refus etait posee SUR la region
+    -- interdite. Ecrire un champ sur un objet que le client refuse est refuse
+    -- aussi -- le drapeau n'etait jamais pose, chaque passe recommencait.
+    do
+        local attempts = 0
+        rawset(visual.clickHint, "SetText", function()
+            attempts = attempts + 1
+            error("bad argument #1 to '?' (Attempt to access forbidden object)")
+        end)
+        -- La region refuse aussi qu'on y range quoi que ce soit, comme en jeu.
+        setmetatable(visual.clickHint, {
+            __newindex = function() error("Attempt to access forbidden object") end,
+        })
+        for _ = 1, 8 do NS:StyleAuraVisual(button, auraType, visual) end
+        eq(attempts, 1,
+            "memoire : huit passes, une seule tentative -- le drapeau ne vit plus sur la region")
+        truthy(visual.hintRefused,
+            "memoire : il vit sur le visuel, qui nous appartient")
+        setmetatable(visual.clickHint, nil)
+    end
+
+    -- L'option eteinte : ne rien preparer du tout.
+    do
+        local visual2 = visuals and visuals[2] or visual
+        local writes = 0
+        rawset(visual2.clickHint, "SetText", function() writes = writes + 1 end)
+        visual2.hintRefused = nil
+        NS.db.showClickHints = false
+        for _ = 1, 6 do NS:StyleAuraVisual(button, auraType, visual2) end
+        eq(writes, 0,
+            "eteint : aucune ecriture sur un indice que personne ne voit")
+        NS.db.showClickHints = true
+    end
+
+    -- Les causes sont comptees PAR OPERATION : « 846 refus » ne disait pas
+    -- 846 fois quoi.
+    do
+        NS:ResetDiagnostics()
+        NS:NoteStyleFailure("premier", 1, "SetText")
+        NS:NoteStyleFailure("second", 1, "SetText")
+        NS:NoteStyleFailure("autre", 1, "SetFont")
+        -- Chaque lecture est gardee : sans cela l'absence d'une cause ferait
+        -- TOMBER la suite au lieu de la faire echouer.
+        local causes = NS:GetDiagnostics().styleCauses or {}
+        eq(causes.SetText and causes.SetText.count, 2,
+            "causes : deux refus de texte comptes ensemble")
+        eq(causes.SetFont and causes.SetFont.count, 1,
+            "causes : le refus de police compte a part")
+        eq(causes.SetText and causes.SetText.example, "premier",
+            "causes : chacune garde son exemple")
+        truthy(NS:BuildDiagnosticsReport():find("styleCause SetText count=2", 1, true),
+            "causes : le rapport les porte")
+
+        -- Bornee : une session qui refuse tout ne fait pas grossir le releve.
+        for index = 1, 20 do NS:NoteStyleFailure("x", 1, "operation" .. index) end
+        local known = 0
+        for _ in pairs(NS:GetDiagnostics().styleCauses or {}) do known = known + 1 end
+        truthy(known <= 8, "causes : leur nombre est borne")
+        truthy((NS:GetDiagnostics().styleCausesDropped or 0) > 0,
+            "causes : et ce qui ne rentre pas est annonce, pas tu")
+    end
+
+    -- La police d'une region du moteur : son refus etait jete. Un appel
+    -- protege dont personne ne lit le resultat prouve seulement qu'il n'a pas
+    -- fait tomber l'addon.
+    do
+        NS:ResetDiagnostics()
+        rawset(visual.stack, "SetFont", function()
+            error("Attempt to access forbidden object from code tainted by an AddOn")
+        end)
+        NS:ApplyCellFonts(button)
+        local causes = NS:GetDiagnostics().styleCauses or {}
+        truthy(causes.SetFont and causes.SetFont.count and causes.SetFont.count > 0,
+            "police : un refus de police est compte, il ne part plus a la poubelle")
+        rawset(visual.stack, "SetFont", function() end)
+    end
+
+    -- L'import : changer de profil entre l'analyse et la confirmation.
+    do
+        NS:ShowProfileTransfer()
+        local transfer = NS.profileTransferFrame
+        NS.db.frameSize = 22
+        local exportA = NS:ExportProfile()
+        NS.db.frameSize = 23
+
+        transfer.importBox:SetText(exportA)
+        transfer.analyze:GetScript("OnClick")(transfer.analyze)
+        truthy(transfer.pendingImport, "cible : l'analyse aboutit sur le profil courant")
+        truthy(transfer.result:GetText():find(NS:GetActiveProfileLabel(), 1, true),
+            "cible : et l'apercu dit OU il ira")
+
+        NS:CreateNamedProfile("Ailleurs")
+        NS:UseNamedProfile("Ailleurs")
+        NS.db.frameSize = 40
+        transfer.apply:GetScript("OnClick")(transfer.apply)
+        eq(NS.db.frameSize, 40,
+            "cible : un import prepare pour un autre profil n'ecrit pas dans celui-ci")
+        falsy(transfer.pendingImport, "cible : la confirmation perimee est retiree")
+
+        -- Et un reglage modifie apres l'analyse, absent de l'apercu parce
+        -- qu'il etait alors identique.
+        NS:UseOwnProfile()
+        NS.db.frameSize = 23
+        NS.db.showNames = false
+        transfer.importBox:SetText(exportA)
+        transfer.analyze:GetScript("OnClick")(transfer.analyze)
+        truthy(transfer.pendingImport, "cible : nouvelle analyse sur le bon profil")
+        NS.db.showNames = true
+        transfer.apply:GetScript("OnClick")(transfer.apply)
+        truthy(NS.db.showNames,
+            "cible : un reglage change sous l'apercu bloque l'application")
+        NS:DeleteNamedProfile("Ailleurs")
+        transfer:Hide()
+    end
+end
+
+--------------------------------------------------------------------------
 -- report
 --------------------------------------------------------------------------
 local lines = {}

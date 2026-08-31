@@ -34,6 +34,7 @@ function NS:GetDiagnostics()
     if record.version and record.version ~= self.version then
         record.pending = {}
         record.styleFailures, record.styleError, record.styleSteps = nil, nil, nil
+        record.styleCauses, record.styleCausesDropped = nil, nil
         record.styleContext, record.forbidden = nil, nil
         record.forbiddenVisuals, record.styleSkipped = nil, nil
         record.soundPeak = nil
@@ -134,12 +135,37 @@ end
 -- steps says how much of the pass was lost. One refused step out of nine is a
 -- cosmetic dent; nine out of nine is the whole styling gone, and before 1.5.40
 -- the two were indistinguishable because a single refusal aborted the rest.
-function NS:NoteStyleFailure(err, steps)
+-- Le compteur global additionnait des refus de natures differentes et ne
+-- gardait qu'UNE cause -- la premiere. « 846 refus » ne disait donc pas 846
+-- fois quoi. Une seconde table, bornee, compte par operation et retient un
+-- exemple de chacune : c'est ce qui permet de dire lesquels sont partis et
+-- lesquels restent.
+local STYLE_CAUSE_LIMIT = 8
+
+function NS:NoteStyleFailure(err, steps, operation)
     local record = self:GetDiagnostics()
     if not record then return end
     record.styleFailures = (record.styleFailures or 0) + 1
     record.styleSteps = (record.styleSteps or 0) + (tonumber(steps) or 1)
     if not record.styleError then record.styleError = tostring(err) end
+
+    local key = tostring(operation or "step")
+    record.styleCauses = type(record.styleCauses) == "table" and record.styleCauses or {}
+    local cause = record.styleCauses[key]
+    if not cause then
+        -- Bornee : une session qui refuse tout ne doit pas faire grossir le
+        -- releve sans fin. Au-dela, le compte global reste juste.
+        local known = 0
+        for _ in pairs(record.styleCauses) do known = known + 1 end
+        if known >= STYLE_CAUSE_LIMIT then
+            record.styleCausesDropped = (record.styleCausesDropped or 0) + 1
+            key = nil
+        else
+            cause = { count = 0, example = tostring(err) }
+            record.styleCauses[key] = cause
+        end
+    end
+    if cause then cause.count = cause.count + 1 end
     -- Grouped by context rather than kept as a single sample: the question is
     -- not what the last refusal looked like, it is whether they all happen
     -- while the addon thinks it is unlocked.
@@ -360,6 +386,14 @@ function NS:BuildDiagnosticsReport()
     if record.styleSkipped then lines[#lines + 1] = "styleSkipped=" .. tostring(record.styleSkipped) end
     if record.forbiddenVisuals then
         lines[#lines + 1] = "forbiddenVisuals=" .. tostring(record.forbiddenVisuals)
+    end
+    for _, cause in ipairs(sortedKeys(record.styleCauses)) do
+        local entry = record.styleCauses[cause]
+        lines[#lines + 1] = string.format("styleCause %s count=%s example=%s",
+            cause, tostring(entry.count), tostring(entry.example))
+    end
+    if record.styleCausesDropped then
+        lines[#lines + 1] = "styleCausesDropped=" .. tostring(record.styleCausesDropped)
     end
     for _, context in ipairs(sortedKeys(record.styleContext)) do
         lines[#lines + 1] = "styleContext " .. context .. " count=" .. tostring(record.styleContext[context])

@@ -643,9 +643,15 @@ const pcallOffenders = [];
     const lines = fs.readFileSync(path.join(addon, file), "utf8").split("\n");
     lines.forEach((line, i) => {
       const trimmed = line.trim();
-      if (trimmed.startsWith("--") || !/\bpcall\s*\(/.test(trimmed)) return;
+      // « tryCall » est un pcall deguise : le controle ne connaissait que le
+      // mot littéral, et laissait donc passer exactement les appels dont le
+      // retour ignore a masque les refus de police et de taille.
+      const guard = /\b(pcall|tryCall)\s*\(/;
+      if (trimmed.startsWith("--") || !guard.test(trimmed)) return;
+      // La DEFINITION du helper n'est pas un appel.
+      if (/^local\s+function\s+tryCall\s*\(/.test(trimmed)) return;
       // Le retour est lu s'il est affecte, teste, renvoye, ou combine.
-      if (/(local\s+[\w,\s]+=|^[\w.\[\]:]+\s*=|[\w,\s]+\s*=\s*[^=]*|\bif\b|\breturn\b|\band\b|\bor\b|\bnot\b)[^=]*\bpcall\s*\(/.test(trimmed)) return;
+      if (/(local\s+[\w,\s]+=|^[\w.\[\]:]+\s*=|[\w,\s]+\s*=\s*[^=]*|\bif\b|\breturn\b|\band\b|\bor\b|\bnot\b)[^=]*\b(pcall|tryCall)\s*\(/.test(trimmed)) return;
       pcallOffenders.push(`${file}:${i + 1} ${trimmed.slice(0, 90)}`);
     });
   }
