@@ -6,6 +6,25 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.6.26
+
+**`SetText` partait nu.** Releve en jeu le 31/08/2026 :
+`Frames.lua:186 calling 'SetText' on bad self (Attempt to access forbidden
+object from code tainted by an AddOn)`.
+
+- C'etait le **seul appel non protege** de `ApplyClickHint`, ecrit en 1.6.24. Tous ses voisins passent par `tryCall` ; celui-la partait sans garde-fou, sur une `FontString` que le moteur d'auras peut declarer interdite.
+- Il emportait son appelant. Depuis `ApplyCellFonts`, cela veut dire `LayoutButtons`, dont le drapeau d'attente n'est efface qu'a sa derniere ligne : la plaque « en attente » se serait rallumee a chaque combat du reste de la session. C'est le defaut de police de la 1.5.35, revenu a l'endroit exact ou il avait ete corrige ailleurs.
+- La pose de l'indice etait de surcroit **hors du decoupage en etapes** de `StyleAuraVisual`, qui existe precisement pour qu'un refus n'emporte pas les huit autres etapes du visuel. Elle y rentre.
+- Le refus est retenu, comme ceux du niveau de cadre et de l'etat de la souris : l'objet ne redevient jamais accessible, et le rejouer a chaque passe est ce qui a produit six cent quatre-vingt-dix refus par cle, trois fois de suite.
+- Lire le texte est protege aussi : lire un objet interdit leve autant qu'y ecrire.
+- Tests : 1 671 a 1 680.
+
+**Le releve de la meme session est par ailleurs le plus propre a ce jour :**
+zero refus de style, zero `pendingAuraStyle`, aucun evenement refuse, 246/246
+emplacements, 138/138 sons. Les six cent quatre-vingt-dix refus par cle
+mythique, corriges en trois fois de la 1.6.16 a la 1.6.21, ne se produisent
+plus.
+
 ## 1.6.25
 
 **Revue d'interface.** Quatre defauts mesures, dont deux que la 1.6.24 venait

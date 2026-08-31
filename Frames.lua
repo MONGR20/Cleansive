@@ -183,9 +183,27 @@ function NS:ApplyClickHint(hint, plate, hintText, size)
     if plate then plate.hintText = hintText end
     if not width then return false end
     if hint then
-        if hint.SetText then hint:SetText(hintText) end
-        local face = self.GetUXFont and self:GetUXFont()
-        if face and hint.SetFont then tryCall(hint.SetFont, hint, face, font, "OUTLINE") end
+        -- SetText etait le SEUL appel non protege de cette fonction. Tous ses
+        -- voisins passent par tryCall ; celui-la partait nu, et le client l'a
+        -- refuse en jeu le 31/08 sur une FontString appartenant au moteur.
+        -- Il emportait alors son appelant : ApplyCellFonts, donc LayoutButtons,
+        -- dont le drapeau d'attente n'est efface qu'a sa derniere ligne. C'est
+        -- exactement le defaut de police de la 1.5.35, au meme endroit qu'il
+        -- avait ete corrige ailleurs.
+        if not hint.textRefused and hint.SetText then
+            if tryCall(hint.SetText, hint, hintText) then
+                local face = self.GetUXFont and self:GetUXFont()
+                if face and hint.SetFont then tryCall(hint.SetFont, hint, face, font, "OUTLINE") end
+            else
+                -- L'objet ne redevient jamais accessible. Retenir le refus
+                -- evite de le rejouer a chaque passe -- six cent quatre-vingt-
+                -- dix fois par cle, trois fois deja dans cet addon.
+                hint.textRefused = true
+                return false
+            end
+        elseif hint.textRefused then
+            return false
+        end
     end
     if plate and plate.SetSize then tryCall(plate.SetSize, plate, width, plateSize) end
     return true
@@ -221,7 +239,11 @@ function NS:ApplyCellFonts(button)
     -- retrecie -- ou l'inverse.
     local function setHint(hint, region)
         local hintText = region and region.hintText
-        if hintText == nil and hint and hint.GetText then hintText = hint:GetText() end
+        -- Lire un objet interdit leve autant qu'y ecrire.
+        if hintText == nil and hint and hint.GetText then
+            local read, value = pcall(hint.GetText, hint)
+            hintText = read and value or nil
+        end
         self:ApplyClickHint(hint, region, hintText or "", size)
     end
     setFont(button.nameText, "name")
@@ -923,7 +945,12 @@ function NS:StyleAuraVisual(button, auraType, visual)
     -- ClickHintText a deja choisi le plus riche des indices qui tienne. Une
     -- chaine vide veut donc dire qu'aucun ne tient, pas qu'on abandonne le
     -- premier venu.
-    local hintFits = self:ApplyClickHint(visual.clickHint, visual.clickHintPlate, visualHint)
+    -- DANS une etape : tout ce qui touche aux regions du moteur passe par la,
+    -- pour qu'un refus n'emporte pas les huit autres etapes du visuel.
+    local hintFits = false
+    step(function()
+        hintFits = self:ApplyClickHint(visual.clickHint, visual.clickHintPlate, visualHint)
+    end)
     local hintVisible = hintShown and hintFits and visualHint ~= ""
     if visual.clickHint then
         step(function()

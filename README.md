@@ -1,4 +1,4 @@
-# Cleansive 1.6.25
+# Cleansive 1.6.26
 
 Cleansive is a standalone one-click cleansing addon for **World of Warcraft Retail 12.1** (`120100`). It provides a compact Decursive-style workflow with a dark, class-colored interface inspired by the clarity of Ellesmere UI. The interface follows the language of your WoW client, English or French; either can be picked from the General page at any time.
 
@@ -194,6 +194,7 @@ the reason on its own.
 
 ## Recent changes
 
+- **1.6.26** - `SetText` was the one unguarded protected call in the click hint, and the client refused it in game: it took its caller down with it, up to and including the whole button layout.
 - **1.6.25** - interface review fixes: a click hint that cannot fit now falls back to the cleanse number instead of vanishing, section titles reach 4.5:1, a truncated profile name is readable in its tooltip, and seven controls added since 1.6.20 finally explain themselves.
 - **1.6.24** - external audit fixes: a long click combination no longer overflows its cell, a thirty-two byte profile name no longer overflows its place button, the drag handle and the click window wake up when combat starts, and every profile is reachable from the window instead of the seventh onward being sent to the chat box.
 - **1.6.23** - the profile window answered nothing on an empty database: the name field's background was darker than the panel, so the one control that could unlock everything was the one you could not see.

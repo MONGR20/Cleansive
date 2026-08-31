@@ -8114,6 +8114,67 @@ do
 end
 
 --------------------------------------------------------------------------
+-- 1.6.26 : SetText partait nu
+--
+-- Releve en jeu le 31/08/2026, session 33 du grabber :
+--   Frames.lua:186 calling 'SetText' on bad self
+--   (Attempt to access forbidden object from code tainted by an AddOn)
+--
+-- C'etait le SEUL appel non protege de ApplyClickHint, ecrit en 1.6.24. Tous
+-- ses voisins passent par tryCall. Il emportait son appelant : ApplyCellFonts,
+-- donc LayoutButtons, dont le drapeau d'attente n'est efface qu'a sa derniere
+-- ligne -- et la pose de l'indice, dans StyleAuraVisual, etait HORS du
+-- decoupage en etapes qui existe precisement pour ca.
+--------------------------------------------------------------------------
+do
+    freshProfile("PALADIN")
+    knowSpells(4987)
+    mock.state.auraEngine.loaded = true
+    NS:UpdateSpells()
+    NS:CreateGrid()
+    NS.db.showClickHints = true
+
+    local button = NS.buttons[1]
+    local auraType, visuals = next(button.auraSlotVisuals or {})
+    local visual = visuals and visuals[1]
+    truthy(visual, "indice : un visuel du moteur existe")
+
+    -- Le client refuse le texte de l'indice, exactement comme en jeu.
+    local attempts = 0
+    rawset(visual.clickHint, "SetText", function()
+        attempts = attempts + 1
+        error("Attempt to access forbidden object from code tainted by an AddOn")
+    end)
+    rawset(visual.overlay, "__color", nil)
+    rawset(visual.typeMark, "__color", nil)
+
+    truthy(pcall(NS.StyleAuraVisual, NS, button, auraType, visual),
+        "indice : la passe survit au refus du texte")
+    truthy(rawget(visual.overlay, "__color") ~= nil,
+        "indice : le voile est pose malgre le refus -- il n'emporte plus les autres etapes")
+    truthy(rawget(visual.typeMark, "__color") ~= nil,
+        "indice : la bande de type aussi")
+    eq(attempts, 1, "indice : le refus est retenu, pas rejoue a chaque passe")
+    for _ = 1, 5 do NS:StyleAuraVisual(button, auraType, visual) end
+    eq(attempts, 1, "indice : cinq passes de plus n'en retentent aucun")
+
+    -- Et la police des cases, qui appelle le meme chemin : elle ne doit pas
+    -- emporter la mise en page. C'est le defaut de la 1.5.35, au meme endroit.
+    truthy(pcall(NS.ApplyCellFonts, NS, button),
+        "indice : recalculer les polices survit au refus")
+    truthy(pcall(NS.LayoutButtons, NS),
+        "indice : et la mise en page complete aussi")
+
+    -- Lire un objet interdit leve autant qu'y ecrire.
+    rawset(visual.clickHint, "GetText", function()
+        error("Attempt to access forbidden object from code tainted by an AddOn")
+    end)
+    rawset(visual.clickHintPlate, "hintText", nil)
+    truthy(pcall(NS.ApplyCellFonts, NS, button),
+        "indice : LIRE le texte de l'indice est protege aussi")
+end
+
+--------------------------------------------------------------------------
 -- report
 --------------------------------------------------------------------------
 local lines = {}
