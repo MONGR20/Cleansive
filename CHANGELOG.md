@@ -6,6 +6,27 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.6.28
+
+**La valeur venait du moteur, pas la region.** Releve en jeu le 31/08/2026,
+premiere session ou ces refus etaient comptes :
+
+```
+styleFailures=846 styleSteps=3861
+styleError=bad argument #1 to '?' (Attempt to access forbidden object
+           from code tainted by an AddOn - Usage: self:SetText([text]))
+styleContext lock=0 / ChallengeMode,Map,Chat count=801
+```
+
+- **« bad argument #1 », pas « bad self ».** Ce n'est pas la region qui est refusee, c'est la VALEUR qu'on lui passe. Elle venait du repli `GetText` de `ApplyCellFonts`, ecrit en 1.6.24 : on relisait le texte sur la region du moteur et on le lui rendait. Proteger la lecture ne servait a rien -- elle reussissait ; c'est la valeur qui etait empoisonnee.
+- Le texte de l'indice se lit desormais sur **notre** plaque, jamais sur la region du moteur. Et rien d'autre qu'une chaine ne descend jusqu'a `SetText`, quel que soit l'appelant.
+- **Le compteur pose la veille a fait son travail des sa premiere session.** Ces refus etaient la depuis la 1.6.24 et n'apparaissaient nulle part : le `pcall` de l'etape reussit quand l'erreur est interceptee plus bas. C'est precisement ce que la 1.6.27 a corrige, et ce qu'elle a revele.
+- Tests : 1 717 a 1 723.
+
+Une reserve sur les chiffres : `styleError` ne retient que la PREMIERE cause.
+Les 846 refus ne sont donc pas prouves identiques ; seule la premiere porte
+cette signature.
+
 ## 1.6.27
 
 **Audit externe de la 1.6.26.** Huit constats, tous verifies dans le code avant

@@ -179,6 +179,9 @@ end
 -- Pose la plaque, sa police et son texte d'un seul geste, et rend faux quand
 -- la combinaison ne peut pas tenir : c'est le seul endroit qui decide.
 function NS:ApplyClickHint(hint, plate, hintText, size)
+    -- Ceinture : rien d'autre qu'une chaine ne descend jusqu'a SetText, quelle
+    -- que soit la provenance de l'appelant.
+    if type(hintText) ~= "string" then hintText = "" end
     local width, plateSize, font = self:ClickHintMetrics(hintText, size)
     if plate then plate.hintText = hintText end
     if not width then return false end
@@ -245,14 +248,19 @@ function NS:ApplyCellFonts(button)
     -- texte pose, pas seulement du role. Une combinaison longue doit reduire
     -- les deux ensemble, sinon la police d'indice reste grande dans une plaque
     -- retrecie -- ou l'inverse.
+    -- Le texte de l'indice se lit sur NOTRE plaque, jamais sur la region du
+    -- moteur. Le repli par GetText, ecrit en 1.6.24, rendait une valeur
+    -- appartenant au client -- et la repasser a SetText leve « bad argument
+    -- #1 » sur un objet interdit. Proteger la LECTURE ne servait a rien : la
+    -- lecture reussissait, c'est la valeur qui etait empoisonnee.
+    --
+    -- Releve du 31/08/2026 sur la 1.6.27 : 846 refus portant exactement cette
+    -- signature. Ils etaient la avant, invisibles ; le compteur pose la veille
+    -- les a fait apparaitre des sa premiere session.
     local function setHint(hint, region)
         local hintText = region and region.hintText
-        -- Lire un objet interdit leve autant qu'y ecrire.
-        if hintText == nil and hint and hint.GetText then
-            local read, value = pcall(hint.GetText, hint)
-            hintText = read and value or nil
-        end
-        self:ApplyClickHint(hint, region, hintText or "", size)
+        if type(hintText) ~= "string" then hintText = "" end
+        self:ApplyClickHint(hint, region, hintText, size)
     end
     setFont(button.nameText, "name")
     setFont(button.center, "stack")

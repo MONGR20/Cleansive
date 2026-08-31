@@ -8378,6 +8378,70 @@ do
 end
 
 --------------------------------------------------------------------------
+-- 1.6.28 : la valeur venait du moteur, pas la region
+--
+-- Releve du 31/08/2026 sur la 1.6.27, PREMIERE session ou ces refus etaient
+-- comptes :
+--   styleFailures=846 styleSteps=3861
+--   styleError=bad argument #1 to '?' (Attempt to access forbidden object
+--              from code tainted by an AddOn - Usage: self:SetText([text]))
+--   styleContext lock=0 / ChallengeMode,Map,Chat count=801
+--
+-- « bad argument #1 », pas « bad self » : ce n'est pas la region qui est
+-- refusee, c'est la VALEUR qu'on lui passe. Elle venait du repli GetText de
+-- ApplyCellFonts, ecrit en 1.6.24 : on relisait le texte sur la region du
+-- moteur et on le lui rendait. Proteger la lecture ne servait a rien -- elle
+-- reussissait. Le texte se lit desormais sur NOTRE plaque, jamais sur la
+-- region du moteur.
+--------------------------------------------------------------------------
+do
+    freshProfile("PALADIN")
+    knowSpells(4987)
+    mock.state.auraEngine.loaded = true
+    NS:UpdateSpells()
+    NS:CreateGrid()
+    NS.db.showClickHints = true
+
+    local button = NS.buttons[1]
+    local auraType, visuals = next(button.auraSlotVisuals or {})
+    local visual = visuals and visuals[1]
+    truthy(visual, "valeur : un visuel du moteur existe")
+
+    -- Le client rend une valeur qui lui appartient, et refuse qu'on la lui
+    -- repasse. C'est exactement la signature relevee en jeu.
+    -- Court a dessein : une valeur longue ne tiendrait pas dans la case, la
+    -- mesure rendrait nil et SetText ne serait jamais atteint -- le test
+    -- passerait sans avoir rien exerce.
+    local poison = setmetatable({}, { __tostring = function() return "G" end })
+    local refusals, handed = 0, nil
+    rawset(visual.clickHint, "GetText", function() return poison end)
+    rawset(visual.clickHint, "SetText", function(_, value)
+        handed = value
+        if type(value) ~= "string" then
+            refusals = refusals + 1
+            error("bad argument #1 to '?' (Attempt to access forbidden object"
+                .. " from code tainted by an AddOn - Usage: self:SetText([text]))")
+        end
+    end)
+    rawset(visual.clickHintPlate, "hintText", nil)
+
+    local before = NS:GetDiagnostics().styleFailures or 0
+    for _ = 1, 8 do NS:ApplyCellFonts(button) end
+    eq(refusals, 0,
+        "valeur : ce que le moteur rend ne lui est jamais repasse")
+    eq(type(handed), "string",
+        "valeur : SetText ne recoit qu'une chaine, quelle que soit la provenance")
+    eq(NS:GetDiagnostics().styleFailures or 0, before,
+        "valeur : huit passes n'inscrivent aucun refus")
+
+    -- Et la ceinture : meme appele directement avec une valeur etrangere,
+    -- ApplyClickHint ne la fait pas descendre jusqu'a SetText.
+    NS:ApplyClickHint(visual.clickHint, visual.clickHintPlate, poison, 22)
+    eq(refusals, 0, "valeur : un appelant distrait ne peut pas la faire passer non plus")
+    eq(type(handed), "string", "valeur : c'est toujours une chaine qui arrive")
+end
+
+--------------------------------------------------------------------------
 -- report
 --------------------------------------------------------------------------
 local lines = {}
