@@ -8592,6 +8592,99 @@ do
 end
 
 --------------------------------------------------------------------------
+-- 1.6.30 : une seule memoire, pour toutes les regions du moteur
+--
+-- Releve du 31/08/2026 sur la 1.6.29, premier a compter PAR OPERATION :
+--   styleCause SetFont count=4920
+--   styleCause step    count=450    (SetColorTexture)
+--   styleCause SetText count=231    (un par visuel : la memoire tenait)
+--   styleContext lock=0 / ChallengeMode,Map,Chat  count=5571
+--
+-- L'indice, protege la veille, ne comptait plus qu'un refus par visuel. La
+-- police et les couleurs, elles, n'avaient aucune memoire : elles repartaient a
+-- chaque passe. Corriger region par region faisait reapparaitre le motif
+-- ailleurs a chaque fois ; il n'y a plus qu'une regle.
+--------------------------------------------------------------------------
+do
+    freshProfile("PALADIN")
+    knowSpells(4987)
+    mock.state.auraEngine.loaded = true
+    NS:UpdateSpells()
+    NS:RebuildRoster()
+    NS:CreateGrid()
+    mock.state.inCombat = false
+
+    local button = NS.buttons[1]
+    local auraType, visuals = next(button.auraSlotVisuals or {})
+    local visual = visuals and visuals[1]
+    truthy(visual, "regions : un visuel du moteur existe")
+
+    -- La police : 4 920 refus faute de memoire.
+    do
+        NS:ResetDiagnostics()
+        local tries = 0
+        rawset(visual.stack, "SetFont", function()
+            tries = tries + 1
+            error("Attempt to access forbidden object from code tainted by an AddOn")
+        end)
+        for _ = 1, 10 do NS:ApplyCellFonts(button) end
+        eq(tries, 1, "police : dix mises en page, une seule tentative")
+        local causes = NS:GetDiagnostics().styleCauses or {}
+        eq(causes.SetFont and causes.SetFont.count, 1, "police : et un seul refus compte")
+        rawset(visual.stack, "SetFont", function() end)
+    end
+
+    -- Les couleurs : 450 refus, et 450 reports qui ne pouvaient rien donner.
+    do
+        NS:ResetDiagnostics()
+        NS.pendingAuraStyle = false
+        local tries = 0
+        rawset(visual.overlay, "SetColorTexture", function()
+            tries = tries + 1
+            error("Attempt to access forbidden object from code tainted by an AddOn")
+        end)
+        for _ = 1, 10 do NS:StyleAuraVisual(button, auraType, visual) end
+        eq(tries, 1, "couleur : dix passes, une seule tentative")
+        falsy(NS.pendingAuraStyle,
+            "couleur : hors combat, un refus definitif ne pose plus de report inutile")
+        truthy(rawget(visual.typeMark, "__color") ~= nil,
+            "couleur : et la bande de type continue d'etre posee")
+    end
+
+    -- LA distinction que l'audit demandait : un refus PENDANT le verrou de
+    -- combat peut venir du combat. Celui-la se rejoue, il ne condamne rien.
+    do
+        local victim = visuals and visuals[2] or visual
+        NS:ResetDiagnostics()
+        NS.pendingAuraStyle = false
+        mock.state.inCombat = true
+        local tries = 0
+        rawset(victim.unitName, "SetShown", function()
+            tries = tries + 1
+            error("Attempt to access forbidden object from code tainted by an AddOn")
+        end)
+        NS:StyleAuraVisual(button, auraType, victim)
+        truthy(NS.pendingAuraStyle,
+            "combat : un refus sous verrou pose un report -- le combat peut en etre la cause")
+        falsy(victim.regionRefused and victim.regionRefused.unitName,
+            "combat : et ne condamne pas la region")
+
+        -- Hors verrou, le combat n'y est pour rien : la region est retenue.
+        mock.state.inCombat = false
+        NS.pendingAuraStyle = false
+        NS:StyleAuraVisual(button, auraType, victim)
+        truthy(victim.regionRefused and victim.regionRefused.unitName,
+            "hors combat : la region est retenue")
+        falsy(NS.pendingAuraStyle,
+            "hors combat : et aucun report n'est pose")
+        local after = tries
+        for _ = 1, 6 do NS:StyleAuraVisual(button, auraType, victim) end
+        eq(tries, after, "hors combat : six passes de plus ne retentent rien")
+        rawset(victim.unitName, "SetShown", function() end)
+    end
+end
+
+--------------------------------------------------------------------------
 -- report
 --------------------------------------------------------------------------
 local lines = {}

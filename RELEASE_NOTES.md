@@ -6,6 +6,31 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.6.30
+
+**Une seule memoire de refus, pour toutes les regions que le moteur nous
+prete.** Le releve du 31/08/2026 sur la 1.6.29 est le premier a compter PAR
+OPERATION, et ce qu'il montre est net :
+
+```
+styleCause SetFont count=4920
+styleCause step    count=450    (SetColorTexture)
+styleCause SetText count=231    (un par visuel : la memoire tenait)
+styleContext lock=0 / ChallengeMode,Map,Chat  count=5571
+```
+
+L'indice de clic, protege la veille, ne comptait plus **qu'un refus par
+visuel**. La police et les couleurs n'avaient aucune memoire : elles
+repartaient a chaque passe, sur des regions dont le client avait deja dit non.
+
+- La memoire etait posee defaut par defaut : d'abord le niveau de cadre, puis l'etat de la souris, puis l'indice -- chacune avec sa variable. Corriger region par region faisait reapparaitre le motif ailleurs a chaque fois. **Une seule regle desormais** : une region dont le client refuse UNE operation n'est plus touchee, et la memoire vit sur une table a nous.
+- **Deux refus qui se ressemblent n'appellent pas la meme reponse.** Sous verrou de combat, c'est peut-etre le combat qui refuse : on pose un report et on rejouera a la fin, sans condamner la region. Hors verrou, le combat n'y est pour rien -- les 5 571 refus portaient tous « lock=0 », donc les rejouer ne pouvait rien donner. C'etaient les 450 reports de cette session.
+- Tests : 1 742 a 1 753.
+
+Le compteur par operation, pose la veille, aura donc servi exactement a ca :
+distinguer ce qui etait corrige de ce qui ne l'etait pas. Sans lui, 5 601 refus
+se seraient lus comme un seul probleme.
+
 ## 1.6.29
 
 **Ce que la 1.6.28 annoncait comme cause etait faux.** L'audit externe l'a

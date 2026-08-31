@@ -103,6 +103,46 @@ local function tryCall(method, owner, ...)
     return pcall(method, owner, ...)
 end
 
+-- UNE memoire de refus, pour toutes les regions que le moteur nous prete.
+--
+-- Elle a d'abord ete posee sur le niveau de cadre, puis sur l'etat de la
+-- souris, puis sur l'indice de clic -- une par defaut constate, chacune avec sa
+-- propre variable. Le releve du 31/08/2026 sur la 1.6.29 a montre le prix de
+-- cette approche : l'indice, enfin protege, ne comptait plus que 231 refus,
+-- soit un par visuel ; la police en comptait 4 920 et les couleurs 450, parce
+-- que ces deux-la n'avaient encore aucune memoire.
+--
+--   styleCause SetFont count=4920
+--   styleCause step    count=450   (SetColorTexture)
+--   styleCause SetText count=231   (un par visuel : la memoire tenait)
+--
+-- Corriger region par region faisait reapparaitre le meme motif ailleurs a
+-- chaque fois. Une seule regle desormais : une region dont le client refuse
+-- UNE operation n'est plus touchee, et la memoire vit sur une table a NOUS.
+function NS:RegionUsable(state, key)
+    if not state then return true end
+    local refused = state.regionRefused
+    return not (refused and refused[key])
+end
+
+-- Deux refus qui se ressemblent et qui n'appellent pas la meme reponse.
+--
+-- PENDANT le verrou de combat, c'est peut-etre le combat qui refuse : on pose
+-- un report et on rejouera a la fin, sans condamner la region.
+--
+-- HORS verrou, le combat n'y est pour rien. Les 5 571 refus du 31/08 portaient
+-- tous « lock=0 » : les rejouer ne pouvait rien donner, et c'est exactement ce
+-- que faisaient les 450 reports de cette session.
+function NS:NoteRegionRefusal(state, key, why, operation)
+    if InCombatLockdown and InCombatLockdown() then
+        self:MarkPending("pendingAuraStyle", true)
+    elseif state then
+        state.regionRefused = type(state.regionRefused) == "table" and state.regionRefused or {}
+        state.regionRefused[key] = true
+    end
+    if self.NoteStyleFailure then self:NoteStyleFailure(why, 1, operation or key) end
+end
+
 -- Every label carried a fixed size tuned for the default 22 px cell. At 12 px
 -- the click plate covered most of the cell and the labels overlapped; at 40 px
 -- the same labels floated in empty space. Sizes scale from the cell now,
@@ -252,13 +292,15 @@ function NS:ApplyCellFonts(button)
     -- Le retour partait a la poubelle : un appel protege dont personne ne lit
     -- le resultat prouve seulement qu'il n'a pas fait tomber l'addon. Le refus
     -- est desormais compte, avec le nom de l'operation.
-    local function setFont(region, role, flags)
+    -- 4 920 refus en une session, faute de memoire : la police etait reposee
+    -- sur chaque region, a chaque mise en page, y compris sur celles dont le
+    -- client avait deja dit non. Le refus se retient comme les autres.
+    local function setFont(region, role, flags, state, key)
         if not (region and region.SetFont) then return end
+        if not self:RegionUsable(state, key) then return end
         local sized, reason = tryCall(region.SetFont, region,
             font, self:CellFontSize(role, size), flags or "")
-        if not sized and self.NoteStyleFailure then
-            self:NoteStyleFailure(reason, 1, "SetFont")
-        end
+        if not sized then self:NoteRegionRefusal(state, key, reason, "SetFont") end
         return sized
     end
     -- L'indice et sa plaque ne passent PAS par setFont : leur taille depend du
@@ -280,18 +322,18 @@ function NS:ApplyCellFonts(button)
         if type(hintText) ~= "string" then hintText = "" end
         self:ApplyClickHint(hint, region, hintText, size, state)
     end
-    setFont(button.nameText, "name")
-    setFont(button.center, "stack")
+    setFont(button.nameText, "name", nil, button, "nameText")
+    setFont(button.center, "stack", nil, button, "center")
     setHint(button.clickHint, button.clickHintPlate, button)
     local cooldown = button.cooldown
     if cooldown and cooldown.GetCountdownFontString then
-        setFont(cooldown:GetCountdownFontString(), "countdown", "OUTLINE")
+        setFont(cooldown:GetCountdownFontString(), "countdown", "OUTLINE", button, "countdown")
     end
     -- The protected engine draws its own copy of every label.
     for _, visuals in pairs(button.auraSlotVisuals or {}) do
         for _, visual in ipairs(visuals) do
-            setFont(visual.unitName, "name")
-            setFont(visual.stack, "stack")
+            setFont(visual.unitName, "name", nil, visual, "unitName")
+            setFont(visual.stack, "stack", nil, visual, "stack")
             setHint(visual.clickHint, visual.clickHintPlate, visual)
         end
     end
@@ -955,13 +997,25 @@ function NS:StyleAuraVisual(button, auraType, visual)
         -- reconstruction du moteur redonne sa chance a l'objet suivant.
         if not applied then visual.levelRefused = true end
     end
-    step(function()
+    -- Chaque region a sa cle. Une seule regle pour toutes : refusee une fois,
+    -- plus touchee. Le voile et la bande de type comptaient 450 refus par
+    -- session -- un par passe, pas un par region.
+    -- Ces refus ne passent PAS par le compteur d'etapes, et ne posent donc
+    -- aucun report : un report sert a rejouer plus tard ce que le combat
+    -- empeche maintenant. Une region definitivement refusee ne sera jamais
+    -- reussie, la rejouer a chaque passe etait le motif des 450.
+    local function styleRegion(key, fn)
+        if not self:RegionUsable(visual, key) then return end
+        local ok, why = pcall(fn)
+        if not ok then self:NoteRegionRefusal(visual, key, why, key) end
+    end
+    styleRegion("overlay", function()
         visual.overlay:SetColorTexture(clickColor[1], clickColor[2], clickColor[3], alpha)
     end)
-    step(function()
+    styleRegion("typeMark", function()
         visual.typeMark:SetColorTexture(typeColor[1], typeColor[2], typeColor[3], enabled and 1 or 0)
     end)
-    step(function()
+    styleRegion("stack", function()
         visual.stack:ClearAllPoints()
         if slot == 2 then
             visual.stack:SetPoint("RIGHT", button, "RIGHT", -1, 0)
@@ -973,7 +1027,7 @@ function NS:StyleAuraVisual(button, auraType, visual)
         visual.stack:SetShown(enabled and self.db.showStacks and not self:CellShowsNames())
     end)
     if visual.unitName then
-        step(function()
+        styleRegion("unitName", function()
             visual.unitName:SetWidth(math.max(8, self:CellSize() - 4))
             visual.unitName:SetText(button.descriptor and button.descriptor.displayName or button.unit or "")
             visual.unitName:SetShown(enabled and self:CellShowsNames())
