@@ -9,7 +9,8 @@ mock.install(_G)
 
 local ADDON = ADDON_PATH or "../work/Cleansive-1.4.0/Cleansive"
 
--- Files that hold logic. SetupWizard.lua is left out; EllesmereUX.lua is
+-- Files that hold logic. SetupWizard.lua et EllesmereUX.lua sont charges a la
+-- FIN de ce fichier, apres les bouchons d'interface. EllesmereUX.lua is
 -- loaded at the very END of this file instead, after every test that relies on
 -- the UI stubs below. It was excluded for years as "too frame-heavy for no
 -- added coverage" -- which is how six silent sliders survived that long.
@@ -2543,6 +2544,12 @@ do
     -- RefreshAuraHistoryPage. Le rechargement rend la vraie fonction.
     local lists = loadfile(ADDON .. "/Lists.lua")
     lists("Cleansive", NS)
+    -- L'assistant etait exempte du controle de couverture comme « sans logique
+    -- a verifier ». Il en a : le choix de langue, l'application d'un reglage,
+    -- la fin de configuration -- et depuis la 1.6.27, sa mise a l'echelle.
+    local wizard = loadfile(ADDON .. "/SetupWizard.lua")
+    if not wizard then error("cannot load SetupWizard.lua") end
+    wizard("Cleansive", NS)
 
     freshProfile("PALADIN")
     knowSpells(4987)
@@ -8172,6 +8179,202 @@ do
     rawset(visual.clickHintPlate, "hintText", nil)
     truthy(pcall(NS.ApplyCellFonts, NS, button),
         "indice : LIRE le texte de l'indice est protege aussi")
+end
+
+--------------------------------------------------------------------------
+-- 1.6.27 : audit externe de la 1.6.26
+--------------------------------------------------------------------------
+do
+    freshProfile("PALADIN")
+    knowSpells(4987)
+    NS:UpdateSpells()
+    NS:RebuildRoster()
+    mock.state.inCombat = false
+
+    -- P2-01. Une confirmation ne vaut que pour le texte sur lequel elle a ete
+    -- donnee. Coller un export a 22, analyser, corriger le texte, appliquer :
+    -- l'addon posait 22 alors que le champ montrait autre chose.
+    NS:ShowProfileTransfer()
+    local transfer = NS.profileTransferFrame
+    NS.db.frameSize = 22
+    local exportA = NS:ExportProfile()
+    NS.db.frameSize = 23
+
+    transfer.importBox:SetText(exportA)
+    transfer.analyze:GetScript("OnClick")(transfer.analyze)
+    truthy(transfer.pendingImport, "import : l'analyse du premier texte aboutit")
+    truthy(transfer.apply:IsShown(), "import : elle propose de l'appliquer")
+
+    transfer.importBox:SetText((exportA:gsub("frameSize=22", "frameSize=40")))
+    falsy(transfer.pendingImport, "import : modifier le texte invalide l'analyse")
+    falsy(transfer.apply:IsShown(), "import : et retire le bouton qui l'engageait")
+    truthy(transfer.result:GetText():find(NS.L.IMPORT_STALE, 1, true),
+        "import : la fenetre dit pourquoi")
+
+    transfer.apply:GetScript("OnClick")(transfer.apply)
+    eq(NS.db.frameSize, 23, "import : rien n'a ete ecrit sans nouvelle analyse")
+
+    -- La ceinture : meme si rien n'avait invalide, la confirmation compare le
+    -- texte au moment d'ecrire.
+    transfer.pendingImport = NS:AnalyzeProfileImport(exportA)
+    transfer.pendingText = "un autre texte"
+    transfer.apply:Show()
+    transfer.apply:GetScript("OnClick")(transfer.apply)
+    eq(NS.db.frameSize, 23, "import : un texte qui a change depuis l'analyse n'ecrit pas")
+
+    -- P3-03. Une analyse invalide et une reouverture doivent nettoyer le motif
+    -- du refus en meme temps que le bouton.
+    mock.state.inCombat = true
+    transfer.importBox:SetText(exportA)
+    transfer.analyze:GetScript("OnClick")(transfer.analyze)
+    truthy(transfer.applyHint:IsShown(), "import : en combat, le motif explique le bouton grise")
+    transfer.importBox:SetText("ceci n'est pas un profil")
+    transfer.analyze:GetScript("OnClick")(transfer.analyze)
+    falsy(transfer.apply:IsShown(), "import : une analyse invalide retire le bouton")
+    falsy(transfer.applyHint:IsShown(), "import : et son motif part avec lui")
+
+    -- La reouverture doit nettoyer par ELLE-MEME. Poser l'etat a la main
+    -- plutot que par un changement de texte : sinon c'est l'invalidation qui
+    -- fait le travail, et la reouverture n'est pas testee du tout.
+    transfer.applyHint:Show()
+    transfer.apply:Show()
+    transfer.result:SetText("un reste de la fois d'avant")
+    transfer.pendingText = "un texte perime"
+    transfer:Hide()
+    NS:ShowProfileTransfer()
+    falsy(transfer.applyHint:IsShown(), "import : rouvrir la fenetre ne laisse pas le motif derriere")
+    falsy(transfer.apply:IsShown(), "import : ni le bouton qui l'accompagnait")
+    eq(transfer.result:GetText(), "", "import : ni l'apercu de la fois d'avant")
+    falsy(transfer.pendingText, "import : ni le texte de reference")
+    mock.state.inCombat = false
+    transfer:Hide()
+
+    -- P2-02 et P3-01. Un refus sur une region du moteur doit l'abandonner EN
+    -- ENTIER, et laisser une trace : le pcall de l'etape reussit quand on
+    -- absorbe l'erreur, donc l'indice disparaissait avec un diagnostic sain.
+    do
+        mock.state.auraEngine.loaded = true
+        NS:UpdateSpells()
+        NS:CreateGrid()
+        NS.db.showClickHints = true
+        local button = NS.buttons[1]
+        local auraType, visuals = next(button.auraSlotVisuals or {})
+        local visual = visuals and visuals[1]
+        truthy(visual, "region : un visuel du moteur existe")
+
+        local before = NS:GetDiagnostics().styleFailures or 0
+        local placements = 0
+        rawset(visual.clickHint, "SetText", function()
+            error("Attempt to access forbidden object from code tainted by an AddOn")
+        end)
+        rawset(visual.clickHint, "ClearAllPoints", function()
+            placements = placements + 1
+            error("Attempt to access forbidden object from code tainted by an AddOn")
+        end)
+
+        NS:StyleAuraVisual(button, auraType, visual)
+        -- Sans « or 0 », l'absence de compteur ferait TOMBER la suite au lieu
+        -- de la faire echouer, et un test qui plante ne dit pas ce qui cloche.
+        truthy((NS:GetDiagnostics().styleFailures or 0) > before,
+            "region : un refus absorbe est COMPTE, il ne disparait plus en silence")
+        truthy(NS:GetDiagnostics().styleError,
+            "region : et sa cause est retenue")
+
+        local afterFirst = NS:GetDiagnostics().styleFailures
+        for _ = 1, 6 do NS:StyleAuraVisual(button, auraType, visual) end
+        eq(NS:GetDiagnostics().styleFailures, afterFirst,
+            "region : et le releve ne se gonfle plus")
+        truthy(rawget(visual.overlay, "__color") ~= nil,
+            "region : le reste du visuel continue d'etre pose")
+    end
+
+    -- Le placement se teste SEUL : quand le texte passe et que c'est le
+    -- placement qui est refuse. Le tester avec un texte deja refuse ne prouve
+    -- rien -- la region est alors abandonnee avant d'y arriver.
+    do
+        local button = NS.buttons[2] or NS.buttons[1]
+        local auraType, visuals = next(button.auraSlotVisuals or {})
+        local visual = visuals and visuals[1]
+        if visual then
+            local placements = 0
+            rawset(visual.clickHint, "ClearAllPoints", function()
+                placements = placements + 1
+                error("Attempt to access forbidden object from code tainted by an AddOn")
+            end)
+            for _ = 1, 6 do NS:StyleAuraVisual(button, auraType, visual) end
+            eq(placements, 1,
+                "region : un placement refuse n'est tente qu'une fois -- c'est le motif des 690")
+            truthy(rawget(visual.overlay, "__color") ~= nil,
+                "region : et les autres etapes continuent d'etre posees")
+        end
+    end
+
+    -- P3-02. Verrouiller puis deverrouiller dans le MEME combat laissait une
+    -- attente que rien n'effacait.
+    do
+        NS.db.locked = false
+        mock.state.inCombat = false
+        NS:UpdateGridAnchorAppearance()
+        NS.pendingAnchorAppearance = false
+        mock.state.inCombat = true
+        NS.db.locked = true
+        NS:UpdateGridAnchorAppearance()
+        truthy(NS.pendingAnchorAppearance, "ancre : verrouiller en combat pose bien un report")
+        NS.db.locked = false
+        NS:UpdateGridAnchorAppearance()
+        falsy(NS.pendingAnchorAppearance,
+            "ancre : revenir a l'etat d'origine acquitte le report devenu sans objet")
+        mock.state.inCombat = false
+    end
+
+    -- P3-04. Le diagnostic de recharge : une erreur inventee sur succes, et la
+    -- vraie cause perdue sur refus.
+    do
+        local button = NS.buttons[1]
+        local def = NS.clickSpells and NS.clickSpells[1]
+        truthy(def, "recharge : un sort de dissipation est connu")
+
+        rawset(button.cooldown, "SetCooldownFromDurationObject", function() end)
+        NS:ApplySpellCooldown(button.cooldown, def)
+        local ok = NS.cooldownDiagnostics
+        truthy(ok and ok.applied, "recharge : une pose acceptee est notee comme telle")
+        eq(ok and ok.error, nil,
+            "recharge : et son champ d'erreur est VIDE, pas la chaine « nil »")
+
+        rawset(button.cooldown, "SetCooldownFromDurationObject", function()
+            error("cooldown refuse par le client")
+        end)
+        NS:ApplySpellCooldown(button.cooldown, def)
+        local refused = NS.cooldownDiagnostics
+        falsy(refused and refused.applied, "recharge : un refus est note comme refus")
+        truthy(refused and refused.error and refused.error:find("refuse", 1, true),
+            "recharge : la vraie cause survit, elle n'est plus ecrasee par « no duration »")
+        truthy(refused and refused.source,
+            "recharge : et la source de la duree est conservee -- une duree EXISTAIT")
+    end
+
+    -- P3-05. L'assistant suit la mise a l'echelle des autres fenetres.
+    do
+        truthy(NS.CreateSetupWizard, "assistant : le fichier est charge par la suite")
+        NS:CreateSetupWizard()
+        local wizard = NS.setupWizard
+        truthy(wizard, "assistant : la fenetre existe")
+        local known = false
+        for _, frame in ipairs(NS.uxWindows or {}) do
+            if frame == wizard then known = true end
+        end
+        truthy(known, "assistant : elle est inscrite a la mise a l'echelle commune")
+        truthy(rawget(wizard, "__scale"), "assistant : et une echelle lui a ete posee")
+    end
+
+    -- P3-06. L'infobulle des indices decrivait l'ancien systeme fixe.
+    for _, language in ipairs({ "enUS", "frFR" }) do
+        local tip = NS.LOCALES[language].TIP_CLICK_HINTS
+        falsy(tip:find("G, D ou C", 1, true) or tip:find("L, R, or C", 1, true),
+            "infobulle : elle n'annonce plus les trois lettres fixes en " .. language)
+        truthy(tip:find("1", 1, true) and tip:find("2", 1, true),
+            "infobulle : elle annonce le repli sur le numero en " .. language)
+    end
 end
 
 --------------------------------------------------------------------------

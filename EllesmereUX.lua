@@ -135,6 +135,14 @@ local function fitToScreen(frame, width, height)
     windows[#windows + 1] = frame
 end
 
+-- Le meme calcul, ouvert aux fichiers voisins : l'assistant de premiere
+-- installation vit dans SetupWizard.lua et n'avait donc aucun moyen d'y
+-- entrer. Il est reste seul a 600 x 470 pendant que les cinq autres fenetres
+-- se reduisaient.
+function NS:RegisterUXWindow(frame, width, height)
+    if frame then fitToScreen(frame, width, height) end
+end
+
 -- Rejoue le calcul pour chaque fenetre deja construite. Appele par les deux
 -- evenements qui changent la place disponible.
 function NS:RefitWindows()
@@ -2529,6 +2537,15 @@ function NS:ShowProfileTransfer()
         frame.importBox:SetHeight(400)
         frame.importBox:SetTextInsets(8, 8, 8, 8)
         frame.importBox:SetScript("OnEscapePressed", function(box) box:ClearFocus() end)
+        -- Modifier le texte n'invalidait PAS l'analyse : Appliquer ecrivait
+        -- alors un profil que le joueur n'avait plus sous les yeux. Coller un
+        -- export a 22 px, analyser, corriger le texte a 40, appliquer --
+        -- l'addon posait 22. Une confirmation ne vaut que pour le texte sur
+        -- lequel elle a ete donnee.
+        frame.importBox:SetScript("OnTextChanged", function()
+            if not frame.pendingImport then return end
+            self:ResetProfileImport(self.L.IMPORT_STALE)
+        end)
         importScroll:SetScrollChild(frame.importBox)
 
         frame.result = text(frame, "", 11, C.text)
@@ -2548,12 +2565,13 @@ function NS:ShowProfileTransfer()
 
         frame.analyze:SetScript("OnClick", function()
             local analysis, reason = self:AnalyzeProfileImport(frame.importBox:GetText())
-            frame.pendingImport = analysis
             if not analysis then
-                frame.result:SetText(reason or "")
-                frame.apply:Hide()
+                self:ResetProfileImport(reason or "")
                 return
             end
+            frame.pendingImport = analysis
+            -- Le texte SUR LEQUEL la confirmation est donnee.
+            frame.pendingText = frame.importBox:GetText()
             -- P2 de l'audit du 30/08 : un import qui change presque tout
             -- produisait des dizaines de lignes dans un texte sans hauteur
             -- bornee. Il traversait les boutons de confirmation puis sortait
@@ -2605,16 +2623,21 @@ function NS:ShowProfileTransfer()
 
         frame.apply:SetScript("OnClick", function()
             if not frame.pendingImport then return end
+            -- Ceinture : un chemin de saisie qui n'emettrait pas OnTextChanged
+            -- laisserait passer la meme divergence. On compare le texte a
+            -- celui sur lequel la confirmation a ete donnee.
+            if frame.pendingText ~= frame.importBox:GetText() then
+                self:ResetProfileImport(self.L.IMPORT_STALE)
+                return
+            end
             if not self:ApplyProfileImport(frame.pendingImport) then
                 -- Refuse en combat : l'apercu RESTE, avec son bouton grise.
                 -- L'effacer obligerait a recoller le texte apres le combat.
                 self:RefreshProfileTransferState()
                 return
             end
-            frame.pendingImport = nil
-            frame.apply:Hide()
+            self:ResetProfileImport("")
             frame.exportBox:SetText(self:ExportProfile())
-            frame.result:SetText("")
         end)
 
         fitToScreen(frame, 700, 520)
@@ -2626,11 +2649,21 @@ function NS:ShowProfileTransfer()
 
     frame.exportBox:SetText(self:ExportProfile())
     frame.importBox:SetText("")
-    frame.result:SetText("")
-    frame.pendingImport = nil
-    frame.apply:Hide()
+    self:ResetProfileImport("")
     frame:Show()
     frame.exportBox:HighlightText()
+end
+
+-- Quatre chemins remettaient l'import a zero, chacun a sa facon : l'un
+-- oubliait le motif du refus, un autre le bouton, un troisieme le texte de
+-- reference. Un seul endroit les fait tous ensemble.
+function NS:ResetProfileImport(message)
+    local frame = self.profileTransferFrame
+    if not frame then return end
+    frame.pendingImport, frame.pendingText = nil, nil
+    frame.apply:Hide()
+    if message ~= nil then frame.result:SetText(message) end
+    self:RefreshProfileTransferState()
 end
 
 function NS:RefreshOptionsStatus()

@@ -191,14 +191,22 @@ function NS:ApplyClickHint(hint, plate, hintText, size)
         -- exactement le defaut de police de la 1.5.35, au meme endroit qu'il
         -- avait ete corrige ailleurs.
         if not hint.textRefused and hint.SetText then
-            if tryCall(hint.SetText, hint, hintText) then
+            local wrote, why = tryCall(hint.SetText, hint, hintText)
+            if wrote then
                 local face = self.GetUXFont and self:GetUXFont()
                 if face and hint.SetFont then tryCall(hint.SetFont, hint, face, font, "OUTLINE") end
             else
                 -- L'objet ne redevient jamais accessible. Retenir le refus
                 -- evite de le rejouer a chaque passe -- six cent quatre-vingt-
                 -- dix fois par cle, trois fois deja dans cet addon.
+                -- Le pcall de l'etape REUSSIT quand on absorbe l'erreur ici :
+                -- l'indice disparaissait donc avec un diagnostic parfaitement
+                -- sain. Ne pas tracer un refus, c'est le rendre introuvable --
+                -- et c'est exactement ce qui a laisse celui du 31/08 dormir
+                -- dans le grabber pendant que le rapport annoncait zero.
                 hint.textRefused = true
+                hint.regionRefused = true
+                if self.NoteStyleFailure then self:NoteStyleFailure(why, 1) end
                 return false
             end
         elseif hint.textRefused then
@@ -345,14 +353,18 @@ function NS:UpdateGridAnchorAppearance(combatOverride)
     -- evenements de combat : un report etait donc inscrit a chaque pull, pour
     -- une valeur qui n'avait pas bouge. Troisieme fois que ce motif se paie --
     -- apres le niveau de cadre et l'etat de la souris des visuels d'aura.
-    if anchor.mouseEnabled == nil or anchor.mouseEnabled ~= shown then
-        if InCombatLockdown and InCombatLockdown() then
-            self:MarkPending("pendingAnchorAppearance")
-        else
-            anchor:EnableMouse(shown)
-            anchor.mouseEnabled = shown
-            self.pendingAnchorAppearance = false
-        end
+    if anchor.mouseEnabled ~= nil and anchor.mouseEnabled == shown then
+        -- L'etat demande est deja celui de l'ancre. Un report inscrit plus tot
+        -- dans le MEME combat n'a donc plus rien a appliquer : verrouiller
+        -- puis deverrouiller avant la fin du combat laissait sinon une attente
+        -- que rien n'effacait, annoncee aux combats suivants.
+        self.pendingAnchorAppearance = false
+    elseif InCombatLockdown and InCombatLockdown() then
+        self:MarkPending("pendingAnchorAppearance")
+    else
+        anchor:EnableMouse(shown)
+        anchor.mouseEnabled = shown
+        self.pendingAnchorAppearance = false
     end
     if anchor.handle then anchor.handle:SetShown(shown) end
     if anchor.mark then anchor.mark:SetShown(shown) end
@@ -951,21 +963,28 @@ function NS:StyleAuraVisual(button, auraType, visual)
     step(function()
         hintFits = self:ApplyClickHint(visual.clickHint, visual.clickHintPlate, visualHint)
     end)
+    -- Retenir le refus du TEXTE ne suffisait pas : le placement et l'affichage
+    -- de la meme region repartaient a chaque passe, et se faisaient refuser a
+    -- chaque passe. C'est le motif des 690, sur les operations voisines. Une
+    -- region dont le client refuse une operation est abandonnee EN ENTIER,
+    -- pas operation par operation -- l'objet ne redevient jamais accessible.
+    local hintUsable = visual.clickHint and not visual.clickHint.regionRefused
+    local plateUsable = visual.clickHintPlate and not visual.clickHintPlate.regionRefused
     local hintVisible = hintShown and hintFits and visualHint ~= ""
-    if visual.clickHint then
-        step(function()
+    if hintUsable then
+        if not step(function()
             visual.clickHint:ClearAllPoints()
             visual.clickHint:SetPoint("TOPLEFT", button, "TOPLEFT", 2 + (hintOffset or 0), -1)
             -- Manual abilities use an exclamation mark, never a click letter.
             visual.clickHint:SetShown(hintVisible)
-        end)
+        end) then visual.clickHint.regionRefused = true end
     end
-    if visual.clickHintPlate then
-        step(function()
+    if plateUsable then
+        if not step(function()
             visual.clickHintPlate:ClearAllPoints()
             visual.clickHintPlate:SetPoint("TOPLEFT", button, "TOPLEFT", 1 + (hintOffset or 0), -1)
             visual.clickHintPlate:SetShown(hintVisible)
-        end)
+        end) then visual.clickHintPlate.regionRefused = true end
     end
     -- Nos deux couches se placaient par rapport au niveau DEMANDE, en supposant
     -- que la demande avait ete honoree. Quand le client la refuse -- 690 fois
@@ -1962,14 +1981,27 @@ function NS:ApplySpellCooldown(cooldown, def, durationCache)
     end
     if entry and entry.duration then
         local applied, failure = pcall(cooldown.SetCooldownFromDurationObject, cooldown, entry.duration, true)
+        if applied then
+            -- « applied and nil or tostring(failure) » rendait la CHAINE « nil »
+            -- sur un succes : en Lua, « x and nil » retombe toujours sur le
+            -- « or ». Le rapport annoncait donc une erreur nommee nil a chaque
+            -- recharge posee correctement.
+            self.cooldownDiagnostics = {
+                spellID = def.id, source = entry.source,
+                active = entry.active, applied = true,
+            }
+            return entry.active == nil and true or entry.active
+        end
+        -- Une duree EXISTE, c'est son application qui a ete refusee. La cause
+        -- etait ecrite ici puis immediatement ecrasee par « no duration » --
+        -- le diagnostic designait l'absence de donnee la ou le client avait
+        -- refuse, et c'est la question meme qu'on lui pose.
+        clearCooldown()
         self.cooldownDiagnostics = {
-            spellID = def.id,
-            source = entry.source,
-            active = entry.active,
-            applied = applied,
-            error = applied and nil or tostring(failure),
+            spellID = def.id, source = entry.source, active = entry.active,
+            applied = false, error = tostring(failure),
         }
-        if applied then return entry.active == nil and true or entry.active end
+        return nil
     end
     clearCooldown()
     self.cooldownDiagnostics = { spellID = def.id, active = false, applied = false, error = "no duration" }

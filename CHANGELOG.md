@@ -6,6 +6,46 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.6.27
+
+**Audit externe de la 1.6.26.** Huit constats, tous verifies dans le code avant
+correction.
+
+**Un import pouvait ecrire un profil que le joueur n'avait plus sous les yeux.**
+Modifier le texte colle n'invalidait pas l'analyse : coller un export a 22 px,
+analyser, corriger le texte a 40, appliquer -- l'addon posait 22. Une
+confirmation ne vaut desormais que pour le texte sur lequel elle a ete donnee,
+et ce texte est compare une seconde fois au moment d'ecrire, pour le cas ou une
+saisie n'emettrait pas l'evenement attendu.
+
+**Une region refusee par le client est abandonnee EN ENTIER.** Retenir le refus
+du texte ne suffisait pas : le placement et l'affichage de la meme region
+repartaient a chaque passe et se faisaient refuser a chaque passe. C'est le
+motif des six cent quatre-vingt-dix, sur les operations voisines de celle qu'on
+venait de corriger. Quatrieme fois qu'il se paie.
+
+**Un refus absorbe laissait un diagnostic parfaitement sain.** Le `pcall` de
+l'etape REUSSIT quand l'erreur est interceptee plus bas : l'indice disparaissait
+sans qu'aucun compteur ne bouge. C'est exactement ce qui a laisse le refus du
+31/08 dormir dans le grabber pendant que le rapport annoncait zero. Il est
+compte, avec sa cause et son contexte.
+
+**Le diagnostic de recharge se trompait deux fois.**
+`error = applied and nil or tostring(failure)` rendait la CHAINE « nil » sur un
+succes -- en Lua, `x and nil` retombe toujours sur le `or`. Et sur un refus, la
+vraie cause etait ecrite puis immediatement ecrasee par « no duration », alors
+qu'une duree existait : c'est son application qui avait ete refusee. Le rapport
+designait l'absence de donnee la ou le client avait dit non.
+
+**Et le reste.**
+
+- Verrouiller puis deverrouiller la grille dans le MEME combat laissait un report que rien n'effacait, annonce aux combats suivants. Un report devenu sans objet s'acquitte.
+- Le motif « pas pendant un combat » de l'import survivait a une analyse invalide et a une reouverture de la fenetre. Quatre chemins remettaient l'import a zero, chacun a sa facon ; il n'y en a plus qu'un.
+- L'assistant de premiere installation restait a 600 x 470 pendant que les cinq autres fenetres se reduisaient : il vit dans un autre fichier et n'avait aucun moyen d'entrer dans la mise a l'echelle commune. Elle lui est ouverte.
+- L'infobulle des indices de clic annoncait encore « G, D ou C », le systeme fixe d'avant la 1.6.18. Elle decrit les combinaisons, les initiales de modificateurs et le repli sur le numero.
+- **L'assistant etait exempte du controle de couverture** comme « sans logique a verifier ». Il en a. Il est charge et teste, et l'exemption tombe -- au passage, le controle ne reconnaissait qu'une des deux facons de charger un fichier, et aurait donc accuse un fichier reellement execute.
+- Tests : 1 680 a 1 717.
+
 ## 1.6.26
 
 **`SetText` partait nu.** Releve en jeu le 31/08/2026 :

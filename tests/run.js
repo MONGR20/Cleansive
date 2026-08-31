@@ -427,7 +427,6 @@ const coverageOffenders = [];
   // Deliberate exclusions, each with the reason it is not in FILES.
   const excused = {
     "EllesmereUX.lua": "charge a la fin de spec.lua, apres les bouchons d'interface",
-    "SetupWizard.lua": "assistant de premier lancement, sans logique a verifier",
   };
   const tocPath = path.join(addon, "Cleansive.toc");
   const specPath = path.join(here, "spec.lua");
@@ -436,7 +435,11 @@ const coverageOffenders = [];
       .map(l => l.trim()).filter(l => l.endsWith(".lua"));
     const spec = fs.readFileSync(specPath, "utf8");
     for (const file of declared) {
-      if (spec.includes('"' + file + '"')) continue;
+      // Deux orthographes chargent un fichier : son nom dans la liste FILES,
+      // et « ADDON .. "/Nom.lua" » pour ceux qui se chargent a la fin. Le
+      // controle ne connaissait que la premiere, et aurait donc accuse un
+      // fichier reellement execute.
+      if (spec.includes('"' + file + '"') || spec.includes('"/' + file + '"')) continue;
       if (excused[file]) continue;
       coverageOffenders.push(`${file} est charge par l'addon et par aucun test`);
     }

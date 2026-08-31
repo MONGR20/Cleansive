@@ -17,6 +17,11 @@ end
 function NS:CreateSetupWizard()
     local frame = CreateFrame("Frame", "CleansiveSetupWizard", UIParent)
     frame:SetSize(600, 470)
+    -- Cette fenetre n'etait inscrite nulle part : RefitWindows, appele aux
+    -- changements de resolution et d'echelle, ne la voyait pas. Rester a
+    -- l'ecran borne la POSITION, jamais la taille -- sur un petit espace
+    -- logique elle depassait sans se reduire.
+    if NS.RegisterUXWindow then NS:RegisterUXWindow(frame, 600, 470) end
     frame:SetPoint("CENTER")
     frame:SetFrameStrata("FULLSCREEN_DIALOG")
     frame:SetClampedToScreen(true)
