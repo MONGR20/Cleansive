@@ -243,6 +243,38 @@ end
 -- twice, spaced, and no more, because a permanent refusal must not loop.
 local MAX_SOUND_RETRIES = 2
 
+-- C_UnitAuras.AddAuraSound porte HasRestrictions=true dans les definitions de
+-- 12.1. Ce que ca veut dire EN PRATIQUE, seuls les releves le disent :
+--
+--   1.6.34, cle mythique, lock=0 / ChallengeMode,Map,Chat : 46/46 poses,
+--   zero action bloquee. L'appel PASSE sous ChallengeMode, Map et Chat.
+--   1.6.36, lock=1 / Combat,Encounter,Map,Chat : 210 actions bloquees, pile
+--   dans registerBatch. L'appel est REFUSE en combat.
+--
+-- Attendre un masque nul, comme le suggerait l'audit, tuerait les alertes
+-- pendant toute une cle : Map et Chat sont actives dans 100 % des contextes
+-- releves, ChallengeMode d'un bout a l'autre. La garde porte donc sur ce qui
+-- refuse -- le verrou de combat -- plus Encounter par precaution : sans preuve
+-- pour celle-la, mais un report de quelques secondes au pull ne coute rien,
+-- alors qu'une nouvelle serie d'actions bloquees couterait une version.
+-- Si un releve montre un refus sous un autre type, on l'ajoute ici.
+local SOUND_ADD_BLOCKERS = { "Combat", "Encounter" }
+
+function NS:AddAuraSoundBlocked()
+    if InCombatLockdown and InCombatLockdown() then return true end
+    local api = C_RestrictedActions
+    local types = Enum and Enum.AddOnRestrictionType
+    if not (api and api.IsAddOnRestrictionActive and types) then return false end
+    for _, name in ipairs(SOUND_ADD_BLOCKERS) do
+        local value = types[name]
+        if value ~= nil then
+            local ok, active = pcall(api.IsAddOnRestrictionActive, value)
+            if ok and active then return true end
+        end
+    end
+    return false
+end
+
 function NS:ScheduleAuraSoundRetry()
     if InCombatLockdown and InCombatLockdown() then return end
     local attempts = self.auraSoundRetries or 0
@@ -458,7 +490,11 @@ function NS:RefreshAuraSoundRegistrations(reason)
             -- all, and the missing sounds stayed missing until some unrelated
             -- event happened to request a refresh. Ask here instead.
             self.auraSoundFingerprint = nil
-            self:ScheduleAuraSoundRetry()
+            -- Une passe reportee par une restriction n'a pas a se rejouer a
+            -- l'aveugle : la levee passe par FlushCombatUpdates, qui demande
+            -- deja un rafraichissement. Une minuterie ici ne ferait que
+            -- retenter sous la meme restriction.
+            if not diagnostics.deferred then self:ScheduleAuraSoundRetry() end
         end
         if diagnostics.attempted >= SOUND_WARNING_THRESHOLD and not self.soundLoadWarningShown then
             self.soundLoadWarningShown = true
@@ -466,8 +502,34 @@ function NS:RefreshAuraSoundRegistrations(reason)
         end
     end
 
+    -- Les ajouts sont reportes ; les anciennes poignees restent en place, donc
+    -- tout ce qui sonnait continue de sonner. Ce qui n'avait pas encore de
+    -- poignee attend la levee -- il attendait deja, l'appel echouait de toute
+    -- facon ; il n'echoue plus en produisant une action bloquee.
+    local function deferAdds(fromIndex)
+        diagnostics.deferred = self:RestrictionSnapshot() or "restricted"
+        diagnostics.deferredAdds = (diagnostics.deferredAdds or 0) + (#pendingAdds - fromIndex + 1)
+        for index = fromIndex, #pendingAdds do
+            local entry = pendingAdds[index]
+            if entry.oldHandle then
+                registered[entry.key] = true
+                diagnostics.registered = diagnostics.registered + 1
+                diagnostics.reused = diagnostics.reused + 1
+                diagnostics.preserved = diagnostics.preserved + 1
+                replacementFailures = replacementFailures + 1
+            end
+        end
+        nextAdd = #pendingAdds + 1
+        finalize()
+    end
+
     local function registerBatch()
         if self.auraSoundGeneration ~= generation then return end
+        -- Avant CHAQUE lot, pas seulement le premier : les lots s'etalent sur
+        -- plusieurs images, et le combat peut commencer entre deux.
+        if nextAdd <= #pendingAdds and self:AddAuraSoundBlocked() then
+            return deferAdds(nextAdd)
+        end
         local batchSize = C_Timer and C_Timer.After and 180 or #pendingAdds
         local lastAdd = math.min(#pendingAdds, nextAdd + batchSize - 1)
         if lastAdd >= nextAdd then diagnostics.batches = diagnostics.batches + 1 end

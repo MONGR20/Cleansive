@@ -6,6 +6,45 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.6.38
+
+**`AddAuraSound` est refuse en combat, et l'addon l'appelait quand meme.**
+Releve de la 1.6.36 : **210 actions bloquees** `UNKNOWN()`, contexte
+`lock=1 / Combat,Encounter,Map,Chat`, pile dans `registerBatch`. Un familier
+invoque en plein combat demandait un rafraichissement du registre sonore, la
+minuterie de 0,10 s le lancait en combat, et chaque `AddAuraSound` produisait
+une action bloquee. Le `pcall` absorbait le retour Lua ; il n'empechait ni
+`ADDON_ACTION_BLOCKED` ni `!BugGrabber`. La suite ne voyait rien : son bouchon
+autorisait toujours l'appel.
+
+- Les AJOUTS sont reportes tant que le verrou de combat -- ou Encounter, par
+  precaution -- est actif. La garde est relue avant CHAQUE lot, pas seulement le
+  premier : les lots s'etalent sur plusieurs images et le combat peut commencer
+  entre deux.
+- Les alertes en place restent en place. Un changement de canal en combat
+  attend ; tout ce qui sonnait continue de sonner.
+- Aucune reprise aveugle sous restriction : la levee passe par
+  `FlushCombatUpdates`, qui demande deja un rafraichissement.
+- Le rapport distingue un report d'un echec : `soundDeferred adds=N context=...`.
+- Le bouchon refuse desormais `AddAuraSound` la ou les releves ont montre un
+  refus, et compte chaque action bloquee. Neuf assertions le prouvent.
+
+**Ce que la 1.6.38 ne fait PAS, a dessein.** L'audit recommandait d'attendre
+un masque de restrictions nul avant tout ajout. Le releve de la 1.6.34 dit le
+contraire : 46/46 alertes posees sous `lock=0 / ChallengeMode,Map,Chat`, zero
+action bloquee. Map et Chat sont actives dans 100 % des contextes releves et
+ChallengeMode d'un bout a l'autre d'une cle : attendre un masque nul aurait
+tue les alertes pendant toute la cle. La garde porte sur ce qui refuse. Un test
+tient cette decision -- la regle « masque nul » fait perdre ses 46 alertes a la
+cle -- et si un releve montre un refus sous un autre type, on l'ajoute a la
+liste, elle est faite pour ca.
+
+Verifie par trois injections : la garde retiree rend 46 actions bloquees par
+scene ; la regle « masque nul » rend une cle muette ; une reprise aveugle apres
+report est attrapee.
+
+- Tests : 1 796 a 1 819.
+
 ## 1.6.37
 
 **Relecture du chantier masque, de la 1.6.34 a la 1.6.36.** Trois choses que

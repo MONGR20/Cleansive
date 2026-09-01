@@ -227,6 +227,7 @@ M.SECRET = SECRET
 -- Mutable state the tests drive.
 state = {
     inCombat = false,
+    blockedActions = 0,             -- appels d'API restreinte faits sous restriction
     secretMode = false,
     identityRestricted = false,     -- UnitGUID, UnitClass, UnitFullName illisibles
     nameRestricted = false,         -- UnitName illisible (drapeau distinct chez Blizzard)
@@ -547,7 +548,21 @@ function M.install(_G)
     _G.C_UnitAuras = {
         GetDebuffDataByIndex = function(unit, index) return (state.debuffs[unit] or {})[index] end,
         GetAuraApplicationDisplayCount = function() return 1 end,
-        AddAuraSound = function() return math.random(1, 1e6) end,
+        -- HasRestrictions=true. Le bouchon autorisait toujours l'appel : la
+        -- suite ne pouvait pas voir les 210 actions bloquees de la 1.6.36.
+        -- Refuse dans ce que les releves ont montre refuser -- le combat --
+        -- plus Encounter, comme l'addon. Un refus = une action bloquee comptee,
+        -- exactement ce que le client fait, pcall ou pas.
+        AddAuraSound = function()
+            local types = _G.Enum and _G.Enum.AddOnRestrictionType
+            local blocked = state.inCombat
+                or (types and (state.restrictions[types.Combat] or state.restrictions[types.Encounter]))
+            if blocked then
+                state.blockedActions = state.blockedActions + 1
+                return nil
+            end
+            return math.random(1, 1e6)
+        end,
         RemoveAuraSound = function() return true end,
     }
     _G.C_AddOns = {
@@ -629,6 +644,7 @@ end
 
 function M.reset()
     state.inCombat = false
+    state.blockedActions = 0
     state.secretMode = false
     state.identityRestricted, state.comparisonRestricted = false, false
     state.nameRestricted = false

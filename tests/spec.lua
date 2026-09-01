@@ -3327,6 +3327,122 @@ do
 end
 
 --------------------------------------------------------------------------
+-- 1.6.38 : AddAuraSound n'est plus appele sous une restriction qui le refuse
+--
+-- Releve de la 1.6.36 : 210 actions bloquees, contexte lock=1 / Combat,
+-- Encounter,Map,Chat, pile dans registerBatch. Le pcall absorbait le retour
+-- Lua ; il n'empechait ni ADDON_ACTION_BLOCKED ni !BugGrabber. La suite ne
+-- voyait rien parce que son bouchon autorisait toujours l'appel.
+do
+    local types = Enum.AddOnRestrictionType
+    local adds, removes = 0, 0
+    -- Les vraies fonctions sont capturees UNE fois : C_UnitAuras n'est construit
+    -- que par install(), jamais par reset(). Les recapturer a chaque scene
+    -- prenait le wrapper de la scene precedente, dont le « return realAdd(...) »
+    -- -- un appel terminal, donc sans debordement de pile -- se rappelait
+    -- lui-meme sans fin au premier son pose par un bloc ulterieur. La suite
+    -- pendait sans un mot. Les poignees, elles, survivent a freshProfile : une
+    -- scene qui ne les vide pas n'a plus rien a ajouter, donc rien a reporter.
+    local realAdd, realRemove = C_UnitAuras.AddAuraSound, C_UnitAuras.RemoveAuraSound
+    C_UnitAuras.AddAuraSound = function(...) adds = adds + 1 return realAdd(...) end
+    C_UnitAuras.RemoveAuraSound = function(...) removes = removes + 1 return realRemove(...) end
+    local function soundScene()
+        freshProfile("PALADIN")
+        knowSpells(4987)
+        NS:UpdateSpells()
+        mock.state.exists.party1 = true
+        mock.state.inCombat = false
+        mock.state.restrictions = {}
+        mock.state.blockedActions = 0
+        NS.auraSoundRefreshScheduled = false
+        NS.auraSoundRetries = 0
+        NS.auraSoundFingerprint = nil
+        NS.auraSoundHandles, NS.auraSoundRegistered = {}, {}
+        NS.auraSoundHandleChannels, NS.auraSoundOrphanHandles = {}, {}
+        NS.auraSoundDiagnostics = nil
+        NS.combatExitRefreshScheduled = false
+        mock.state.timers = {}
+    end
+    local realIsInGroup = IsInGroup
+    IsInGroup = function() return true end
+
+    -- 1. Sous ChallengeMode, Map et Chat -- une cle -- l'appel PASSE, et il
+    -- est fait. C'est la decision que le releve de la 1.6.34 impose : attendre
+    -- un masque nul aurait tue les alertes pendant toute la cle.
+    soundScene()
+    mock.state.restrictions = { [types.ChallengeMode] = true, [types.Map] = true, [types.Chat] = true }
+    adds = 0
+    local registered = NS:RefreshAuraSoundRegistrations("cle")
+    truthy(adds > 0, "son : sous ChallengeMode, Map et Chat, les alertes sont bien posees")
+    eq(mock.state.blockedActions, 0, "son : et aucune action bloquee")
+    eq(registered, NS.auraSoundDiagnostics.attempted, "son : registre complet dans la cle")
+    falsy(NS.auraSoundDiagnostics.deferred, "son : rien n'est reporte dans la cle")
+
+    -- 2. En combat : ZERO appel, zero action bloquee, un report nomme.
+    soundScene()
+    mock.state.inCombat = true
+    adds = 0
+    NS:RefreshAuraSoundRegistrations("combat")
+    eq(adds, 0, "son : en combat, aucun AddAuraSound n'est tente")
+    eq(mock.state.blockedActions, 0, "son : donc aucune action bloquee")
+    truthy(NS.auraSoundDiagnostics.deferred, "son : la passe est marquee reportee")
+    truthy((NS.auraSoundDiagnostics.deferredAdds or 0) > 0, "son : et compte ses ajouts en attente")
+    eq(NS.auraSoundRetries, 0, "son : aucune reprise aveugle n'est armee sous restriction")
+    eq(mock.timerCount(), 0, "son : et aucune minuterie de reprise")
+    truthy(string.find(NS:BuildDiagnosticsReport(), "soundDeferred adds=", 1, true),
+        "son : le rapport distingue un report d'un echec")
+
+    -- 3. Encounter sans verrou : reporte aussi, par precaution.
+    soundScene()
+    mock.state.restrictions = { [types.Encounter] = true }
+    adds = 0
+    NS:RefreshAuraSoundRegistrations("rencontre")
+    eq(adds, 0, "son : sous Encounter, aucun AddAuraSound non plus")
+    eq(mock.state.blockedActions, 0, "son : zero action bloquee sous Encounter")
+    -- Hors verrou de combat, ScheduleAuraSoundRetry ne se retient pas tout
+    -- seul : c'est le report qui doit lui dire de ne pas retenter a l'aveugle.
+    eq(NS.auraSoundRetries, 0, "son : sous Encounter, aucune reprise aveugle armee")
+    eq(mock.timerCount(), 0, "son : ni minuterie -- la levee passe par le flush")
+
+    -- 4. Les anciennes poignees survivent au report. Un changement de canal
+    -- en combat aurait remplace chaque paire ; les remplacements attendent,
+    -- les alertes en place continuent de sonner.
+    soundScene()
+    NS:RefreshAuraSoundRegistrations("hors combat")
+    local before = 0
+    for _ in pairs(NS.auraSoundHandles or {}) do before = before + 1 end
+    truthy(before > 0, "son : des poignees existent avant le combat")
+    NS.db.soundChannel = "SFX"
+    NS.auraSoundFingerprint = nil
+    mock.state.inCombat = true
+    adds, removes = 0, 0
+    NS:RefreshAuraSoundRegistrations("canal en combat")
+    eq(adds, 0, "son : le remplacement de canal attend la fin du combat")
+    eq(removes, 0, "son : et ne retire AUCUNE alerte en place")
+    local after = 0
+    for _ in pairs(NS.auraSoundHandles or {}) do after = after + 1 end
+    eq(after, before, "son : toutes les poignees d'avant sont encore la")
+
+    -- 5. La levee : PLAYER_REGEN_ENABLED -> flush -> rafraichissement -> tout
+    -- est pose, en une passe, et le report est efface.
+    mock.state.inCombat = false
+    adds = 0
+    local fire = NS.eventFrame:GetScript("OnEvent")
+    fire(NS.eventFrame, "PLAYER_REGEN_ENABLED")
+    for _ = 1, 4 do mock.runTimers() end
+    truthy(adds > 0, "son : la fin du combat rejoue les ajouts")
+    eq(NS.auraSoundDiagnostics.registered, NS.auraSoundDiagnostics.attempted,
+        "son : registre complet apres la levee")
+    falsy(NS.auraSoundDiagnostics.deferred, "son : plus rien n'est reporte")
+    eq(mock.state.blockedActions, 0, "son : toujours aucune action bloquee")
+
+    C_UnitAuras.AddAuraSound, C_UnitAuras.RemoveAuraSound = realAdd, realRemove
+    IsInGroup = realIsInGroup
+    NS.db.soundChannel = nil
+    mock.state.restrictions = {}
+end
+
+--------------------------------------------------------------------------
 -- 1.5.39 : un refus perime ne doit pas se lire comme un probleme actuel
 --------------------------------------------------------------------------
 do

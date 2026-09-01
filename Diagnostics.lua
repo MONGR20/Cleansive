@@ -354,6 +354,11 @@ function NS:SnapshotDiagnostics()
             -- still have it after the client has thrown the table away.
             error = sound.error,
             pending = sound.pending,
+            -- Un report par restriction n'est PAS un echec d'enregistrement :
+            -- le rapport doit les distinguer, sinon « pending=true » se lit
+            -- comme un registre casse.
+            deferred = sound.deferred,
+            deferredAdds = sound.deferredAdds,
             retries = sound.retries,
             added = sound.added,
             removed = sound.removed,
@@ -438,6 +443,11 @@ function NS:BuildDiagnosticsReport()
     lines[#lines + 1] = string.format("soundNative live=%s peak=%s",
         tostring(self.liveNativeSounds or 0), tostring(self.liveNativeSoundsPeak or 0))
     if sound.error then lines[#lines + 1] = "soundError=" .. tostring(sound.error) end
+    if liveSound.deferred or sound.deferred then
+        lines[#lines + 1] = string.format("soundDeferred adds=%s context=%s",
+            tostring(liveSound.deferredAdds or sound.deferredAdds or 0),
+            tostring(liveSound.deferred or sound.deferred))
+    end
 
     local peak = record.soundPeak
     if type(peak) == "table" then
