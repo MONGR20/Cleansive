@@ -1,4 +1,4 @@
-# Cleansive 1.6.34
+# Cleansive 1.6.35
 
 Cleansive is a standalone one-click cleansing addon for **World of Warcraft Retail 12.1** (`120100`). It provides a compact Decursive-style workflow with a dark, class-colored interface inspired by the clarity of Ellesmere UI. The interface follows the language of your WoW client, English or French; either can be picked from the General page at any time.
 
@@ -194,6 +194,7 @@ the reason on its own.
 
 ## Recent changes
 
+- **1.6.35** - the report now says how many refused regions got a second chance and how many took it. Writing that counter surfaced a real defect: a successful retry never cleared its mark, so yesterday's key could leave a region dark through tomorrow's, silently.
 - **1.6.34** - a mythic key holds ChallengeMode from start to finish, so every combat exit was replaying every refused region for nothing: 7 602 refusals, about sixty rounds of them. A refusal now remembers which restrictions were active, and only their release earns a retry.
 - **1.6.33** - a test claimed the restriction event never works during its own dispatch, but only checked that a timer existed. It now counts the calls: zero during the event, one after. No shipped code changed.
 - **1.6.32** - the restriction API answers false while its own change event is being dispatched, so classifying a refusal from inside that handler would call it permanent. The deferral that protects us is now pinned by a test.

@@ -8834,6 +8834,58 @@ do
         victim.regionRefused = nil
     end
 
+    -- Une tentative qui REUSSIT efface la marque. Sans cela, la marque de la
+    -- cle d'hier -- prise sous ChallengeMode, Map et Chat -- bloquerait la
+    -- region a la cle de demain SANS jamais la retenter : les memes
+    -- restrictions seraient actives, donc aucune n'aurait « ete levee ». La
+    -- region resterait eteinte, et pas un refus au releve pour le dire.
+    do
+        local types = Enum.AddOnRestrictionType
+        local victim = visuals and visuals[4] or visual
+        victim.regionRefused = nil
+        NS:ResetDiagnostics()
+        local refuse, tries = true, 0
+        rawset(victim.overlay, "SetColorTexture", function()
+            tries = tries + 1
+            if refuse then
+                error("Attempt to access forbidden object from code tainted by an AddOn")
+            end
+        end)
+
+        -- Cle 1 : la region refuse sous ChallengeMode.
+        mock.state.inCombat = false
+        mock.state.restrictions = { [types.ChallengeMode] = true }
+        NS:RefreshRestrictionMask()
+        NS:StyleAuraVisual(button, auraType, victim)
+        truthy(type(victim.regionRefused.overlay) == "number",
+            "cycle : marquee avec le masque de la premiere cle")
+
+        -- Fin de cle 1 : la levee rend une chance, et cette fois ca passe.
+        refuse = false
+        mock.state.restrictions = {}
+        NS:RefreshRestrictionMask()
+        NS:StyleAuraVisual(button, auraType, victim)
+        falsy(victim.regionRefused.overlay,
+            "cycle : la tentative reussit, la marque est EFFACEE")
+        local retry = NS:GetDiagnostics().styleRetry
+        eq(retry and retry.granted, 1, "cycle : une chance accordee, comptee")
+        eq(retry and retry.recovered, 1, "cycle : et une reprise, comptee")
+
+        -- Cle 2, memes restrictions qu'a la cle 1. Sans effacement, la vieille
+        -- marque aurait dit « rien n'a ete leve depuis » et la region n'aurait
+        -- jamais ete touchee.
+        mock.state.restrictions = { [types.ChallengeMode] = true }
+        NS:RefreshRestrictionMask()
+        local before = tries
+        NS:StyleAuraVisual(button, auraType, victim)
+        eq(tries, before + 1, "cycle : la deuxieme cle retente bel et bien la region")
+
+        rawset(victim.overlay, "SetColorTexture", function() end)
+        victim.regionRefused = nil
+        mock.state.restrictions = {}
+        NS:RefreshRestrictionMask()
+    end
+
     -- L'evenement REEL de levee defere du travail ; celui d'activation, non.
     do
         NS.combatExitRefreshScheduled = false

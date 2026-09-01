@@ -6,6 +6,38 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.6.35
+
+**Le compteur demande, et ce qu'il a fait tomber.**
+
+Le releve du 1er septembre sur la 1.6.34 montrait 567 refus contre 7 602 -- la
+1.6.34 tenait -- mais aucune ligne « lock=0 / none » apres la fin de la cle.
+Deux lectures possibles, que le rapport ne distinguait pas : les regions ont ete
+retentees et ca a marche, ou aucune tentative n'a eu lieu et elles sont restees
+eteintes. Le silence avait la meme tete dans les deux cas.
+
+Le rapport porte desormais une ligne de plus :
+
+    styleRetry granted=<n> recovered=<n>
+
+« accordees », les regions a qui une levee a rendu une chance ; « reprises »,
+celles qui l'ont saisie.
+
+**Et en la posant, un defaut est tombe.** Une tentative qui reussissait
+n'effacait pas sa marque. Consequence : la marque de la cle d'hier -- prise sous
+ChallengeMode, Map et Chat -- aurait bloque la region a la cle de demain **sans
+jamais la retenter**, puisque les memes restrictions auraient ete actives et
+qu'aucune n'aurait « ete levee depuis ». La region serait restee eteinte d'un
+bout a l'autre, et pas un seul refus au releve pour le dire.
+
+Une reussite efface donc la marque. Le compteur ne se serait d'ailleurs jamais
+stabilise sans cela : il se serait rearme a chaque passe.
+
+Verifie en reinjectant les deux defauts separement : la marque qui survit fait
+tomber deux tests, la chance non comptee un troisieme.
+
+- Tests : 1 783 a 1 788.
+
 ## 1.6.34
 
 **Une levee ne rejoue que ce qu'elle libere vraiment.** Le relevé du 1er

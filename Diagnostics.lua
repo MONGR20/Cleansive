@@ -37,6 +37,7 @@ function NS:GetDiagnostics()
         record.styleCauses, record.styleCausesDropped = nil, nil
         record.styleContext, record.forbidden = nil, nil
         record.forbiddenVisuals, record.styleSkipped = nil, nil
+        record.styleRetry = nil
         record.soundPeak = nil
     end
     record.version = self.version
@@ -195,6 +196,26 @@ end
 -- exemple de chacune : c'est ce qui permet de dire lesquels sont partis et
 -- lesquels restent.
 local STYLE_CAUSE_LIMIT = 8
+
+-- Le releve du 01/09 sur la 1.6.34 a montre 567 refus et AUCUNE ligne
+-- « lock=0 / none » apres la fin de la cle. Deux lectures possibles, que le
+-- rapport ne distinguait pas : les regions ont ete retentees et ca a marche,
+-- ou aucune tentative n'a eu lieu et elles sont restees eteintes. Le silence
+-- avait la meme tete dans les deux cas.
+--
+-- « accordees » compte les regions a qui une levee a rendu une chance.
+-- « reprises » compte celles qui l'ont saisie. Deux nombres, plus de silence.
+function NS:NoteStyleRetry(recovered)
+    local record = self:GetDiagnostics()
+    if not record then return end
+    record.styleRetry = type(record.styleRetry) == "table" and record.styleRetry
+        or { granted = 0, recovered = 0 }
+    if recovered then
+        record.styleRetry.recovered = (record.styleRetry.recovered or 0) + 1
+    else
+        record.styleRetry.granted = (record.styleRetry.granted or 0) + 1
+    end
+end
 
 function NS:NoteStyleFailure(err, steps, operation)
     local record = self:GetDiagnostics()
@@ -451,6 +472,11 @@ function NS:BuildDiagnosticsReport()
     end
     if record.styleCausesDropped then
         lines[#lines + 1] = "styleCausesDropped=" .. tostring(record.styleCausesDropped)
+    end
+    if record.styleRetry then
+        lines[#lines + 1] = string.format("styleRetry granted=%s recovered=%s",
+            tostring(record.styleRetry.granted or 0),
+            tostring(record.styleRetry.recovered or 0))
     end
     for _, context in ipairs(sortedKeys(record.styleContext)) do
         lines[#lines + 1] = "styleContext " .. context .. " count=" .. tostring(record.styleContext[context])

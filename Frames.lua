@@ -134,7 +134,25 @@ function NS:RegionUsable(state, key)
     -- rencontre qui ouvraient une generation, donc qui rejouaient la totalite
     -- des regions refusees. Environ soixante tours pour rien.
     if mark == true then return false end
-    return self:RestrictionReleasedSince(mark)
+    if not self:RestrictionReleasedSince(mark) then return false end
+    if self.NoteStyleRetry then self:NoteStyleRetry(false) end
+    return true
+end
+
+-- Une tentative qui reussit doit EFFACER la marque, pas seulement passer.
+--
+-- Tant qu'elle restait posee, deux choses : le compteur de reprises se serait
+-- rearme a chaque passe, et surtout une marque de la cle d'hier -- prise sous
+-- ChallengeMode, Map et Chat -- aurait bloque la region a la cle de demain
+-- SANS jamais la retenter, puisque les memes restrictions seraient de nouveau
+-- actives et qu'aucune n'aurait « ete levee depuis ». La region serait restee
+-- eteinte tout du long, sans un seul refus au releve pour le dire.
+function NS:NoteRegionSuccess(state, key)
+    if not state then return end
+    local refused = state.regionRefused
+    if not (refused and refused[key]) then return end
+    refused[key] = nil
+    if self.NoteStyleRetry then self:NoteStyleRetry(true) end
 end
 
 -- Deux refus qui se ressemblent et qui n'appellent pas la meme reponse.
@@ -280,6 +298,8 @@ function NS:ApplyClickHint(hint, plate, hintText, size, state)
                 return false
             end
         end
+        -- Texte et police poses : la region repond de nouveau.
+        self:NoteRegionSuccess(state, "clickHint")
     end
     -- La plaque etait marquee refusee et sa marque n'etait jamais relue : six
     -- passes donnaient six SetSize refuses.
@@ -289,6 +309,7 @@ function NS:ApplyClickHint(hint, plate, hintText, size, state)
             self:NoteRegionRefusal(state, "clickHintPlate", reason, "SetSize")
             return false
         end
+        self:NoteRegionSuccess(state, "clickHintPlate")
     end
     return true
 end
@@ -323,7 +344,8 @@ function NS:ApplyCellFonts(button)
         if not self:RegionUsable(state, key) then return end
         local sized, reason = tryCall(region.SetFont, region,
             font, self:CellFontSize(role, size), flags or "")
-        if not sized then self:NoteRegionRefusal(state, key, reason, "SetFont") end
+        if sized then self:NoteRegionSuccess(state, key)
+        else self:NoteRegionRefusal(state, key, reason, "SetFont") end
         return sized
     end
     -- L'indice et sa plaque ne passent PAS par setFont : leur taille depend du
@@ -970,7 +992,8 @@ function NS:StyleAuraVisual(button, auraType, visual)
     local function styleRegion(key, operation, fn)
         if not self:RegionUsable(visual, key) then return false end
         local ok, why = pcall(fn)
-        if not ok then self:NoteRegionRefusal(visual, key, why, operation or key) end
+        if ok then self:NoteRegionSuccess(visual, key)
+        else self:NoteRegionRefusal(visual, key, why, operation or key) end
         return ok
     end
 
