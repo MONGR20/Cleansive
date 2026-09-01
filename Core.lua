@@ -1204,7 +1204,12 @@ function NS:FlushCombatUpdates()
         -- Retirer les bits tombes AVANT la passe : les refus qu'elle produira
         -- reconstruiront l'union avec leur propre masque.
         self.waitingRestrictionMask = self:RestrictionMaskKeepActive(waiting)
+        -- Hors distribution, MarkPending attribue le report au joueur. Ici la
+        -- cause est une levee de restriction, et le releve doit le dire.
+        local event = self.currentEvent
+        self.currentEvent = "RESTRICTION_RELEASED"
         self:MarkPending("pendingAuraStyle", true)
+        self.currentEvent = event
     end
 
     local profileChanged = false

@@ -152,10 +152,7 @@ function NS:NoteRegionSuccess(state, key)
     refused[key] = nil
     -- La marque etait forcement numerique : une marque definitive n'est jamais
     -- retentee. Cette reussite EST donc une reprise, et une seule.
-    if self.NoteStyleRetry then
-        self:NoteStyleRetry(false)
-        self:NoteStyleRetry(true)
-    end
+    if self.NoteStyleRetry then self:NoteStyleRetry(true) end
 end
 
 -- Deux refus qui se ressemblent et qui n'appellent pas la meme reponse.

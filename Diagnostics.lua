@@ -110,9 +110,6 @@ function NS:RefreshRestrictionMask()
     return self.restrictionMask
 end
 
--- Vrai si au moins une restriction presente au moment du refus est tombee
--- depuis. Une restriction qui S'AJOUTE ne redonne aucune chance : seule une
--- levee peut liberer l'objet.
 local function hasBit(mask, bit)
     return mask % (bit + bit) >= bit
 end
@@ -141,6 +138,9 @@ function NS:RestrictionMaskKeepActive(mask)
     return kept
 end
 
+-- Vrai si au moins une restriction presente au moment du refus est tombee
+-- depuis. Une restriction qui S'AJOUTE ne redonne aucune chance : seule une
+-- levee peut liberer l'objet.
 function NS:RestrictionReleasedSince(mark)
     if type(mark) ~= "number" or mark == 0 then return false end
     local current = self.restrictionMask or 0
@@ -229,20 +229,19 @@ local STYLE_CAUSE_LIMIT = 8
 -- ou aucune tentative n'a eu lieu et elles sont restees eteintes. Le silence
 -- avait la meme tete dans les deux cas.
 --
--- « accordees » compte les tentatives REELLEMENT rejouees, « reprises » celles
+-- « retentees » compte les tentatives REELLEMENT rejouees, « reprises » celles
 -- qui ont abouti. Compter les autorisations plutot que les issues doublait le
 -- chiffre : l'indice de clic passe par quatre gardes RegionUsable pour une
--- seule operation. Une issue, elle, ne peut arriver qu'une fois.
+-- seule operation. Une issue, elle, ne peut arriver qu'une fois -- et c'est
+-- pourquoi il n'y a qu'UN appel par issue, qui dit si elle a abouti.
 function NS:NoteStyleRetry(recovered)
     local record = self:GetDiagnostics()
     if not record then return end
-    record.styleRetry = type(record.styleRetry) == "table" and record.styleRetry
-        or { granted = 0, recovered = 0 }
-    if recovered then
-        record.styleRetry.recovered = (record.styleRetry.recovered or 0) + 1
-    else
-        record.styleRetry.granted = (record.styleRetry.granted or 0) + 1
-    end
+    local retry = type(record.styleRetry) == "table" and record.styleRetry
+        or { retried = 0, recovered = 0 }
+    record.styleRetry = retry
+    retry.retried = (retry.retried or 0) + 1
+    if recovered then retry.recovered = (retry.recovered or 0) + 1 end
 end
 
 function NS:NoteStyleFailure(err, steps, operation)
@@ -502,8 +501,8 @@ function NS:BuildDiagnosticsReport()
         lines[#lines + 1] = "styleCausesDropped=" .. tostring(record.styleCausesDropped)
     end
     if record.styleRetry then
-        lines[#lines + 1] = string.format("styleRetry granted=%s recovered=%s",
-            tostring(record.styleRetry.granted or 0),
+        lines[#lines + 1] = string.format("styleRetry retried=%s recovered=%s",
+            tostring(record.styleRetry.retried or 0),
             tostring(record.styleRetry.recovered or 0))
     end
     for _, context in ipairs(sortedKeys(record.styleContext)) do

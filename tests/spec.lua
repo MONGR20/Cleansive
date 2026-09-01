@@ -8868,7 +8868,7 @@ do
         falsy(victim.regionRefused.overlay,
             "cycle : la tentative reussit, la marque est EFFACEE")
         local retry = NS:GetDiagnostics().styleRetry
-        eq(retry and retry.granted, 1, "cycle : une chance accordee, comptee")
+        eq(retry and retry.retried, 1, "cycle : une tentative rejouee, comptee")
         eq(retry and retry.recovered, 1, "cycle : et une reprise, comptee")
 
         -- Cle 2, memes restrictions qu'a la cle 1. Sans effacement, la vieille
@@ -8916,7 +8916,7 @@ do
         NS:RefreshRestrictionMask()
         NS:StyleAuraVisual(button, auraType, victim)
         local retry = NS:GetDiagnostics().styleRetry
-        eq(retry and retry.granted, 1, "indice : UNE chance accordee, pas deux")
+        eq(retry and retry.retried, 1, "indice : UNE tentative rejouee, pas deux")
         eq(retry and retry.recovered, 1, "indice : et une reprise")
 
         rawset(victim.clickHint, "SetText", function() end)
@@ -8983,6 +8983,11 @@ do
             mock.runTimers()
             truthy(styled > 0,
                 "cycle complet : la levee UTILE declenche bien une passe de style")
+            -- Le rearmement a lieu dans une minuterie, hors distribution : sans
+            -- cause posee, le releve l'aurait attribue au joueur.
+            local pending = NS:GetDiagnostics().pending.pendingAuraStyle
+            eq(pending and pending.lastCause, "RESTRICTION_RELEASED",
+                "cycle complet : le releve nomme la levee, pas le joueur")
         end)
         NS.UpdateAuraContainerConfiguration = real
         if not ok then error(err, 0) end
