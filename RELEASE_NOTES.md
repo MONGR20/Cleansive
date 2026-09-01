@@ -6,6 +6,31 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.6.37
+
+**Relecture du chantier masque, de la 1.6.34 a la 1.6.36.** Trois choses que
+j'aurais changees en le relisant a froid, changees.
+
+- Le compteur s'appelle desormais `styleRetry retried=N recovered=N`. « granted »
+  promettait « une chance donnee » alors que, depuis la 1.6.36, il mesure les
+  tentatives reellement rejouees. Une etiquette qui ne dit pas ce qu'elle
+  mesure, c'est la lecon de la 1.6.32 ; elle vaut aussi pour le rapport. Un seul
+  appel par issue, qui dit si elle a abouti -- le double appel pour une reussite
+  invitait a compter deux fois.
+- Le rearmement du report vit dans une minuterie, hors distribution
+  d'evenement : le releve l'attribuait **au joueur**. Il dit maintenant
+  `RESTRICTION_RELEASED`.
+- Le commentaire de `RestrictionReleasedSince` s'etait retrouve au-dessus de
+  `hasBit` quand les aides de masque ont ete inserees entre les deux.
+
+Ce qui n'a PAS ete change, a dessein : la relecture du masque a chaque refus
+(bornee au chemin d'echec), l'union des masques en attente qui sur-approxime
+(une passe pour rien, jamais un refus, et un nombre qui ne fait que
+sur-approximer ne peut pas deriver), et les deux bits qui representent le
+combat (l'API de restriction est neuve en 12.1).
+
+- Tests : 1 795 a 1 796.
+
 ## 1.6.36
 
 **Le drapeau d'attente etait un booleen, et le mauvais flux le consommait.**
