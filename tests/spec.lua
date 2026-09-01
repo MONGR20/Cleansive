@@ -66,6 +66,11 @@ local function freshProfile(class)
     mock.reset()
     CleansiveDB = nil
     NS.dbRoot, NS.db = nil, nil
+    -- mock.reset() vide la file des minuteries, pas les drapeaux que l'addon a
+    -- poses dessus. Un scenario qui declenche une sortie de combat sans drainer
+    -- sa minuterie laissait donc OnCombatEnded sortir immediatement dans le
+    -- scenario SUIVANT -- un faux echec pour qui ajouterait un test apres.
+    NS.combatExitRefreshScheduled = false
     NS.profileDefaults = NS.profileDefaults or {}
     NS:InitializeProfiles()
     NS.enabled = true
@@ -8785,6 +8790,29 @@ do
             "evenement : une restriction qui s'ACTIVE n'en ouvre aucune")
     end
 
+    -- Blizzard documente que IsAddOnRestrictionActive rend TOUJOURS faux
+    -- pendant la distribution de ADDON_RESTRICTION_STATE_CHANGED. Restyler
+    -- depuis l'evenement classerait donc « definitif » un refus encore
+    -- temporaire : les autres restrictions repondraient faux elles aussi.
+    -- Ce qui nous protege est le report par C_Timer -- une propriete indirecte,
+    -- donc a epingler.
+    do
+        NS:ResetDiagnostics()
+        NS.combatExitRefreshScheduled = false
+        mock.state.timers = {}
+        mock.state.restrictions[Enum.AddOnRestrictionType.Map] = true
+        local fire = NS.eventFrame:GetScript("OnEvent")
+        fire(NS.eventFrame, "ADDON_RESTRICTION_STATE_CHANGED", 0,
+            Enum.AddOnRestrictionState.Inactive)
+        truthy(#mock.state.timers > 0,
+            "levee : le travail est DIFFERE, jamais fait pendant la distribution")
+        mock.runTimers()
+        truthy(NS:AnyRestrictionActive(),
+            "levee : au moment ou il s'execute, les restrictions repondent de nouveau")
+        mock.state.restrictions = {}
+        NS.combatExitRefreshScheduled = false
+    end
+
     -- Le balayage de duree et la couche de libelles avaient droit au meme
     -- traitement que les autres regions, et ne l'avaient pas.
     do
@@ -8824,6 +8852,12 @@ do
         NS.db.enabledTypes.Magic = true
         transfer:Hide()
     end
+
+    -- La minuterie de sortie de combat est drainee plus haut, dans le controle
+    -- du report. Le garde-fou general est dans freshProfile : il remet le
+    -- drapeau a zero pour TOUS les scenarios. Aucune assertion ne peut le voir
+    -- -- rien ne suit ce bloc aujourd'hui -- et une assertion qui ne peut pas
+    -- virer au rouge n'est pas un test.
 end
 
 --------------------------------------------------------------------------

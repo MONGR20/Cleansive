@@ -1,4 +1,4 @@
-# Cleansive 1.6.31
+# Cleansive 1.6.32
 
 Cleansive is a standalone one-click cleansing addon for **World of Warcraft Retail 12.1** (`120100`). It provides a compact Decursive-style workflow with a dark, class-colored interface inspired by the clarity of Ellesmere UI. The interface follows the language of your WoW client, English or French; either can be picked from the General page at any time.
 
@@ -194,6 +194,7 @@ the reason on its own.
 
 ## Recent changes
 
+- **1.6.32** - the restriction API answers false while its own change event is being dispatched, so classifying a refusal from inside that handler would call it permanent. The deferral that protects us is now pinned by a test.
 - **1.6.31** - a mythic key keeps ChallengeMode active throughout, so "no combat lockdown" never meant "no restriction": 5 571 refusals were being condemned as permanent when a restriction could still lift. Every restriction now counts, and every path goes through the same rule.
 - **1.6.30** - one refusal memory for every region the engine lends us, instead of one flag per defect found. A refusal under combat lockdown is replayed; a refusal outside it is remembered, because combat was not the cause.
 - **1.6.29** - the refusal memory was stored ON the forbidden region, so it was refused too and the flag never held: 846 repeats in one session. It lives on our own table now. The cause 1.6.28 announced was wrong, and this entry says why.

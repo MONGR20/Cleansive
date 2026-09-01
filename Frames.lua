@@ -133,12 +133,17 @@ end
 
 -- Deux refus qui se ressemblent et qui n'appellent pas la meme reponse.
 --
--- PENDANT le verrou de combat, c'est peut-etre le combat qui refuse : on pose
--- un report et on rejouera a la fin, sans condamner la region.
+-- SOUS au moins une restriction -- les six de Retail 12.1, pas le seul verrou
+-- de combat -- c'est peut-etre elle qui refuse : on pose un report, on rejouera
+-- a sa levee, et la region n'est pas condamnee.
 --
--- HORS verrou, le combat n'y est pour rien. Les 5 571 refus du 31/08 portaient
--- tous « lock=0 » : les rejouer ne pouvait rien donner, et c'est exactement ce
--- que faisaient les 450 reports de cette session.
+-- SANS aucune restriction, plus rien ne peut liberer l'objet : le refus est
+-- definitif et aucun report n'est pose.
+--
+-- La 1.6.30 tranchait sur le seul « lock=0 » et condamnait donc les 5 571
+-- refus du 31/08, qui portaient tous ChallengeMode, Map et Chat actives. Une
+-- cle mythique garde ChallengeMode d'un bout a l'autre : « pas de verrou de
+-- combat » ne veut pas dire « libre ».
 function NS:NoteRegionRefusal(state, key, why, operation)
     -- TOUTE restriction, pas le seul verrou de combat. Une cle mythique garde
     -- ChallengeMode active d'un bout a l'autre, y compris entre les packs --

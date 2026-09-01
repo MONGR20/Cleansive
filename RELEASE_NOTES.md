@@ -6,6 +6,24 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.6.32
+
+**Les deux dernieres remarques de l'audit de la 1.6.31**, toutes deux mineures,
+plus une propriete que cet audit a mise au jour et qui meritait d'etre epinglee.
+
+- Le commentaire au-dessus de `NoteRegionRefusal` portait encore le raisonnement de la 1.6.30 -- « hors verrou de combat, les rejouer ne pouvait rien donner » -- juste au-dessus du code qui le corrige. Il dit maintenant la regle reelle : sous au moins une restriction, on rejoue a sa levee ; sans aucune, le refus est definitif.
+- Un scenario de test declenchait une sortie de combat sans drainer sa minuterie. `mock.reset()` vide la file, pas les drapeaux que l'addon a poses dessus : le scenario SUIVANT aurait vu `OnCombatEnded` sortir immediatement. Le drapeau est remis a zero pour tous les scenarios.
+
+**Et la propriete epinglee.** Blizzard documente que
+`IsAddOnRestrictionActive` rend **toujours faux** pendant la distribution de
+`ADDON_RESTRICTION_STATE_CHANGED`. Restyler depuis cet evenement classerait donc
+« definitif » un refus encore temporaire : les autres restrictions repondraient
+faux elles aussi. Ce qui nous protege est le report par `C_Timer` -- une
+propriete indirecte, que rien ne tenait. Un test la tient : le travail doit
+etre differe, jamais fait pendant la distribution.
+
+- Tests : 1 774 a 1 776.
+
 ## 1.6.31
 
 **« lock=0 » ne veut pas dire « aucune restriction ».** La 1.6.30 tranchait sur
