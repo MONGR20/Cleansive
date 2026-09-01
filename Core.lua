@@ -1193,6 +1193,19 @@ function NS:FlushCombatUpdates()
     -- regions refusees sous une restriction qui vient de tomber redeviennent
     -- tentables ici, et seulement ici.
     if self.RefreshRestrictionMask then self:RefreshRestrictionMask() end
+    -- Le drapeau d'attente est un booleen : le premier flux venu le consomme.
+    -- Une sortie de combat sous ChallengeMode le vidait donc AVANT la levee qui
+    -- comptait, et la vraie fin de cle ne restylait plus rien -- la marque
+    -- savait que ChallengeMode etait tombe, plus personne ne venait le lui
+    -- demander. L'union des masques en attente dit si une levee utile a eu
+    -- lieu ; alors seulement on rearme.
+    local waiting = self.waitingRestrictionMask
+    if waiting and waiting ~= 0 and self:RestrictionReleasedSince(waiting) then
+        -- Retirer les bits tombes AVANT la passe : les refus qu'elle produira
+        -- reconstruiront l'union avec leur propre masque.
+        self.waitingRestrictionMask = self:RestrictionMaskKeepActive(waiting)
+        self:MarkPending("pendingAuraStyle", true)
+    end
 
     local profileChanged = false
     if self.pendingProfileSwitch and self.LoadCurrentProfile then

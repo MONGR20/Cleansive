@@ -113,14 +113,40 @@ end
 -- Vrai si au moins une restriction presente au moment du refus est tombee
 -- depuis. Une restriction qui S'AJOUTE ne redonne aucune chance : seule une
 -- levee peut liberer l'objet.
+local function hasBit(mask, bit)
+    return mask % (bit + bit) >= bit
+end
+
+-- L'union des masques encore en attente. Un seul nombre suffit : si un bit y
+-- figure, au moins une region attend sa levee.
+function NS:RestrictionMaskUnion(a, b)
+    a, b = tonumber(a) or 0, tonumber(b) or 0
+    local union = 0
+    for index = 1, #RESTRICTION_BITS + 1 do
+        local bit = RESTRICTION_BITS[index] or LOCK_BIT
+        if hasBit(a, bit) or hasBit(b, bit) then union = union + bit end
+    end
+    return union
+end
+
+-- Ne garde que les bits ENCORE actifs. Ceux qui viennent de tomber ont servi :
+-- les garder ferait redeclencher une passe a chaque flush suivant.
+function NS:RestrictionMaskKeepActive(mask)
+    mask = tonumber(mask) or 0
+    local current, kept = self.restrictionMask or 0, 0
+    for index = 1, #RESTRICTION_BITS + 1 do
+        local bit = RESTRICTION_BITS[index] or LOCK_BIT
+        if hasBit(mask, bit) and hasBit(current, bit) then kept = kept + bit end
+    end
+    return kept
+end
+
 function NS:RestrictionReleasedSince(mark)
     if type(mark) ~= "number" or mark == 0 then return false end
     local current = self.restrictionMask or 0
     for index = 1, #RESTRICTION_BITS + 1 do
         local bit = RESTRICTION_BITS[index] or LOCK_BIT
-        if mark % (bit + bit) >= bit and current % (bit + bit) < bit then
-            return true
-        end
+        if hasBit(mark, bit) and not hasBit(current, bit) then return true end
     end
     return false
 end
@@ -203,8 +229,10 @@ local STYLE_CAUSE_LIMIT = 8
 -- ou aucune tentative n'a eu lieu et elles sont restees eteintes. Le silence
 -- avait la meme tete dans les deux cas.
 --
--- « accordees » compte les regions a qui une levee a rendu une chance.
--- « reprises » compte celles qui l'ont saisie. Deux nombres, plus de silence.
+-- « accordees » compte les tentatives REELLEMENT rejouees, « reprises » celles
+-- qui ont abouti. Compter les autorisations plutot que les issues doublait le
+-- chiffre : l'indice de clic passe par quatre gardes RegionUsable pour une
+-- seule operation. Une issue, elle, ne peut arriver qu'une fois.
 function NS:NoteStyleRetry(recovered)
     local record = self:GetDiagnostics()
     if not record then return end

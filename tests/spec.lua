@@ -8886,6 +8886,114 @@ do
         NS:RefreshRestrictionMask()
     end
 
+    -- L'indice de clic passe par QUATRE gardes RegionUsable pour une seule
+    -- operation. Tant que le compteur lisait les autorisations, une reprise
+    -- d'indice affichait deux chances accordees pour une seule reprise. Il lit
+    -- desormais les issues : une operation, une issue.
+    do
+        local types = Enum.AddOnRestrictionType
+        local victim = visuals and visuals[6] or visual
+        victim.regionRefused = nil
+        NS:ResetDiagnostics()
+        local previousHints = NS.db.showClickHints
+        NS.db.showClickHints = true
+
+        local refuse = true
+        rawset(victim.clickHint, "SetText", function()
+            if refuse then
+                error("Attempt to access forbidden object from code tainted by an AddOn")
+            end
+        end)
+        mock.state.inCombat = false
+        mock.state.restrictions = { [types.ChallengeMode] = true }
+        NS:RefreshRestrictionMask()
+        NS:ApplyClickHint(victim.clickHint, victim.clickHintPlate, "1", 22, victim)
+        truthy(type(victim.regionRefused.clickHint) == "number",
+            "indice : refuse sous ChallengeMode, marque temporairement")
+
+        refuse = false
+        mock.state.restrictions = {}
+        NS:RefreshRestrictionMask()
+        NS:StyleAuraVisual(button, auraType, victim)
+        local retry = NS:GetDiagnostics().styleRetry
+        eq(retry and retry.granted, 1, "indice : UNE chance accordee, pas deux")
+        eq(retry and retry.recovered, 1, "indice : et une reprise")
+
+        rawset(victim.clickHint, "SetText", function() end)
+        victim.regionRefused = nil
+        NS.db.showClickHints = previousHints
+        mock.state.restrictions = {}
+        NS:RefreshRestrictionMask()
+    end
+
+    -- Le cycle COMPLET, par le vrai repartiteur : refus -> levee sans rapport
+    -- -> levee utile. Les tests ci-dessus appellent StyleAuraVisual a la main
+    -- apres chaque changement de masque ; ils valident le masque et sautent
+    -- justement le drapeau d'attente, que FlushCombatUpdates consommait sans
+    -- condition. Le masque savait que ChallengeMode etait tombe ; plus personne
+    -- ne venait lui poser la question.
+    do
+        local types = Enum.AddOnRestrictionType
+        local victim = visuals and visuals[5] or visual
+        victim.regionRefused = nil
+        NS:ResetDiagnostics()
+        local fire = NS.eventFrame:GetScript("OnEvent")
+
+        -- Un refus sous ChallengeMode, hors combat.
+        mock.state.inCombat = false
+        mock.state.restrictions = { [types.ChallengeMode] = true }
+        NS:RefreshRestrictionMask()
+        rawset(victim.overlay, "SetColorTexture", function()
+            error("Attempt to access forbidden object from code tainted by an AddOn")
+        end)
+        NS:StyleAuraVisual(button, auraType, victim)
+        truthy(NS.pendingAuraStyle, "cycle complet : le refus pose une attente")
+
+        -- On compte les passes de style reelles, pas les minuteries.
+        local styled, real = 0, NS.UpdateAuraContainerConfiguration
+        -- force=true SEULEMENT : la passe sans restyle ne repose rien, et
+        -- RefreshAuraCandidateFilters en declenche une a chaque flush.
+        NS.UpdateAuraContainerConfiguration = function(selfRef, force)
+            if force then styled = styled + 1 end
+            return real(selfRef, force)
+        end
+        local ok, err = pcall(function()
+            -- Sortie de combat : ChallengeMode tient toujours. La passe peut
+            -- avoir lieu, mais l'attente ne doit pas etre perdue.
+            NS.combatExitRefreshScheduled = false
+            mock.state.timers = {}
+            fire(NS.eventFrame, "PLAYER_REGEN_ENABLED")
+            mock.runTimers()
+            falsy(NS.pendingAuraStyle,
+                "cycle complet : la passe de sortie de combat a consomme l'attente")
+            truthy(type(victim.regionRefused.overlay) == "number",
+                "cycle complet : et la region attend toujours ChallengeMode")
+
+            -- La cle se termine. LA, une passe de style est due -- et par le
+            -- style SEUL : tout autre drapeau est baisse, sinon la passe
+            -- pourrait avoir lieu pour une raison qui n'a rien a voir.
+            styled = 0
+            NS.pendingSpells, NS.pendingRoster, NS.pendingLayout = nil, nil, nil
+            NS.pendingProfileSwitch = nil
+            mock.state.restrictions = {}
+            NS.combatExitRefreshScheduled = false
+            mock.state.timers = {}
+            fire(NS.eventFrame, "ADDON_RESTRICTION_STATE_CHANGED", 0,
+                Enum.AddOnRestrictionState.Inactive)
+            mock.runTimers()
+            truthy(styled > 0,
+                "cycle complet : la levee UTILE declenche bien une passe de style")
+        end)
+        NS.UpdateAuraContainerConfiguration = real
+        if not ok then error(err, 0) end
+
+        rawset(victim.overlay, "SetColorTexture", function() end)
+        victim.regionRefused = nil
+        NS.combatExitRefreshScheduled = false
+        mock.state.restrictions = {}
+        NS:RefreshRestrictionMask()
+    end
+
     -- L'evenement REEL de levee defere du travail ; celui d'activation, non.
     do
         NS.combatExitRefreshScheduled = false

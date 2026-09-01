@@ -6,6 +6,45 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.6.36
+
+**Le drapeau d'attente etait un booleen, et le mauvais flux le consommait.**
+Correction d'un defaut introduit en 1.6.34 et passe au travers de la 1.6.35.
+
+La sequence, telle qu'elle se produisait en clé :
+
+1. une region refuse sous `ChallengeMode` ; la marque et le report sont poses,
+   correctement ;
+2. le combat se termine, `ChallengeMode` tient toujours ;
+3. le flux de sortie de combat consomme `pendingAuraStyle` sans condition ;
+4. la passe de style atteint la region, qui refuse a juste titre d'etre
+   retentee -- rien n'a ete libere ;
+5. aucun echec neuf, donc rien ne rearme le report ;
+6. **a la fin de la cle, le flux ne trouve plus rien a faire.**
+
+La marque savait que `ChallengeMode` etait tombe. Plus personne ne venait le lui
+demander. Selon la region, une couleur, une lettre, un nom ou une pile pouvait
+rester absente jusqu'a un changement d'option ou un `/reload`.
+
+- L'addon tient desormais **l'union des masques en attente** : un seul nombre
+  qui dit quelles levees sont encore attendues. Le report n'est rearme que
+  lorsque l'une d'elles tombe vraiment. Le correctif simple -- restyler a chaque
+  fin de combat -- aurait ramene les passes que la 1.6.34 venait de supprimer.
+- Les bits tombes sont retires de l'union AVANT la passe, pour que les refus
+  qu'elle produit la reconstruisent avec leur propre masque.
+
+**Et le compteur de la 1.6.35 comptait double.** Il lisait les autorisations ;
+l'indice de clic passe par quatre gardes pour une seule operation, donc une
+reprise d'indice affichait deux chances accordees. Il lit maintenant les
+**issues** : une operation aboutit ou echoue une fois, jamais deux.
+`RegionUsable` redevient une lecture pure, sans effet de bord.
+
+Verifie en reinjectant les deux defauts : le rearmement retire fait tomber le
+test du cycle complet, le compteur relu sur les autorisations fait passer
+l'indice a deux chances pour une reprise.
+
+- Tests : 1 788 a 1 795.
+
 ## 1.6.35
 
 **Le compteur demande, et ce qu'il a fait tomber.**

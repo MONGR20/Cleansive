@@ -134,9 +134,7 @@ function NS:RegionUsable(state, key)
     -- rencontre qui ouvraient une generation, donc qui rejouaient la totalite
     -- des regions refusees. Environ soixante tours pour rien.
     if mark == true then return false end
-    if not self:RestrictionReleasedSince(mark) then return false end
-    if self.NoteStyleRetry then self:NoteStyleRetry(false) end
-    return true
+    return self:RestrictionReleasedSince(mark)
 end
 
 -- Une tentative qui reussit doit EFFACER la marque, pas seulement passer.
@@ -152,7 +150,12 @@ function NS:NoteRegionSuccess(state, key)
     local refused = state.regionRefused
     if not (refused and refused[key]) then return end
     refused[key] = nil
-    if self.NoteStyleRetry then self:NoteStyleRetry(true) end
+    -- La marque etait forcement numerique : une marque definitive n'est jamais
+    -- retentee. Cette reussite EST donc une reprise, et une seule.
+    if self.NoteStyleRetry then
+        self:NoteStyleRetry(false)
+        self:NoteStyleRetry(true)
+    end
 end
 
 -- Deux refus qui se ressemblent et qui n'appellent pas la meme reponse.
@@ -176,12 +179,23 @@ function NS:NoteRegionRefusal(state, key, why, operation)
     -- il rafraichit le cache que RegionUsable lira sans rien demander au client.
     local mask = self.RefreshRestrictionMask and self:RefreshRestrictionMask() or 0
     local temporary = mask ~= 0
+    local previous = state and state.regionRefused and state.regionRefused[key]
     if state then
         state.regionRefused = type(state.regionRefused) == "table" and state.regionRefused or {}
         state.regionRefused[key] = temporary and mask or true
     end
-    -- Un report n'a de sens que si quelque chose peut le liberer.
-    if temporary then self:MarkPending("pendingAuraStyle", true) end
+    -- Une marque numerique remplacee : la region avait ete rendue tentable et
+    -- la tentative vient d'echouer. C'est une chance accordee, sans reprise.
+    if type(previous) == "number" and self.NoteStyleRetry then self:NoteStyleRetry(false) end
+    -- Un report n'a de sens que si quelque chose peut le liberer -- et l'union
+    -- des masques en attente dit LAQUELLE. Sans elle, le drapeau d'attente
+    -- etait consomme par le premier flush venu, typiquement une sortie de
+    -- combat sous ChallengeMode, et plus rien ne revenait a la vraie levee.
+    if temporary then
+        self.waitingRestrictionMask =
+            self:RestrictionMaskUnion(self.waitingRestrictionMask, mask)
+        self:MarkPending("pendingAuraStyle", true)
+    end
     if self.NoteStyleFailure then self:NoteStyleFailure(why, 1, operation or key) end
 end
 
