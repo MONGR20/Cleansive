@@ -6,6 +6,40 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.6.34
+
+**Une levee ne rejoue que ce qu'elle libere vraiment.** Le relevé du 1er
+septembre, en jeu sur la 1.6.33 : 7 602 refus, et **pas un seul** sans
+ChallengeMode active. Une cle mythique la garde d'un bout a l'autre ; elle n'est
+jamais tombee de la session.
+
+Les compteurs par region portaient la signature du defaut : 360 pour trois
+d'entre elles (6 x 60), 300 pour deux autres (5 x 60), 720 pour une sixieme
+(12 x 60). Une soixantaine de tours -- le nombre de sorties de combat et de
+fins de rencontre pendant la cle. A chacune, l'addon ouvrait une « generation »
+et redonnait une chance a TOUTES les regions refusees, y compris a celles que
+ces levees ne liberaient pas. Elles echouaient, etaient re-marquees, et le tour
+recommencait au pack suivant.
+
+La 1.6.31 avait raison de compter toutes les restrictions. Elle avait tort de
+traiter n'importe quelle levee comme liberatrice.
+
+- La marque n'est plus un numero de generation mais le **masque des restrictions
+  actives au moment du refus**. La region redevient tentable quand l'une
+  d'ELLES tombe, pas quand n'importe laquelle tombe. Une sortie de combat sous
+  ChallengeMode ne libere rien : elle ne rejoue rien.
+- Le masque n'est relu qu'a deux endroits : au moment d'un refus, et quand le
+  travail differe s'execute -- donc apres la distribution de l'evenement, la ou
+  l'API repond de nouveau. C'est la propriete que la 1.6.33 venait d'epingler.
+- La lecture par region reste arithmetique : elle passe sur chaque region de
+  chaque case a chaque rafraichissement, elle doit rester gratuite.
+- `AnyRestrictionActive` n'avait plus d'appelant. Retiree.
+
+Verifie en reinjectant le defaut : sur douze cycles de combat et six
+rencontres, un seul refus en devient trente-huit. Trois tests virent au rouge.
+
+- Tests : 1 778 a 1 783.
+
 ## 1.6.33
 
 **Rien ne change dans l'addon.** Aucune ligne de ce que WoW execute n'est
