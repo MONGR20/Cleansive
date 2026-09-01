@@ -8689,8 +8689,8 @@ do
         NS:StyleAuraVisual(button, auraType, victim)
         truthy(NS.pendingAuraStyle,
             "restriction : un refus sous restriction pose un report -- elle peut en etre la cause")
-        -- La marque est la GENERATION de restriction, pas « definitif » : la
-        -- region a droit a une nouvelle tentative quand la restriction tombe.
+        -- La marque est le MASQUE des restrictions actives, pas « definitif » :
+        -- la region a droit a une nouvelle tentative quand l'UNE d'elles tombe.
         local mark = victim.regionRefused and victim.regionRefused.unitName
         truthy(type(mark) == "number",
             "restriction : la region est marquee temporairement, pas condamnee")
@@ -8703,7 +8703,7 @@ do
 
         -- La restriction tombe : UNE nouvelle tentative, pas six.
         mock.state.inCombat = false
-        NS:ReleaseRestrictionGeneration()
+        NS:RefreshRestrictionMask()
         NS.pendingAuraStyle = false
         for _ = 1, 6 do NS:StyleAuraVisual(button, auraType, victim) end
         eq(tries, underRestriction + 1,
@@ -8744,9 +8744,9 @@ do
     local visual = visuals and visuals[1]
     truthy(visual, "restrictions : un visuel du moteur existe")
 
-    falsy(NS:AnyRestrictionActive(), "restrictions : aucune n'est active au depart")
+    falsy((NS:ComputeRestrictionMask() ~= 0), "restrictions : aucune n'est active au depart")
     mock.state.restrictions[Enum.AddOnRestrictionType.ChallengeMode] = true
-    truthy(NS:AnyRestrictionActive(),
+    truthy((NS:ComputeRestrictionMask() ~= 0),
         "restrictions : une cle mythique en active une, verrou de combat ou non")
     falsy(InCombatLockdown(), "restrictions : et le verrou de combat, lui, repond non")
 
@@ -8768,26 +8768,87 @@ do
 
     -- La restriction tombe. UNE nouvelle tentative.
     mock.state.restrictions = {}
-    NS:ReleaseRestrictionGeneration()
+    NS:RefreshRestrictionMask()
     for _ = 1, 6 do NS:StyleAuraVisual(button, auraType, visual) end
     eq(tries, 2, "levee : une seule nouvelle tentative")
     eq(visual.regionRefused.overlay, true,
         "levee : refusee hors restriction, elle est cette fois condamnee")
     rawset(visual.overlay, "SetColorTexture", function() end)
 
-    -- L'evenement REEL de levee ouvre bien une generation.
+    -- Le releve du 01/09 sur la 1.6.33, en jeu : 7 602 refus, et pas UN seul
+    -- sans ChallengeMode active. La cle la garde d'un bout a l'autre. Ce qui
+    -- rejouait la totalite des regions, une soixantaine de fois, c'etaient les
+    -- sorties de combat et les fins de rencontre -- des levees qui ne
+    -- liberaient rien de ce qui avait refuse.
+    --
+    -- Une region refusee sous ChallengeMode n'a droit a une nouvelle chance
+    -- que quand ChallengeMode tombe.
     do
-        local before = NS.restrictionGeneration
+        local types = Enum.AddOnRestrictionType
+        local victim = visuals and visuals[3] or visual
+        victim.regionRefused = nil
+        local tries = 0
+        rawset(victim.overlay, "SetColorTexture", function()
+            tries = tries + 1
+            error("Attempt to access forbidden object from code tainted by an AddOn")
+        end)
+
+        mock.state.inCombat = false
+        mock.state.restrictions = { [types.ChallengeMode] = true }
+        NS:RefreshRestrictionMask()
+        NS:StyleAuraVisual(button, auraType, victim)
+        eq(tries, 1, "cle : le premier refus, sous ChallengeMode")
+
+        -- Le combat va et vient. Le masque grandit puis retrouve sa taille :
+        -- rien de ce qui a refuse n'est tombe.
+        for _ = 1, 12 do
+            mock.state.inCombat = true
+            NS:RefreshRestrictionMask()
+            NS:StyleAuraVisual(button, auraType, victim)
+            mock.state.inCombat = false
+            NS:RefreshRestrictionMask()
+            NS:StyleAuraVisual(button, auraType, victim)
+        end
+        eq(tries, 1, "cle : douze allers-retours de combat ne retentent rien")
+
+        -- Une rencontre commence et se termine. Encounter tombe, mais le refus
+        -- n'a jamais ete pris sous Encounter.
+        for _ = 1, 6 do
+            mock.state.restrictions[types.Encounter] = true
+            NS:RefreshRestrictionMask()
+            NS:StyleAuraVisual(button, auraType, victim)
+            mock.state.restrictions[types.Encounter] = nil
+            NS:RefreshRestrictionMask()
+            NS:StyleAuraVisual(button, auraType, victim)
+        end
+        eq(tries, 1, "cle : six fins de rencontre non plus")
+
+        -- La cle se termine. LA, une nouvelle tentative -- une seule.
+        mock.state.restrictions = {}
+        NS:RefreshRestrictionMask()
+        for _ = 1, 6 do NS:StyleAuraVisual(button, auraType, victim) end
+        eq(tries, 2, "cle : la fin de ChallengeMode rend UNE tentative")
+        eq(victim.regionRefused.overlay, true,
+            "cle : refusee cette fois hors restriction, la region est condamnee")
+        rawset(victim.overlay, "SetColorTexture", function() end)
+        victim.regionRefused = nil
+    end
+
+    -- L'evenement REEL de levee defere du travail ; celui d'activation, non.
+    do
+        NS.combatExitRefreshScheduled = false
+        mock.state.timers = {}
         local fire = NS.eventFrame:GetScript("OnEvent")
         fire(NS.eventFrame, "ADDON_RESTRICTION_STATE_CHANGED", 0,
-            Enum.AddOnRestrictionState.Inactive)
-        truthy(NS.restrictionGeneration > before,
-            "evenement : une restriction levee ouvre une generation")
-        local after = NS.restrictionGeneration
-        fire(NS.eventFrame, "ADDON_RESTRICTION_STATE_CHANGED", 0,
             Enum.AddOnRestrictionState.Active)
-        eq(NS.restrictionGeneration, after,
-            "evenement : une restriction qui s'ACTIVE n'en ouvre aucune")
+        eq(#mock.state.timers, 0,
+            "evenement : une restriction qui s'ACTIVE ne defere rien")
+        fire(NS.eventFrame, "ADDON_RESTRICTION_STATE_CHANGED", 0,
+            Enum.AddOnRestrictionState.Inactive)
+        truthy(#mock.state.timers > 0,
+            "evenement : une restriction levee defere une relecture")
+        mock.runTimers()
+        NS.combatExitRefreshScheduled = false
     end
 
     -- Blizzard documente que IsAddOnRestrictionActive rend TOUJOURS faux
@@ -8818,7 +8879,7 @@ do
             truthy(#mock.state.timers > 0, "levee : le travail est DIFFERE")
             mock.runTimers()
             eq(flushed, 1, "levee : et il s'execute une fois, apres coup")
-            truthy(NS:AnyRestrictionActive(),
+            truthy((NS:ComputeRestrictionMask() ~= 0),
                 "levee : au moment ou il s'execute, les restrictions repondent de nouveau")
         end)
         NS.FlushCombatUpdates = real

@@ -1188,6 +1188,11 @@ end
 function NS:FlushCombatUpdates()
     self.combatExitRefreshScheduled = false
     if InCombatLockdown and InCombatLockdown() then return end
+    -- Le seul endroit sur pour relire les restrictions apres un evenement de
+    -- changement : la distribution est finie, l'API repond de nouveau. Les
+    -- regions refusees sous une restriction qui vient de tomber redeviennent
+    -- tentables ici, et seulement ici.
+    if self.RefreshRestrictionMask then self:RefreshRestrictionMask() end
 
     local profileChanged = false
     if self.pendingProfileSwitch and self.LoadCurrentProfile then
@@ -1555,9 +1560,6 @@ events:SetScript("OnEvent", function(_, event, ...)
         NS:RefreshAuraCandidateFilters()
         NS:RequestAuraSoundRefresh("combat started")
     elseif event == "PLAYER_REGEN_ENABLED" then
-        -- Le verrou de combat est une restriction comme les autres : sa levee
-        -- ouvre la meme generation.
-        if NS.ReleaseRestrictionGeneration then NS:ReleaseRestrictionGeneration() end
         NS:UpdateCooldownOverlayVisibility(false)
         if NS.UpdateGridAnchorAppearance then NS:UpdateGridAnchorAppearance(false) end
         NS:OnCombatEnded()
@@ -1569,10 +1571,9 @@ events:SetScript("OnEvent", function(_, event, ...)
         local inactive = Enum and Enum.AddOnRestrictionState
             and Enum.AddOnRestrictionState.Inactive
         if state == inactive then
-            -- Une restriction vient de tomber : les regions refusees SOUS
-            -- restriction ont droit a une nouvelle tentative, une seule. Les
-            -- refus survenus hors restriction gardent leur marque definitive.
-            if NS.ReleaseRestrictionGeneration then NS:ReleaseRestrictionGeneration() end
+            -- Quelque chose vient de tomber. Laquelle, on ne le demande pas
+            -- ici : pendant la distribution de cet evenement l'API rend
+            -- TOUJOURS faux. Le report par C_Timer relira le masque apres.
             if not (InCombatLockdown and InCombatLockdown()) then NS:OnCombatEnded() end
         end
     elseif event == "UI_SCALE_CHANGED" or event == "DISPLAY_SIZE_CHANGED" then

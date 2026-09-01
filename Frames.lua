@@ -124,11 +124,17 @@ function NS:RegionUsable(state, key)
     local refused = state.regionRefused
     local mark = refused and refused[key]
     if not mark then return true end
-    -- true = definitif. Un nombre = la generation de restriction sous laquelle
-    -- le refus est survenu : une levee de restriction lui redonne une chance,
-    -- une seule.
+    -- true = definitif. Un nombre = le MASQUE des restrictions actives au
+    -- moment du refus. La region redevient tentable quand l'une d'ELLES tombe
+    -- -- pas quand n'importe laquelle tombe.
+    --
+    -- Le releve du 01/09 sur la 1.6.33 a paye la difference : 7 602 refus, tous
+    -- avec ChallengeMode active, aucune exception. La cle garde ChallengeMode
+    -- d'un bout a l'autre ; ce sont les sorties de combat et les fins de
+    -- rencontre qui ouvraient une generation, donc qui rejouaient la totalite
+    -- des regions refusees. Environ soixante tours pour rien.
     if mark == true then return false end
-    return mark ~= (self.restrictionGeneration or 0)
+    return self:RestrictionReleasedSince(mark)
 end
 
 -- Deux refus qui se ressemblent et qui n'appellent pas la meme reponse.
@@ -148,10 +154,13 @@ function NS:NoteRegionRefusal(state, key, why, operation)
     -- TOUTE restriction, pas le seul verrou de combat. Une cle mythique garde
     -- ChallengeMode active d'un bout a l'autre, y compris entre les packs --
     -- exactement la ou l'addon se croit libre d'agir.
-    local temporary = self.AnyRestrictionActive and self:AnyRestrictionActive()
+    -- Relire le masque ici sert deux fois : il decide du sort de CE refus, et
+    -- il rafraichit le cache que RegionUsable lira sans rien demander au client.
+    local mask = self.RefreshRestrictionMask and self:RefreshRestrictionMask() or 0
+    local temporary = mask ~= 0
     if state then
         state.regionRefused = type(state.regionRefused) == "table" and state.regionRefused or {}
-        state.regionRefused[key] = temporary and (self.restrictionGeneration or 0) or true
+        state.regionRefused[key] = temporary and mask or true
     end
     -- Un report n'a de sens que si quelque chose peut le liberer.
     if temporary then self:MarkPending("pendingAuraStyle", true) end

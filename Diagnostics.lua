@@ -75,29 +75,53 @@ local RESTRICTION_TYPES = {
 -- portaient lock=0 avec ChallengeMode, Map et Chat actives. La 1.6.30 a
 -- pourtant conclu de « pas de verrou de combat » que le refus etait definitif.
 -- L'instrument avait la reponse ; c'est la lecture qui etait fausse.
-function NS:AnyRestrictionActive()
-    if InCombatLockdown and InCombatLockdown() then return true end
+-- Un bit par restriction, dans l'ordre de RESTRICTION_TYPES, plus un bit pour
+-- le verrou de combat. Sept au plus : le masque tient dans un petit entier, et
+-- se compare sans la bibliotheque « bit ».
+local RESTRICTION_BITS = { 1, 2, 4, 8, 16, 32 }
+local LOCK_BIT = 64
+
+function NS:ComputeRestrictionMask()
+    local mask = 0
+    if InCombatLockdown and InCombatLockdown() then mask = mask + LOCK_BIT end
     local api = C_RestrictedActions
     local types = Enum and Enum.AddOnRestrictionType
-    if not (api and api.IsAddOnRestrictionActive and types) then return false end
-    for _, name in ipairs(RESTRICTION_TYPES) do
-        local value = types[name]
-        if value ~= nil then
+    if not (api and api.IsAddOnRestrictionActive and types) then return mask end
+    for index, name in ipairs(RESTRICTION_TYPES) do
+        local value, bit = types[name], RESTRICTION_BITS[index]
+        if value ~= nil and bit then
             local ok, isActive = pcall(api.IsAddOnRestrictionActive, value)
-            if ok and isActive then return true end
+            if ok and isActive then mask = mask + bit end
+        end
+    end
+    return mask
+end
+
+-- Le masque courant, en cache. Il est relu au moment d'un refus et au moment
+-- ou le travail differe s'execute -- jamais pendant la distribution de
+-- ADDON_RESTRICTION_STATE_CHANGED, ou l'API rend toujours faux. Entre deux,
+-- la lecture est arithmetique : elle doit rester gratuite, elle passe sur
+-- chaque region de chaque case a chaque rafraichissement.
+NS.restrictionMask = 0
+
+function NS:RefreshRestrictionMask()
+    self.restrictionMask = self:ComputeRestrictionMask()
+    return self.restrictionMask
+end
+
+-- Vrai si au moins une restriction presente au moment du refus est tombee
+-- depuis. Une restriction qui S'AJOUTE ne redonne aucune chance : seule une
+-- levee peut liberer l'objet.
+function NS:RestrictionReleasedSince(mark)
+    if type(mark) ~= "number" or mark == 0 then return false end
+    local current = self.restrictionMask or 0
+    for index = 1, #RESTRICTION_BITS + 1 do
+        local bit = RESTRICTION_BITS[index] or LOCK_BIT
+        if mark % (bit + bit) >= bit and current % (bit + bit) < bit then
+            return true
         end
     end
     return false
-end
-
--- Une generation par levee de restriction. Un refus survenu sous restriction
--- porte la generation courante : a la suivante, il ne compte plus et la region
--- a droit a UNE nouvelle tentative. Sans ce compteur, « temporaire » voudrait
--- dire « retente a chaque passe », ce qui est le motif qu'on cherche a tuer.
-NS.restrictionGeneration = 0
-
-function NS:ReleaseRestrictionGeneration()
-    self.restrictionGeneration = (self.restrictionGeneration or 0) + 1
 end
 
 function NS:RestrictionSnapshot()
