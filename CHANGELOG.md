@@ -6,6 +6,25 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.6.33
+
+**Rien ne change dans l'addon.** Aucune ligne de ce que WoW execute n'est
+touchee : cette version corrige un test qui promettait plus que ce qu'il
+verifiait.
+
+L'assertion posee en 1.6.32 s'intitulait « le travail est differe, jamais fait
+pendant la distribution » et ne controlait que la presence d'une minuterie. Un
+code qui aurait travaille pendant l'evenement **et** pose une minuterie l'aurait
+donc passee sans broncher -- exactement le defaut qu'elle etait censee
+interdire.
+
+Elle compte maintenant les appels : zero juste apres l'evenement, un apres la
+minuterie. La fonction sondee est reposee meme si une assertion leve, sinon un
+echec contaminerait le reste de la suite. Verifie en injectant le defaut : trois
+tests virent au rouge, dont un plus ancien.
+
+- Tests : 1 776 a 1 778.
+
 ## 1.6.32
 
 **Les deux dernieres remarques de l'audit de la 1.6.31**, toutes deux mineures,
