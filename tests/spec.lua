@@ -8802,13 +8802,27 @@ do
         mock.state.timers = {}
         mock.state.restrictions[Enum.AddOnRestrictionType.Map] = true
         local fire = NS.eventFrame:GetScript("OnEvent")
-        fire(NS.eventFrame, "ADDON_RESTRICTION_STATE_CHANGED", 0,
-            Enum.AddOnRestrictionState.Inactive)
-        truthy(#mock.state.timers > 0,
-            "levee : le travail est DIFFERE, jamais fait pendant la distribution")
-        mock.runTimers()
-        truthy(NS:AnyRestrictionActive(),
-            "levee : au moment ou il s'execute, les restrictions repondent de nouveau")
+        -- Compter les appels, pas les minuteries : un code qui travaillerait
+        -- pendant la distribution ET poserait une minuterie passerait un
+        -- simple #timers > 0.
+        local flushed, real = 0, NS.FlushCombatUpdates
+        NS.FlushCombatUpdates = function(...)
+            flushed = flushed + 1
+            return real(...)
+        end
+        local ok, err = pcall(function()
+            fire(NS.eventFrame, "ADDON_RESTRICTION_STATE_CHANGED", 0,
+                Enum.AddOnRestrictionState.Inactive)
+            eq(flushed, 0,
+                "levee : rien n'est fait pendant la distribution de l'evenement")
+            truthy(#mock.state.timers > 0, "levee : le travail est DIFFERE")
+            mock.runTimers()
+            eq(flushed, 1, "levee : et il s'execute une fois, apres coup")
+            truthy(NS:AnyRestrictionActive(),
+                "levee : au moment ou il s'execute, les restrictions repondent de nouveau")
+        end)
+        NS.FlushCombatUpdates = real
+        if not ok then error(err, 0) end
         mock.state.restrictions = {}
         NS.combatExitRefreshScheduled = false
     end
