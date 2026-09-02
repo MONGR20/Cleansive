@@ -37,7 +37,7 @@ function NS:GetDiagnostics()
         record.styleCauses, record.styleCausesDropped = nil, nil
         record.styleContext, record.forbidden = nil, nil
         record.forbiddenVisuals, record.styleSkipped = nil, nil
-        record.styleRetry = nil
+        record.styleRetry, record.soundDeferred = nil, nil
         record.soundPeak = nil
     end
     record.version = self.version
@@ -244,6 +244,23 @@ function NS:NoteStyleRetry(recovered)
     if recovered then retry.recovered = (retry.recovered or 0) + 1 end
 end
 
+-- Le releve du 02/09 sur la 1.6.38 n'a montre AUCUNE ligne soundDeferred, et
+-- ne pouvait pas en montrer : « deferred » vivait sur la table d'UNE passe,
+-- remplacee a la suivante. Un report survenu en plein combat puis resolu ne
+-- laissait donc aucune trace -- le silence avait deux lectures, exactement le
+-- defaut corrige en 1.6.35 pour styleRetry et rebati ici trois versions plus
+-- tard. Le compte vit desormais sur le releve, comme « retried ».
+function NS:NoteSoundDeferral(adds, context)
+    local record = self:GetDiagnostics()
+    if not record then return end
+    local entry = type(record.soundDeferred) == "table" and record.soundDeferred
+        or { count = 0, adds = 0 }
+    record.soundDeferred = entry
+    entry.count = (entry.count or 0) + 1
+    entry.adds = (entry.adds or 0) + (tonumber(adds) or 0)
+    entry.context = context or entry.context
+end
+
 function NS:NoteStyleFailure(err, steps, operation)
     local record = self:GetDiagnostics()
     if not record then return end
@@ -356,9 +373,10 @@ function NS:SnapshotDiagnostics()
             pending = sound.pending,
             -- Un report par restriction n'est PAS un echec d'enregistrement :
             -- le rapport doit les distinguer, sinon « pending=true » se lit
-            -- comme un registre casse.
+            -- comme un registre casse. Le CUMUL vit sur le releve
+            -- (record.soundDeferred) ; ces deux champs-ci ne decrivent que la
+            -- derniere passe et ne servent plus au rapport.
             deferred = sound.deferred,
-            deferredAdds = sound.deferredAdds,
             retries = sound.retries,
             added = sound.added,
             removed = sound.removed,
@@ -443,10 +461,13 @@ function NS:BuildDiagnosticsReport()
     lines[#lines + 1] = string.format("soundNative live=%s peak=%s",
         tostring(self.liveNativeSounds or 0), tostring(self.liveNativeSoundsPeak or 0))
     if sound.error then lines[#lines + 1] = "soundError=" .. tostring(sound.error) end
-    if liveSound.deferred or sound.deferred then
-        lines[#lines + 1] = string.format("soundDeferred adds=%s context=%s",
-            tostring(liveSound.deferredAdds or sound.deferredAdds or 0),
-            tostring(liveSound.deferred or sound.deferred))
+    local deferred = record.soundDeferred
+    if type(deferred) == "table" then
+        -- A lire avec « sound registered=N/N » juste au-dessus : des reports
+        -- suivis d'un registre complet, c'est le rejeu qui a fait son travail.
+        lines[#lines + 1] = string.format("soundDeferred deferrals=%s adds=%s context=%s",
+            tostring(deferred.count or 0), tostring(deferred.adds or 0),
+            tostring(deferred.context or "-"))
     end
 
     local peak = record.soundPeak

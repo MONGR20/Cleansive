@@ -6,6 +6,36 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.6.39
+
+**Le compteur de reports de la 1.6.38 ne comptait rien de durable.**
+
+Le releve du 2 septembre sur la 1.6.38 est excellent -- plus une seule action
+bloquee la ou la 1.6.36 en avait 210, et **567 tentatives de style rejouees pour
+567 reparees** -- mais il ne portait AUCUNE ligne `soundDeferred`, et il ne
+pouvait pas en porter : le champ vivait sur la table d'UNE passe, remplacee a la
+suivante. Un report survenu en plein combat puis resolu ne laissait donc aucune
+trace.
+
+C'est mot pour mot le defaut corrige en 1.6.35 pour `styleRetry` -- « le silence
+a deux lectures » -- et rebati a l'identique dans l'instrument neuf trois
+versions plus tard.
+
+Le compte vit desormais sur le releve, comme `retried` :
+
+    soundDeferred deferrals=<n> adds=<n> context=<restrictions>
+
+A lire avec la ligne `sound registered=N/N` juste au-dessus : des reports suivis
+d'un registre complet, c'est le rejeu qui a fait son travail.
+
+Le champ par passe reste en place -- il retient encore la reprise aveugle dans
+`finalize()` -- mais il ne sert plus au rapport.
+
+Verifie en reinjectant le defaut de la 1.6.38 : trois tests tombent, dont celui
+qui exige qu'un report RESOLU reste visible.
+
+- Tests : 1 819 a 1 822.
+
 ## 1.6.38
 
 **`AddAuraSound` est refuse en combat, et l'addon l'appelait quand meme.**

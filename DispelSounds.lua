@@ -507,8 +507,14 @@ function NS:RefreshAuraSoundRegistrations(reason)
     -- poignee attend la levee -- il attendait deja, l'appel echouait de toute
     -- facon ; il n'echoue plus en produisant une action bloquee.
     local function deferAdds(fromIndex)
-        diagnostics.deferred = self:RestrictionSnapshot() or "restricted"
-        diagnostics.deferredAdds = (diagnostics.deferredAdds or 0) + (#pendingAdds - fromIndex + 1)
+        local context = self:RestrictionSnapshot() or "restricted"
+        local held = #pendingAdds - fromIndex + 1
+        -- « deferred » sert encore ICI, a retenir la reprise aveugle dans
+        -- finalize(). Le COMPTE, lui, va sur le releve : cette table meurt a la
+        -- passe suivante, et avec elle la preuve qu'un report a eu lieu.
+        diagnostics.deferred = context
+        diagnostics.deferredAdds = (diagnostics.deferredAdds or 0) + held
+        if self.NoteSoundDeferral then self:NoteSoundDeferral(held, context) end
         for index = fromIndex, #pendingAdds do
             local entry = pendingAdds[index]
             if entry.oldHandle then

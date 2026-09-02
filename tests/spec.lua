@@ -3389,7 +3389,7 @@ do
     truthy((NS.auraSoundDiagnostics.deferredAdds or 0) > 0, "son : et compte ses ajouts en attente")
     eq(NS.auraSoundRetries, 0, "son : aucune reprise aveugle n'est armee sous restriction")
     eq(mock.timerCount(), 0, "son : et aucune minuterie de reprise")
-    truthy(string.find(NS:BuildDiagnosticsReport(), "soundDeferred adds=", 1, true),
+    truthy(string.find(NS:BuildDiagnosticsReport(), "soundDeferred deferrals=1 adds=", 1, true),
         "son : le rapport distingue un report d'un echec")
 
     -- 3. Encounter sans verrou : reporte aussi, par precaution.
@@ -3435,6 +3435,20 @@ do
         "son : registre complet apres la levee")
     falsy(NS.auraSoundDiagnostics.deferred, "son : plus rien n'est reporte")
     eq(mock.state.blockedActions, 0, "son : toujours aucune action bloquee")
+
+    -- LE point de la 1.6.39. La passe qui vient de reussir a remplace la table
+    -- de la passe reportee : l'ancien instrument perdait le report ici, et le
+    -- releve du 02/09 ne pouvait donc pas dire si ce chemin avait servi.
+    local report = NS:BuildDiagnosticsReport()
+    truthy(string.find(report, "soundDeferred deferrals=", 1, true),
+        "son : un report RESOLU reste visible au releve")
+    local deferrals = NS:GetDiagnostics().soundDeferred
+    truthy(deferrals and (deferrals.count or 0) >= 1,
+        "son : et son compte a survecu a la passe suivante")
+    truthy(string.find(report, "sound registered=" ..
+        tostring(NS.auraSoundDiagnostics.registered) .. "/" ..
+        tostring(NS.auraSoundDiagnostics.attempted), 1, true),
+        "son : lu avec un registre complet, il dit que le rejeu a fait son travail")
 
     C_UnitAuras.AddAuraSound, C_UnitAuras.RemoveAuraSound = realAdd, realRemove
     IsInGroup = realIsInGroup
