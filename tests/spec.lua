@@ -3391,6 +3391,14 @@ do
     eq(mock.timerCount(), 0, "son : et aucune minuterie de reprise")
     truthy(string.find(NS:BuildDiagnosticsReport(), "soundDeferred deferrals=1 adds=", 1, true),
         "son : le rapport distingue un report d'un echec")
+    -- Un deuxieme rafraichissement dans le MEME combat -- familier mort et
+    -- rappele -- reporte les memes 46 entrees. Deux passes, pas 92 alertes.
+    NS.auraSoundRefreshScheduled = false
+    NS:RefreshAuraSoundRegistrations("familier rappele en combat")
+    local twice = NS:GetDiagnostics().soundDeferred
+    eq(twice and twice.count, 2, "son : deux passes reportees comptent deux")
+    eq(twice and twice.adds, 46, "son : mais 46 entrees tenues, pas 92 -- le maximum, pas la somme")
+    eq(adds, 0, "son : et toujours aucun AddAuraSound")
     eq(NS:AuraSoundState(), "DEFERRED", "son : l'etat lu par le joueur dit « en attente », pas « degrade »")
     do
         local before = #mock.state.chat
@@ -3436,6 +3444,24 @@ do
     local after = 0
     for _ in pairs(NS.auraSoundHandles or {}) do after = after + 1 end
     eq(after, before, "son : toutes les poignees d'avant sont encore la")
+    eq(NS.auraSoundDiagnostics.preserved, 0,
+        "son : un report ne compte PAS comme un remplacement echoue")
+    do
+        local at = #mock.state.chat
+        NS:PrintAuraSoundStatus()
+        local said = table.concat(mock.state.chat, "\n", at + 1)
+        -- Aiguilles tirees de la table de langue ACTIVE, pas d'un anglais
+        -- suppose : en francais, « replacements failed » n'existe nulle part
+        -- et l'assertion negative passait pour rien.
+        local preservedCore = NS.L.SOUND_STATUS_PRESERVED:match("^%%d (.-) %(%%d")
+        local deferredTail = NS.L.SOUND_STATUS_DEFERRED:match("%%s%)(.*)$")
+        truthy(preservedCore and #preservedCore > 10 and deferredTail and #deferredTail > 5,
+            "son : les deux aiguilles sont bien extraites de la langue active")
+        falsy(string.find(said, preservedCore, 1, true),
+            "son : l'etat du son ne dit pas « echoue » a cote de « pas des echecs »")
+        truthy(string.find(said, deferredTail, 1, true),
+            "son : il dit bien que ce sont des reports")
+    end
 
     -- 5. La levee : PLAYER_REGEN_ENABLED -> flush -> rafraichissement -> tout
     -- est pose, en une passe, et le report est efface.

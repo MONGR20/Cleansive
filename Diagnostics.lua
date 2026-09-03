@@ -257,7 +257,11 @@ function NS:NoteSoundDeferral(adds, context)
         or { count = 0, adds = 0 }
     record.soundDeferred = entry
     entry.count = (entry.count or 0) + 1
-    entry.adds = (entry.adds or 0) + (tonumber(adds) or 0)
+    -- Le MAXIMUM tenu en une passe, pas la somme. Un familier invoque, mort,
+    -- rappele dans le meme combat, c'est trois passes reportees sur les MEMES
+    -- 46 entrees : une somme aurait dit 138 et fait croire a trois fois plus
+    -- d'alertes retenues qu'il n'y en avait.
+    entry.adds = math.max(entry.adds or 0, tonumber(adds) or 0)
     entry.context = context or entry.context
 end
 
@@ -371,12 +375,8 @@ function NS:SnapshotDiagnostics()
             -- still have it after the client has thrown the table away.
             error = sound.error,
             pending = sound.pending,
-            -- Un report par restriction n'est PAS un echec d'enregistrement :
-            -- le rapport doit les distinguer, sinon « pending=true » se lit
-            -- comme un registre casse. Le CUMUL vit sur le releve
-            -- (record.soundDeferred) ; ces deux champs-ci ne decrivent que la
-            -- derniere passe et ne servent plus au rapport.
-            deferred = sound.deferred,
+            -- Le report vit sur le releve (record.soundDeferred), pas ici : le
+            -- champ par passe n'a aucun lecteur une fois la passe finie.
             retries = sound.retries,
             added = sound.added,
             removed = sound.removed,

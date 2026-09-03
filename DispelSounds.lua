@@ -518,10 +518,14 @@ function NS:RefreshAuraSoundRegistrations(reason)
         for index = fromIndex, #pendingAdds do
             local entry = pendingAdds[index]
             if entry.oldHandle then
+                -- Reutilisee, oui ; « preservee », non. Ce mot-la est reserve
+                -- au remplacement qui a ECHOUE, et l'etat du son l'imprime
+                -- comme tel : compte ici, il aurait affiche « conservees car
+                -- leur remplacement a echoue » juste au-dessus de « ce ne sont
+                -- pas des echecs ». Deux phrases contraires sur le meme ecran.
                 registered[entry.key] = true
                 diagnostics.registered = diagnostics.registered + 1
                 diagnostics.reused = diagnostics.reused + 1
-                diagnostics.preserved = diagnostics.preserved + 1
                 replacementFailures = replacementFailures + 1
             end
         end

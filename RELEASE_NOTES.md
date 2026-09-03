@@ -6,6 +6,35 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.6.41
+
+**Relecture du chantier sonore, de la 1.6.38 a la 1.6.40.** Trois choses
+changees, dont une que le joueur aurait vue a l'ecran.
+
+- **Deux phrases contraires sur le meme ecran.** Un changement de canal reporte
+  par le combat comptait ses anciennes poignees comme « preservees » -- le mot
+  reserve au remplacement qui a ECHOUE. L'etat du son imprimait donc
+  « conservees car leur remplacement a echoue » juste au-dessus de « ce ne sont
+  pas des echecs ». Un report ne compte plus comme un remplacement echoue ; les
+  poignees restent comptees comme reutilisees, ce qu'elles sont.
+- **Le compteur de reports sommait les memes entrees.** Un familier invoque,
+  mort, rappele dans le meme combat, c'est trois passes reportees sur les MEMES
+  46 entrees : `adds` aurait dit 138 et fait croire a trois fois plus d'alertes
+  retenues qu'il n'y en avait. C'est le maximum tenu en une passe desormais :
+  `deferrals=3 adds=46` se lit comme il faut.
+- **Un champ ecrit pour personne.** `record.sound.deferred` etait recopie dans
+  le releve sauvegarde et jamais relu -- le cumul vit sur `record.soundDeferred`
+  depuis la 1.6.39. Retire.
+
+Et une faiblesse de test corrigee au passage : deux assertions cherchaient du
+texte anglais dans l'etat du son. En francais, l'assertion negative passait pour
+rien. Les aiguilles sont tirees de la table de langue active.
+
+Verifie par deux injections : compter un report comme preserve fait tomber
+deux tests, sommer au lieu de prendre le maximum en fait tomber un.
+
+- Tests : 1 832 a 1 839.
+
 ## 1.6.40
 
 **Un report n'est pas une panne, et l'etat du son ne le dit plus.**
