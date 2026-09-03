@@ -1,4 +1,4 @@
-# Cleansive 1.6.39
+# Cleansive 1.6.40
 
 Cleansive is a standalone one-click cleansing addon for **World of Warcraft Retail 12.1** (`120100`). It provides a compact Decursive-style workflow with a dark, class-colored interface inspired by the clarity of Ellesmere UI. The interface follows the language of your WoW client, English or French; either can be picked from the General page at any time.
 
@@ -194,6 +194,7 @@ the reason on its own.
 
 ## Recent changes
 
+- **1.6.40** - a sound registration held back by combat is not a failure, and the sound status no longer calls it one: it has its own `DEFERRED` state and sentence in both languages, and the status panel prints how many registrations are waiting and under which restriction.
 - **1.6.39** - the deferral counter added in 1.6.38 lived on a single refresh's table, so a deferral that happened mid-fight and then resolved left no trace. It is cumulative now: `soundDeferred deferrals=N adds=N`.
 - **1.6.38** - `AddAuraSound` is restricted in combat: 210 blocked actions in one session, from a refresh that fired mid-fight. Additions are now deferred while combat (or an encounter) is active and replayed when it lifts; existing alerts keep playing meanwhile. Not deferred under ChallengeMode, Map or Chat, where the same call is proven to succeed.
 - **1.6.37** - a re-read of the restriction-mask code. The retry counter is now `styleRetry retried=N recovered=N` (it measures attempts, so it says so), a re-arm caused by a lifted restriction is no longer attributed to the player in the report, and one comment sat above the wrong function.

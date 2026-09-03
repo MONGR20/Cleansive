@@ -647,6 +647,10 @@ function NS:PrintAuraSoundStatus()
     self:Print(self.L.SOUND_STATUS_SEASON,
         tostring(self.KNOWN_DISPELLABLE_AURAS_SEASON or "?"), total)
     if diagnostics.pending then self:Print(self.L.SOUND_STATUS_PENDING) end
+    if diagnostics.deferred then
+        self:Print(self.L.SOUND_STATUS_DEFERRED,
+            tonumber(diagnostics.deferredAdds) or 0, tostring(diagnostics.deferred))
+    end
     if diagnostics.error then self:Print(self.L.SOUND_STATUS_ERROR, diagnostics.error) end
 end
 
@@ -703,10 +707,18 @@ function NS:AuraSoundState()
     local diagnostics = self.auraSoundDiagnostics
     if not diagnostics then return "IDLE" end
     if diagnostics.pending then return "PENDING" end
-    if diagnostics.error
-        or (tonumber(diagnostics.preserved) or 0) > 0
-        or (tonumber(diagnostics.registered) or 0) < (tonumber(diagnostics.attempted) or 0)
-        or (tonumber(self.auraSoundSkippedUnits) or 0) > 0 then
+    -- Une vraie erreur, ou un budget atteint, passe AVANT le report : ce
+    -- sont des etats qui ne se resolvent pas tout seuls, le report si.
+    if diagnostics.error or (tonumber(self.auraSoundSkippedUnits) or 0) > 0 then
+        return "DEGRADED"
+    end
+    -- P3 de l'audit du 03/09 : un report volontaire sous restriction tombait
+    -- en DEGRADED -- « certains enregistrements ne sont pas passes ». Faux :
+    -- ils attendent la fin du combat, et les alertes en place sonnent
+    -- toujours. Un etat a part, avec sa phrase, pour ne pas crier a la panne.
+    if diagnostics.deferred then return "DEFERRED" end
+    if (tonumber(diagnostics.preserved) or 0) > 0
+        or (tonumber(diagnostics.registered) or 0) < (tonumber(diagnostics.attempted) or 0) then
         return "DEGRADED"
     end
     return "ACTIVE"

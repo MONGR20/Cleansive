@@ -3391,6 +3391,20 @@ do
     eq(mock.timerCount(), 0, "son : et aucune minuterie de reprise")
     truthy(string.find(NS:BuildDiagnosticsReport(), "soundDeferred deferrals=1 adds=", 1, true),
         "son : le rapport distingue un report d'un echec")
+    eq(NS:AuraSoundState(), "DEFERRED", "son : l'etat lu par le joueur dit « en attente », pas « degrade »")
+    do
+        local before = #mock.state.chat
+        NS:PrintAuraSoundStatus()
+        local said = table.concat(mock.state.chat, "\n", before + 1)
+        -- La scene ne pose que le verrou : le contexte est « lock=1 / none ».
+        if not (string.find(said, "46", 1, true) and string.find(said, "lock=1", 1, true)) then
+            print("  [sonde] chat :", (said:gsub("\n", " | ")))
+        end
+        truthy(string.find(said, "46", 1, true) and string.find(said, "lock=1", 1, true),
+            "son : l'etat du son imprime le nombre d'ajouts en attente et le contexte")
+        truthy(string.find(said, NS.L.SOUND_STATE_DEFERRED, 1, true),
+            "son : et la phrase d'etat est celle du report")
+    end
 
     -- 3. Encounter sans verrou : reporte aussi, par precaution.
     soundScene()
@@ -3449,6 +3463,7 @@ do
         tostring(NS.auraSoundDiagnostics.registered) .. "/" ..
         tostring(NS.auraSoundDiagnostics.attempted), 1, true),
         "son : lu avec un registre complet, il dit que le rejeu a fait son travail")
+    eq(NS:AuraSoundState(), "ACTIVE", "son : apres la levee, l'etat redevient ACTIVE")
 
     C_UnitAuras.AddAuraSound, C_UnitAuras.RemoveAuraSound = realAdd, realRemove
     IsInGroup = realIsInGroup
@@ -5377,7 +5392,7 @@ do
 
     -- Six etats, six phrases : un joueur qui lit "46/46, 0 en attente" doit
     -- encore conclure lui-meme. La conclusion est le travail de l'addon.
-    for _, key in ipairs({ "OFF", "UNAVAILABLE", "IDLE", "PENDING", "DEGRADED", "ACTIVE" }) do
+    for _, key in ipairs({ "OFF", "UNAVAILABLE", "IDLE", "PENDING", "DEFERRED", "DEGRADED", "ACTIVE" }) do
         truthy(NS.LOCALES.enUS["SOUND_STATE_" .. key], "etat son : " .. key .. " a une phrase")
         truthy(NS.LOCALES.frFR["SOUND_STATE_" .. key], "etat son : " .. key .. " en francais aussi")
     end
@@ -5406,6 +5421,19 @@ do
     NS.auraSoundSkippedUnits = 3
     eq(NS:AuraSoundState(), "DEGRADED",
         "etat son : des unites ecartees par le budget degradent aussi")
+    NS.auraSoundSkippedUnits = 0
+
+    -- P3 de l'audit du 03/09 : un report n'est pas une panne.
+    NS.auraSoundDiagnostics = { registered = 0, attempted = 46, deferred = "lock=1 / Combat", deferredAdds = 46 }
+    eq(NS:AuraSoundState(), "DEFERRED", "etat son : un report sous restriction a son propre etat")
+    NS.auraSoundDiagnostics = { registered = 46, attempted = 46, preserved = 46, deferred = "lock=1 / Combat", deferredAdds = 46 }
+    eq(NS:AuraSoundState(), "DEFERRED",
+        "etat son : les poignees preservees par un report ne degradent pas")
+    NS.auraSoundDiagnostics = { registered = 0, attempted = 46, deferred = "lock=1 / Combat", error = "refus" }
+    eq(NS:AuraSoundState(), "DEGRADED", "etat son : une vraie erreur passe avant le report")
+    NS.auraSoundDiagnostics = { registered = 46, attempted = 46, deferred = "lock=1 / Combat" }
+    NS.auraSoundSkippedUnits = 2
+    eq(NS:AuraSoundState(), "DEGRADED", "etat son : un budget atteint passe avant le report aussi")
     NS.auraSoundSkippedUnits = 0
 
     truthy(NS:AuraSoundStateSentence() ~= "", "etat son : la phrase existe")

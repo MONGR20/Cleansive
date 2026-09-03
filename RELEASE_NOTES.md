@@ -6,6 +6,39 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.6.40
+
+**Un report n'est pas une panne, et l'etat du son ne le dit plus.**
+
+P3 de l'audit du 3 septembre sur la 1.6.39. Pendant un report sous restriction,
+`finalize()` remet `pending` a faux et le registre compte moins d'inscrits que
+de demandes : l'etat tombait en `DEGRADED` -- « certains enregistrements ne sont
+pas passes ». Techniquement vrai, mais ca criait a la panne alors que l'addon
+attend simplement la fin du combat, avec toutes les alertes en place qui sonnent
+toujours. Et le bouton **Etat du son** n'imprimait ni le nombre d'ajouts en
+attente ni la restriction en cause ; seul `/cleansive diag` le disait.
+
+- Un etat `DEFERRED` a part, avec sa phrase en anglais et en francais : les
+  alertes attendent la fin de la restriction, celles en place fonctionnent.
+- **Etat du son** imprime le nombre d'enregistrements en attente et le contexte,
+  en precisant que ce ne sont pas des echecs.
+- L'ordre des etats est deliberement : une vraie erreur ou un budget atteint
+  passent AVANT le report -- ce sont des etats qui ne se resolvent pas tout
+  seuls, le report si. Les poignees preservees par un report ne degradent
+  plus. Apres la levee, l'etat redevient `ACTIVE`.
+
+Verifie en reinjectant l'ordre de la 1.6.39 : le report retombe en `DEGRADED`
+et les tests tombent avec lui.
+
+**Ce que cette version ne tranche pas.** `PvPMatch` reste le seul type de
+restriction sans releve reel : on ne sait pas si `AddAuraSound` passe ou non
+sous `lock=0 / PvPMatch`. Il n'est PAS garde, a dessein -- bloquer les sons en
+champ de bataille par supposition serait la faute que l'audit de la 1.6.37 a
+faillie faire pour ChallengeMode. Un essai en arene ou en champ de bataille,
+puis `/cleansive diag` et `!BugGrabber`, tranchera.
+
+- Tests : 1 822 a 1 832.
+
 ## 1.6.39
 
 **Le compteur de reports de la 1.6.38 ne comptait rien de durable.**
