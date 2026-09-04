@@ -181,7 +181,7 @@ function NS:BuildAuraSoundPlan()
         self.enabled and "1" or "0",
         -- Sans cette empreinte, entrer en raid ne rejouait rien : le registre
         -- restait celui du groupe precedent, et continuait de sonner.
-        self:GridWouldBeVisible() and "1" or "0",
+        self:AuraSoundEligible() and "1" or "0",
         self.db.soundChannel or "Master",
         table.concat(spellParts, ","),
         table.concat(unitParts, ","),
@@ -377,7 +377,7 @@ function NS:RefreshAuraSoundRegistrations(reason)
     -- il sonne meme si la grille est eteinte par une regle de visibilite. Il
     -- faut donc le retirer, pas seulement se taire cote Lua.
     local desired = {}
-    if self.db and self.db.sound and self.enabled and self:GridWouldBeVisible() then
+    if self.db and self.db.sound and self.enabled and self:AuraSoundEligible() then
         for _, entry in ipairs(registrations) do
             desired[entry.key] = entry
         end
@@ -475,7 +475,11 @@ function NS:RefreshAuraSoundRegistrations(reason)
         diagnostics.activeHandles = tableCount(handles) + tableCount(self.auraSoundOrphanHandles)
         -- Recorded here, while the group exists. The logout snapshot cannot see
         -- it: by then the player is alone and the numbers are back to one unit.
-        if self.NoteSoundLoad then
+        -- F2 de l'audit du 04/09 : une passe REPORTEE n'a rien mesure. Notee
+        -- 0/46, elle restait le pic -- 46 n'est pas superieur a 46 -- et le
+        -- diag comptait un probleme pour un report qui s'etait bien rejoue.
+        -- Le pic ne retient que des passes qui ont vraiment tente.
+        if self.NoteSoundLoad and not diagnostics.deferred then
             self:NoteSoundLoad(diagnostics.attempted, diagnostics.units, diagnostics.registered)
         end
         if diagnostics.registered == diagnostics.attempted
@@ -708,8 +712,11 @@ end
 function NS:AuraSoundState()
     if not self.db or not self.db.sound then return "OFF" end
     if not self:IsNativeAuraSoundAvailable() then return "UNAVAILABLE" end
+    -- F3 de l'audit du 04/09 : addon desactive ou raid exclu, le registre est
+    -- vide A DESSEIN, et 0/0 n'est pas « incomplet » -- l'etat disait ACTIVE.
+    if not self:AuraSoundEligible() then return "MUTED" end
     local diagnostics = self.auraSoundDiagnostics
-    if not diagnostics then return "IDLE" end
+    if not diagnostics or (tonumber(diagnostics.attempted) or 0) == 0 then return "IDLE" end
     if diagnostics.pending then return "PENDING" end
     -- Une vraie erreur, ou un budget atteint, passe AVANT le report : ce
     -- sont des etats qui ne se resolvent pas tout seuls, le report si.

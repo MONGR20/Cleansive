@@ -6,6 +6,47 @@ par une suite de tests de non-régression maintenue dans le dépôt de
 développement. Les interactions
 du moteur d'auras protégé restent également vérifiées en jeu.
 
+## 1.6.42
+
+**Deux regles justes qui se neutralisaient.** Audit du 4 septembre sur la
+1.6.41 : trois constats, aucun cree par les versions recentes -- mais trois
+audits favorables etaient passes a cote, parce que chaque regle etait testee
+seule et jamais leur croisement.
+
+**F1 -- « Afficher seulement en combat » n'avait JAMAIS d'alerte native.**
+Le registre sonore lisait la visibilite de la grille : hors combat, le masquage
+automatique le vidait ; en combat, la garde de la 1.6.38 interdisait de le
+remplir. Avant la 1.6.38 le mode echouait bruyamment (actions bloquees), depuis
+il echouait en silence -- une case qui s'allume, et pas de son.
+
+- Les sons sont eligibles quand la grille **serait** visible en combat : c'est
+  la qu'ils servent, et ils doivent etre poses avant. Ils sont donc armes hors
+  combat et tiennent d'un pull a l'autre sans une seule tentative en combat.
+- Le contexte (solo, groupe, raid coupe dans les regles), la desactivation de
+  l'addon et le masquage a la main gardent leur mot : ils coupent les sons.
+- **Compromis assume, dit dans l'infobulle :** une alerte native peut sonner
+  hors combat. `UnitAuraSoundInfo` n'a aucune condition de combat, et on n'en
+  invente pas une.
+
+**F2 -- un report comptait comme une panne dans le pic.** Une passe reportee en
+combat inscrivait le pic a 0/46, et le rejeu de meme taille ne le corrigeait
+pas (46 n'est pas superieur a 46) : `/cleansive diag` comptait un probleme
+pour un report qui s'etait bien rejoue. Une passe reportee n'a rien mesure :
+elle n'inscrit plus le pic. Remplacer « > » par « >= » aurait ete faux : un
+succes ulterieur aurait efface la trace d'un VRAI refus. Un test le tient.
+
+**F3 -- « alertes actives » pour un registre vide a dessein.** Addon
+desactive ou raid coupe : 0/0 n'est pas « incomplet », l'etat disait `ACTIVE`.
+Un etat `MUTED` a part, avec sa phrase, et `ACTIVE` reserve a une couverture
+en place.
+
+Et le releve nomme mieux ses compteurs : `soundDeferred deferrals=N maxAdds=N
+context=...`, ou le contexte est celui du maximum, pas du dernier report.
+
+Verifie par trois injections, une par constat.
+
+- Tests : 1 839 a 1 865.
+
 ## 1.6.41
 
 **Relecture du chantier sonore, de la 1.6.38 a la 1.6.40.** Trois choses

@@ -3389,7 +3389,7 @@ do
     truthy((NS.auraSoundDiagnostics.deferredAdds or 0) > 0, "son : et compte ses ajouts en attente")
     eq(NS.auraSoundRetries, 0, "son : aucune reprise aveugle n'est armee sous restriction")
     eq(mock.timerCount(), 0, "son : et aucune minuterie de reprise")
-    truthy(string.find(NS:BuildDiagnosticsReport(), "soundDeferred deferrals=1 adds=", 1, true),
+    truthy(string.find(NS:BuildDiagnosticsReport(), "soundDeferred deferrals=1 maxAdds=", 1, true),
         "son : le rapport distingue un report d'un echec")
     -- Un deuxieme rafraichissement dans le MEME combat -- familier mort et
     -- rappele -- reporte les memes 46 entrees. Deux passes, pas 92 alertes.
@@ -3397,7 +3397,7 @@ do
     NS:RefreshAuraSoundRegistrations("familier rappele en combat")
     local twice = NS:GetDiagnostics().soundDeferred
     eq(twice and twice.count, 2, "son : deux passes reportees comptent deux")
-    eq(twice and twice.adds, 46, "son : mais 46 entrees tenues, pas 92 -- le maximum, pas la somme")
+    eq(twice and twice.maxAdds, 46, "son : mais 46 entrees tenues, pas 92 -- le maximum, pas la somme")
     eq(adds, 0, "son : et toujours aucun AddAuraSound")
     eq(NS:AuraSoundState(), "DEFERRED", "son : l'etat lu par le joueur dit « en attente », pas « degrade »")
     do
@@ -3495,6 +3495,136 @@ do
     IsInGroup = realIsInGroup
     NS.db.soundChannel = nil
     mock.state.restrictions = {}
+end
+
+--------------------------------------------------------------------------
+-- 1.6.42 : F1 -- « seulement en combat » ne coupe plus les alertes natives
+--
+-- Le registre lisait la visibilite de la grille : hors combat, autoHide le
+-- vidait ; en combat, la garde interdisait de le remplir. Le mode n'avait
+-- jamais d'alerte native. Les sons sont eligibles quand la grille SERAIT
+-- visible en combat.
+do
+    freshProfile("PALADIN")
+    knowSpells(4987)
+    NS:UpdateSpells()
+    mock.state.exists.party1 = true
+    local realIsInGroup = IsInGroup
+    IsInGroup = function() return true end
+    local realAdd = C_UnitAuras.AddAuraSound
+    local adds = 0
+    C_UnitAuras.AddAuraSound = function(...) adds = adds + 1 return realAdd(...) end
+    local function refresh(reason)
+        NS.auraSoundRefreshScheduled = false
+        return NS:RefreshAuraSoundRegistrations(reason)
+    end
+    local function cycleScene()
+        NS.auraSoundHandles, NS.auraSoundRegistered = {}, {}
+        NS.auraSoundHandleChannels, NS.auraSoundOrphanHandles = {}, {}
+        NS.auraSoundDiagnostics, NS.auraSoundFingerprint = nil, nil
+        mock.state.inCombat, mock.state.blockedActions = false, 0
+        mock.state.restrictions = {}
+        adds = 0
+    end
+
+    -- Le cycle complet, options fermees, mode test eteint.
+    cycleScene()
+    NS.db.autoHide = true
+    NS.testMode = false
+    falsy(NS:GridWouldBeVisible(), "F1 : hors combat, la grille est bien masquee")
+    truthy(NS:AuraSoundEligible(), "F1 : mais les sons sont eligibles -- la grille SERAIT visible en combat")
+    local registered = refresh("hors combat")
+    eq(registered, 46, "F1 : hors combat, les 46 alertes sont posees d'avance")
+    mock.state.inCombat = true
+    adds = 0
+    refresh("combat")
+    eq(NS.auraSoundDiagnostics.registered, 46, "F1 : en combat, les 46 sont toujours la")
+    eq(adds, 0, "F1 : et rien n'a ete tente en combat -- empreinte identique, cache")
+    eq(mock.state.blockedActions, 0, "F1 : zero action bloquee")
+    mock.state.inCombat = false
+    refresh("hors combat, second")
+    eq(NS.auraSoundDiagnostics.registered, 46, "F1 : hors combat a nouveau, rien n'est retire")
+    mock.state.inCombat = true
+    refresh("second combat")
+    eq(NS.auraSoundDiagnostics.registered, 46, "F1 : le second combat a ses alertes des la premiere seconde")
+    eq(mock.state.blockedActions, 0, "F1 : toujours zero action bloquee")
+    eq(NS:AuraSoundState(), "ACTIVE", "F1 : l'etat dit ACTIVE, et c'est vrai")
+    mock.state.inCombat = false
+
+    -- Ce que autoHide ne change PAS : les exclusions de contexte tiennent.
+    cycleScene()
+    local wasRaid = mock.state.inRaid
+    mock.state.inRaid, NS.db.showRaid = true, false
+    eq(refresh("raid exclu"), 0, "F1 : un raid coupe dans les regles reste muet")
+    eq(NS:AuraSoundState(), "MUTED", "F1 : et l'etat le dit")
+    mock.state.inRaid, NS.db.showRaid = wasRaid, true
+
+    cycleScene()
+    NS.enabled = false
+    eq(refresh("addon desactive"), 0, "F1 : addon desactive, aucune alerte")
+    NS.enabled = true
+
+    cycleScene()
+    NS.gridManuallyHidden = true
+    eq(refresh("masque a la main"), 0, "F1 : masquee a la main, la grille emporte les sons -- geste explicite")
+    NS.gridManuallyHidden = false
+
+    NS.db.autoHide = false
+    C_UnitAuras.AddAuraSound = realAdd
+    IsInGroup = realIsInGroup
+end
+
+--------------------------------------------------------------------------
+-- 1.6.42 : F2 -- une passe reportee n'est pas une mesure de couverture
+do
+    freshProfile("PALADIN")
+    knowSpells(4987)
+    NS:UpdateSpells()
+    mock.state.exists.party1 = true
+    local realIsInGroup = IsInGroup
+    IsInGroup = function() return true end
+    local realAdd = C_UnitAuras.AddAuraSound
+    local function scene()
+        NS.auraSoundHandles, NS.auraSoundRegistered = {}, {}
+        NS.auraSoundHandleChannels, NS.auraSoundOrphanHandles = {}, {}
+        NS.auraSoundDiagnostics, NS.auraSoundFingerprint = nil, nil
+        NS.auraSoundRefreshScheduled = false
+        mock.state.inCombat, mock.state.restrictions = false, {}
+        NS:ResetDiagnostics()
+    end
+
+    -- Report en combat (0/46), puis rejeu de MEME taille hors combat.
+    scene()
+    mock.state.inCombat = true
+    NS:RefreshAuraSoundRegistrations("report")
+    truthy(NS.auraSoundDiagnostics.deferred, "F2 : la passe est bien reportee")
+    local peak = NS:GetDiagnostics().soundPeak
+    falsy(peak and peak.attempted > 0, "F2 : une passe reportee n'inscrit AUCUN pic -- elle n'a rien mesure")
+    mock.state.inCombat = false
+    NS.auraSoundRefreshScheduled = false
+    NS:RefreshAuraSoundRegistrations("rejeu")
+    peak = NS:GetDiagnostics().soundPeak
+    eq(peak and peak.registered, 46, "F2 : le rejeu de meme taille inscrit 46/46")
+    eq(peak and peak.attempted, 46, "F2 : sur 46 -- le diag ne compte plus un probleme fictif")
+
+    -- Un VRAI refus, lui, reste dans le pic : un succes de meme taille apres
+    -- coup ne doit pas effacer la trace. C'est pour ca qu'on ne remplace pas
+    -- « > » par « >= ».
+    scene()
+    C_UnitAuras.AddAuraSound = function() return nil end
+    NS:RefreshAuraSoundRegistrations("vrai refus")
+    peak = NS:GetDiagnostics().soundPeak
+    eq(peak and peak.registered, 0, "F2 : un vrai refus inscrit 0/46")
+    C_UnitAuras.AddAuraSound = realAdd
+    NS.auraSoundFingerprint = nil
+    NS.auraSoundRefreshScheduled = false
+    for _ = 1, 8 do mock.runTimers() end
+    NS:RefreshAuraSoundRegistrations("succes apres refus")
+    eq(NS.auraSoundDiagnostics.registered, 46, "F2 : la passe suivante reussit")
+    peak = NS:GetDiagnostics().soundPeak
+    eq(peak and peak.registered, 0, "F2 : mais le pic garde la trace du refus reel -- pas de « >= »")
+
+    IsInGroup = realIsInGroup
 end
 
 --------------------------------------------------------------------------
@@ -5418,7 +5548,7 @@ do
 
     -- Six etats, six phrases : un joueur qui lit "46/46, 0 en attente" doit
     -- encore conclure lui-meme. La conclusion est le travail de l'addon.
-    for _, key in ipairs({ "OFF", "UNAVAILABLE", "IDLE", "PENDING", "DEFERRED", "DEGRADED", "ACTIVE" }) do
+    for _, key in ipairs({ "OFF", "UNAVAILABLE", "IDLE", "PENDING", "DEFERRED", "DEGRADED", "ACTIVE", "MUTED" }) do
         truthy(NS.LOCALES.enUS["SOUND_STATE_" .. key], "etat son : " .. key .. " a une phrase")
         truthy(NS.LOCALES.frFR["SOUND_STATE_" .. key], "etat son : " .. key .. " en francais aussi")
     end
@@ -5428,6 +5558,17 @@ do
     NS.db.sound = true
     NS.auraSoundDiagnostics = nil
     eq(NS:AuraSoundState(), "IDLE", "etat son : rien de fait encore")
+
+    -- F3 de l'audit du 04/09 : un registre vide A DESSEIN n'est pas « actif ».
+    NS.auraSoundDiagnostics = { registered = 0, attempted = 0 }
+    NS.enabled = false
+    eq(NS:AuraSoundState(), "MUTED", "etat son : addon desactive, preference son gardee -> MUTED, pas ACTIVE")
+    NS.enabled = true
+    local wasRaid, wasShowRaid = mock.state.inRaid, NS.db.showRaid
+    mock.state.inRaid, NS.db.showRaid = true, false
+    eq(NS:AuraSoundState(), "MUTED", "etat son : raid exclu par les regles -> MUTED")
+    mock.state.inRaid, NS.db.showRaid = wasRaid, wasShowRaid
+    eq(NS:AuraSoundState(), "IDLE", "etat son : eligible mais aucun plan -> IDLE, jamais ACTIVE sur 0/0")
 
     NS.auraSoundDiagnostics = { pending = true, registered = 0, attempted = 10 }
     eq(NS:AuraSoundState(), "PENDING", "etat son : en cours")

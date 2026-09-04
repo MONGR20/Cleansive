@@ -254,15 +254,19 @@ function NS:NoteSoundDeferral(adds, context)
     local record = self:GetDiagnostics()
     if not record then return end
     local entry = type(record.soundDeferred) == "table" and record.soundDeferred
-        or { count = 0, adds = 0 }
+        or { count = 0, maxAdds = 0 }
     record.soundDeferred = entry
     entry.count = (entry.count or 0) + 1
     -- Le MAXIMUM tenu en une passe, pas la somme. Un familier invoque, mort,
     -- rappele dans le meme combat, c'est trois passes reportees sur les MEMES
     -- 46 entrees : une somme aurait dit 138 et fait croire a trois fois plus
-    -- d'alertes retenues qu'il n'y en avait.
-    entry.adds = math.max(entry.adds or 0, tonumber(adds) or 0)
-    entry.context = context or entry.context
+    -- d'alertes retenues qu'il n'y en avait. Et le contexte est celui DU
+    -- maximum, pas du dernier report : un lecteur associe les deux.
+    local held = tonumber(adds) or 0
+    if held > (entry.maxAdds or 0) or not entry.context then
+        entry.maxAdds = math.max(entry.maxAdds or 0, held)
+        entry.context = context or entry.context
+    end
 end
 
 function NS:NoteStyleFailure(err, steps, operation)
@@ -465,8 +469,8 @@ function NS:BuildDiagnosticsReport()
     if type(deferred) == "table" then
         -- A lire avec « sound registered=N/N » juste au-dessus : des reports
         -- suivis d'un registre complet, c'est le rejeu qui a fait son travail.
-        lines[#lines + 1] = string.format("soundDeferred deferrals=%s adds=%s context=%s",
-            tostring(deferred.count or 0), tostring(deferred.adds or 0),
+        lines[#lines + 1] = string.format("soundDeferred deferrals=%s maxAdds=%s context=%s",
+            tostring(deferred.count or 0), tostring(deferred.maxAdds or 0),
             tostring(deferred.context or "-"))
     end
 

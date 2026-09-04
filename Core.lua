@@ -438,6 +438,22 @@ function NS:GridWouldBeVisible(combatOverride)
     return contextAllows
 end
 
+-- F1 de l'audit du 04/09. « Afficher seulement en combat » masquait la grille
+-- hors combat, et le registre sonore lisait cette visibilite : hors combat il
+-- se vidait, en combat la garde interdisait de le remplir. Le mode n'avait donc
+-- JAMAIS d'alerte native -- avant la 1.6.38 il echouait bruyamment, depuis il
+-- echouait en silence. Deux regles correctes qui se neutralisaient.
+--
+-- Les sons sont eligibles quand la grille SERAIT visible en combat : c'est la
+-- qu'ils servent, et ils doivent etre poses avant. Le contexte (solo, groupe,
+-- raid), la desactivation et le masquage a la main gardent leur mot ; seul le
+-- masquage automatique hors combat n'en a plus. Consequence a dire au joueur :
+-- une alerte native peut sonner hors combat -- UnitAuraSoundInfo n'a aucune
+-- condition de combat, et on ne va pas en inventer une.
+function NS:AuraSoundEligible()
+    return self:GridWouldBeVisible(true)
+end
+
 -- Every context allowed and no combat rule means "always": registering a
 -- driver that can only ever say show would put the grid under a secure rule
 -- for nothing, and a secure rule cannot be lifted during combat.

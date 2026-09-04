@@ -1,4 +1,4 @@
-# Cleansive 1.6.41
+# Cleansive 1.6.42
 
 Cleansive is a standalone one-click cleansing addon for **World of Warcraft Retail 12.1** (`120100`). It provides a compact Decursive-style workflow with a dark, class-colored interface inspired by the clarity of Ellesmere UI. The interface follows the language of your WoW client, English or French; either can be picked from the General page at any time.
 
@@ -194,6 +194,7 @@ the reason on its own.
 
 ## Recent changes
 
+- **1.6.42** - "Show only in combat" never had a native sound alert: out of combat the hidden grid emptied the registry, in combat the restriction guard refused to fill it. Sounds are now armed whenever the grid *would* show in combat, so they exist before the pull. Context exclusions (solo/group/raid), disabling, and hiding by hand still silence them. Also: a deferred pass no longer records a fake failure in the peak, and a deliberately empty registry no longer reports itself as active.
 - **1.6.41** - a re-read of the sound work. During a deferred channel change the status panel said the replacements had *failed* one line above saying they were *not failures*; the deferral counter summed the same entries across repeated passes in one fight; and one diagnostic field was written for no reader.
 - **1.6.40** - a sound registration held back by combat is not a failure, and the sound status no longer calls it one: it has its own `DEFERRED` state and sentence in both languages, and the status panel prints how many registrations are waiting and under which restriction.
 - **1.6.39** - the deferral counter added in 1.6.38 lived on a single refresh's table, so a deferral that happened mid-fight and then resolved left no trace. It is cumulative now: `soundDeferred deferrals=N adds=N`.
